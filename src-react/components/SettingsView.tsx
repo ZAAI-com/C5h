@@ -24,6 +24,7 @@ import {
 } from "@/components/shadcn-ui/dialog";
 import { Settings, Bell, Palette, Plus, Pencil, Trash2 } from "lucide-react";
 import type { Account, NewAccount } from "@/lib/types";
+import { SchedulerSettings } from "./SchedulerSettings";
 
 const TOOL_TYPES = ["claude", "codex", "gemini"];
 const THEME_OPTIONS = ["system", "light", "dark"];
@@ -492,6 +493,9 @@ export function SettingsView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Scheduler */}
+      <SchedulerSettings />
     </div>
   );
 }

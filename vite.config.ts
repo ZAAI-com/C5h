@@ -16,6 +16,16 @@ export default defineConfig(async () => ({
     },
   },
 
+  // Multi-page setup for main app and popover
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        popover: path.resolve(__dirname, "popover.html"),
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

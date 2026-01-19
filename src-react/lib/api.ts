@@ -137,6 +137,38 @@ export async function scanCliProcesses(): Promise<DetectedProcess[]> {
   return invoke<DetectedProcess[]>("scan_cli_processes");
 }
 
+// Notification commands
+export async function notifyWindowEndingSoon(
+  accountName: string,
+  minutesRemaining: number
+): Promise<void> {
+  return invoke<void>("notify_window_ending_soon", {
+    accountName,
+    minutesRemaining,
+  });
+}
+
+export async function notifyScheduledTrigger(
+  accountName: string,
+  success: boolean
+): Promise<void> {
+  return invoke<void>("notify_scheduled_trigger", { accountName, success });
+}
+
+export async function notifyWeeklySummary(
+  totalWindows: number,
+  avgDuration: number
+): Promise<void> {
+  return invoke<void>("notify_weekly_summary", { totalWindows, avgDuration });
+}
+
+export async function sendNotification(
+  title: string,
+  body: string
+): Promise<void> {
+  return invoke<void>("send_notification", { title, body });
+}
+
 // Helper to format date for API calls
 export function formatDateForApi(date: Date): string {
   return date.toISOString();

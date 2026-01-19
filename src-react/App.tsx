@@ -1,14 +1,18 @@
-import { useAppInit } from "@/hooks";
+import { useAppInit, useWindowEndingAlert } from "@/hooks";
 import { useStore } from "@/store";
 import { Layout, CalendarView, StatsView, SettingsView } from "@/components";
 import { Button } from "@/components/shadcn-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
+import { Toaster } from "@/components/shadcn-ui/sonner";
 import { Loader2, AlertCircle } from "lucide-react";
 
 function App() {
   const { isLoading, error } = useAppInit();
   const setError = useStore((state) => state.setError);
   const initialize = useStore((state) => state.initialize);
+
+  // Enable window ending notifications
+  useWindowEndingAlert();
 
   if (isLoading) {
     return (
@@ -52,11 +56,14 @@ function App() {
   }
 
   return (
-    <Layout
-      calendarContent={<CalendarView />}
-      statsContent={<StatsView />}
-      settingsContent={<SettingsView />}
-    />
+    <>
+      <Layout
+        calendarContent={<CalendarView />}
+        statsContent={<StatsView />}
+        settingsContent={<SettingsView />}
+      />
+      <Toaster />
+    </>
   );
 }
 

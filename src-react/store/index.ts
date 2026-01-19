@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import type { Account, Window, ScheduledTrigger, Settings } from "@/lib/types";
 import * as api from "@/lib/api";
 
@@ -121,8 +122,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.createAccount(account);
       await get().fetchAccounts();
+      toast.success("Account created successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to create account: ${message}`);
       throw err;
     }
   },
@@ -131,8 +135,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.updateAccount(account);
       await get().fetchAccounts();
+      toast.success("Account updated successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to update account: ${message}`);
       throw err;
     }
   },
@@ -141,8 +148,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.deleteAccount(id);
       await get().fetchAccounts();
+      toast.success("Account deleted successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to delete account: ${message}`);
       throw err;
     }
   },

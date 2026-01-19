@@ -1,18 +1,44 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    AppHandle, Manager,
 };
+use tauri_plugin_positioner::{Position, WindowExt};
 
 mod commands;
 mod db;
 mod models;
 mod monitor;
+mod services;
 
 // Temporary greet command for testing
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+// Command to show the main window from the popover
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// Toggle popover window visibility near the tray icon
+fn toggle_popover(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("popover") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            // Position near tray icon (TrayBottomCenter positions below the tray)
+            let _ = window.move_window(Position::TrayBottomCenter);
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,6 +67,7 @@ pub fn run() {
         // Command handlers
         .invoke_handler(tauri::generate_handler![
             greet,
+            show_main_window,
             // Account commands
             commands::accounts::get_accounts,
             commands::accounts::create_account,
@@ -66,6 +93,11 @@ pub fn run() {
             monitor::get_monitoring_status,
             monitor::update_monitor_config,
             monitor::scan_cli_processes,
+            // Notification commands
+            commands::notifications::notify_window_ending_soon,
+            commands::notifications::notify_scheduled_trigger,
+            commands::notifications::notify_weekly_summary,
+            commands::notifications::send_notification,
         ])
         .setup(|app| {
             // Create tray menu
@@ -93,17 +125,18 @@ pub fn run() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
+                    let app = tray.app_handle();
+
+                    // Update positioner's tray position tracking
+                    tauri_plugin_positioner::on_tray_event(app, &event);
+
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        toggle_popover(&app);
                     }
                 })
                 .build(app)?;

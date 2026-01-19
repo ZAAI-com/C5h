@@ -21,6 +21,19 @@
         "center": true,
         "visible": true,
         "resizable": true
+      },
+      {
+        "label": "popover",
+        "title": "C5h Status",
+        "url": "popover.html",
+        "width": 300,
+        "height": 320,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "transparent": false
       }
     ],
     "trayIcon": {

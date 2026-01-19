@@ -4,3 +4,6 @@ export { StatusCard } from "./StatusCard";
 export { StatsView } from "./StatsView";
 export { SettingsView } from "./SettingsView";
 export { MonitoringCard } from "./MonitoringCard";
+export { SchedulerSettings } from "./SchedulerSettings";
+export { PopoverWindow } from "./PopoverWindow";
+export { ErrorBoundary } from "./ErrorBoundary";
