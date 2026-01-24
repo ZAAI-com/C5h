@@ -10,9 +10,10 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
 } from "recharts";
 import { Activity, Clock, Calendar, TrendingUp } from "lucide-react";
-import { format, startOfWeek, eachDayOfInterval, isSameDay } from "date-fns";
+import { format, startOfWeek, eachDayOfInterval, isSameDay, getDay, getHours } from "date-fns";
 
 export function StatsView() {
   const windows = useStore((state) => state.windows);
@@ -77,6 +78,40 @@ export function StatsView() {
       accountStats,
     };
   }, [windows, accounts]);
+
+  // Heatmap data: Usage by day of week (0 = Sunday, 6 = Saturday)
+  const dayOfWeekData = useMemo(() => {
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayCounts = new Array(7).fill(0);
+
+    windows.forEach((w) => {
+      const dayIndex = getDay(new Date(w.started_at));
+      dayCounts[dayIndex]++;
+    });
+
+    const maxCount = Math.max(...dayCounts, 1);
+
+    return dayNames.map((name, index) => ({
+      day: name,
+      count: dayCounts[index],
+      intensity: dayCounts[index] / maxCount,
+    }));
+  }, [windows]);
+
+  // Histogram: Time of day distribution (24-hour format)
+  const timeOfDayData = useMemo(() => {
+    const hourBuckets = new Array(24).fill(0);
+
+    windows.forEach((w) => {
+      const hour = getHours(new Date(w.started_at));
+      hourBuckets[hour]++;
+    });
+
+    return hourBuckets.map((count, hour) => ({
+      hour: hour === 0 ? "12am" : hour < 12 ? `${hour}am` : hour === 12 ? "12pm" : `${hour - 12}pm`,
+      count,
+    }));
+  }, [windows]);
 
   return (
     <div className="space-y-6">
@@ -168,6 +203,84 @@ export function StatsView() {
                     stackId="windows"
                   />
                 ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Day of Week Heatmap */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Usage by Day of Week</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dayOfWeekData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <YAxis
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "var(--radius)",
+                  }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {dayOfWeekData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={`hsl(var(--primary) / ${Math.max(0.2, entry.intensity)})`}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Time of Day Histogram */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Usage by Time of Day</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={timeOfDayData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="hour"
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                  interval={2}
+                />
+                <YAxis
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "var(--radius)",
+                  }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                />
+                <Bar
+                  dataKey="count"
+                  fill="hsl(var(--chart-2))"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

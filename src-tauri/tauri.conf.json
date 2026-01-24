@@ -25,7 +25,7 @@
       {
         "label": "popover",
         "title": "C5h Status",
-        "url": "popover.html",
+        "url": "src-react/popover.html",
         "width": 300,
         "height": 320,
         "visible": false,

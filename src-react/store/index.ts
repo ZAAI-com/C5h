@@ -165,8 +165,11 @@ export const useStore = create<AppState>((set, get) => ({
       const { selectedDate } = get();
       const { start, end } = api.getWeekBoundaries(selectedDate);
       await get().fetchWindows(start, end);
+      toast.success("Window started successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to start window: ${message}`);
       throw err;
     }
   },
@@ -178,8 +181,11 @@ export const useStore = create<AppState>((set, get) => ({
       const { selectedDate } = get();
       const { start, end } = api.getWeekBoundaries(selectedDate);
       await get().fetchWindows(start, end);
+      toast.success("Window ended successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to end window: ${message}`);
       throw err;
     }
   },
@@ -189,8 +195,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.saveSettings(settings);
       set({ settings });
+      toast.success("Settings saved successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to save settings: ${message}`);
       throw err;
     }
   },
@@ -200,8 +209,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.createSchedule({ account_id: accountId, scheduled_at: scheduledAt });
       await get().fetchSchedules();
+      toast.success("Schedule created successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to create schedule: ${message}`);
       throw err;
     }
   },
@@ -210,8 +222,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.deleteSchedule(id);
       await get().fetchSchedules();
+      toast.success("Schedule deleted successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to delete schedule: ${message}`);
       throw err;
     }
   },
@@ -220,8 +235,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.installSchedule(id, cliCommand);
       await get().fetchSchedules();
+      toast.success("Schedule installed successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to install schedule: ${message}`);
       throw err;
     }
   },
@@ -230,8 +248,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.uninstallSchedule(id);
       await get().fetchSchedules();
+      toast.success("Schedule uninstalled successfully");
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      set({ error: message });
+      toast.error(`Failed to uninstall schedule: ${message}`);
       throw err;
     }
   },
