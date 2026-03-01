@@ -1,15 +1,18 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Manager, async_runtime,
 };
 use tauri_plugin_positioner::{Position, WindowExt};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 mod commands;
 mod db;
 mod models;
 mod monitor;
 mod services;
+mod validation;
 
 // Temporary greet command for testing
 #[tauri::command]
@@ -56,12 +59,8 @@ pub fn run() {
             )
         )
         .plugin(tauri_plugin_positioner::init())
-        // SQLite plugin with migrations
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:c5h.db", db::get_migrations())
-                .build(),
-        )
+        // Database pool state (initialized in setup)
+        .manage(db::DbPool::default())
         // Process monitor state
         .manage(monitor::ProcessMonitor::default())
         // Command handlers
@@ -100,6 +99,24 @@ pub fn run() {
             commands::notifications::send_notification,
         ])
         .setup(|app| {
+            // Initialize database
+            let app_data_dir = app.path().app_data_dir()
+                .expect("Failed to get app data directory");
+
+            let db_state = app.state::<db::DbPool>();
+            let db_pool_arc = db_state.0.clone();
+
+            // Initialize database synchronously using block_on
+            let pool = async_runtime::block_on(async {
+                db::init_db(app_data_dir).await
+            }).expect("Failed to initialize database");
+
+            // Store the pool in state
+            async_runtime::block_on(async {
+                let mut pool_guard = db_pool_arc.write().await;
+                *pool_guard = Some(pool);
+            });
+
             // Create tray menu
             let quit = MenuItem::with_id(app, "quit", "Quit C5h", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Open C5h", true, None::<&str>)?;
@@ -107,7 +124,9 @@ pub fn run() {
 
             // Create tray icon with icon from tauri.conf.json
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(app.default_window_icon()
+                    .ok_or("Default window icon not configured")?
+                    .clone())
                 .menu(&menu)
                 .tooltip("C5h - AI Tool Usage Tracker")
                 .on_menu_event(|app, event| {

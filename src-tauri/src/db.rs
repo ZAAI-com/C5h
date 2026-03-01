@@ -1,11 +1,69 @@
-use tauri_plugin_sql::{Migration, MigrationKind};
+use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+use std::sync::Arc;
+use tauri::State;
+use tokio::sync::RwLock;
 
-pub fn get_migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "create_initial_tables",
-            sql: r#"
+/// Database pool wrapper for Tauri state management
+pub struct DbPool(pub Arc<RwLock<Option<SqlitePool>>>);
+
+impl Default for DbPool {
+    fn default() -> Self {
+        Self(Arc::new(RwLock::new(None)))
+    }
+}
+
+/// Get the SQLite connection pool from Tauri's managed state.
+///
+/// This is a shared helper function used by all command modules to access the database.
+pub async fn get_pool(db: &State<'_, DbPool>) -> Result<SqlitePool, String> {
+    let pool_guard = db.0.read().await;
+    pool_guard
+        .clone()
+        .ok_or_else(|| "Database connection not initialized. Please restart the application.".to_string())
+}
+
+/// Initialize the database pool and run migrations
+pub async fn init_db(app_data_dir: std::path::PathBuf) -> Result<SqlitePool, String> {
+    // Ensure the data directory exists
+    std::fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+
+    let db_path = app_data_dir.join("c5h.db");
+    let db_url = format!("sqlite:{}", db_path.display());
+
+    // Create database if it doesn't exist
+    if !Sqlite::database_exists(&db_url).await.unwrap_or(false) {
+        Sqlite::create_database(&db_url)
+            .await
+            .map_err(|e| format!("Failed to create database: {}", e))?;
+    }
+
+    // Connect to the database
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+
+    // Run migrations
+    run_migrations(&pool).await?;
+
+    Ok(pool)
+}
+
+/// Run database migrations
+async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
+    let migration_sql = get_migration_sql();
+
+    sqlx::query(&migration_sql)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to run migrations: {}", e))?;
+
+    Ok(())
+}
+
+/// Get the migration SQL
+fn get_migration_sql() -> String {
+    r#"
                 -- Accounts table for multi-tool/multi-account support
                 CREATE TABLE IF NOT EXISTS accounts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,8 +129,5 @@ pub fn get_migrations() -> Vec<Migration> {
                 CREATE INDEX IF NOT EXISTS idx_windows_started_at ON windows(started_at);
                 CREATE INDEX IF NOT EXISTS idx_scheduled_triggers_account_id ON scheduled_triggers(account_id);
                 CREATE INDEX IF NOT EXISTS idx_scheduled_triggers_status ON scheduled_triggers(status);
-            "#,
-            kind: MigrationKind::Up,
-        },
-    ]
+            "#.to_string()
 }

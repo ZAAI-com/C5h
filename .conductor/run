@@ -1,0 +1,5 @@
+#!/bin/bash
+# C5h Development Server
+# Starts Tauri in development mode with hot-reload
+cd "$(dirname "$0")/.."
+exec bun tauri dev

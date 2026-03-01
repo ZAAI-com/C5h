@@ -1,11 +1,28 @@
+use crate::db::get_pool;
 use crate::models::{Account, NewAccount};
+use crate::validation::{
+    validate_account_name, validate_cli_command, validate_color, validate_window_duration_hours,
+};
 use serde_json::Value;
-use sqlx::SqlitePool;
 use tauri::State;
-use tauri_plugin_sql::DbInstances;
+use crate::db::DbPool;
+
+/// Validate account fields before create/update operations.
+fn validate_account_fields(
+    name: &str,
+    cli_command: &str,
+    window_duration_hours: i32,
+    color: &str,
+) -> Result<(), String> {
+    validate_account_name(name)?;
+    validate_cli_command(cli_command)?;
+    validate_window_duration_hours(window_duration_hours)?;
+    validate_color(color)?;
+    Ok(())
+}
 
 #[tauri::command]
-pub async fn get_accounts(db: State<'_, DbInstances>) -> Result<Vec<Account>, String> {
+pub async fn get_accounts(db: State<'_, DbPool>) -> Result<Vec<Account>, String> {
     let pool = get_pool(&db).await?;
 
     let rows: Vec<(Value,)> = sqlx::query_as(
@@ -19,15 +36,24 @@ pub async fn get_accounts(db: State<'_, DbInstances>) -> Result<Vec<Account>, St
             'color', color,
             'enabled', enabled,
             'created_at', created_at
-        ) FROM accounts ORDER BY id"
+        ) FROM accounts ORDER BY id",
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        eprintln!("Database error in get_accounts: {:?}", e);
+        "Failed to fetch accounts".to_string()
+    })?;
 
     let accounts: Vec<Account> = rows
         .into_iter()
-        .filter_map(|(v,)| serde_json::from_value(v).ok())
+        .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
+            Ok(account) => Some(account),
+            Err(e) => {
+                eprintln!("Failed to deserialize account: {:?}, data: {:?}", e, v);
+                None
+            }
+        })
         .collect();
 
     Ok(accounts)
@@ -35,14 +61,22 @@ pub async fn get_accounts(db: State<'_, DbInstances>) -> Result<Vec<Account>, St
 
 #[tauri::command]
 pub async fn create_account(
-    db: State<'_, DbInstances>,
+    db: State<'_, DbPool>,
     account: NewAccount,
 ) -> Result<Account, String> {
+    // Validate all fields
+    validate_account_fields(
+        &account.name,
+        &account.cli_command,
+        account.window_duration_hours,
+        &account.color,
+    )?;
+
     let pool = get_pool(&db).await?;
 
     let result = sqlx::query(
         "INSERT INTO accounts (name, tool_type, cli_command, cli_args, window_duration_hours, color, enabled)
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&account.name)
     .bind(&account.tool_type)
@@ -53,7 +87,10 @@ pub async fn create_account(
     .bind(account.enabled)
     .execute(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        eprintln!("Database error in create_account: {:?}", e);
+        "Failed to create account".to_string()
+    })?;
 
     let id = result.last_insert_rowid();
 
@@ -71,10 +108,15 @@ pub async fn create_account(
 }
 
 #[tauri::command]
-pub async fn update_account(
-    db: State<'_, DbInstances>,
-    account: Account,
-) -> Result<(), String> {
+pub async fn update_account(db: State<'_, DbPool>, account: Account) -> Result<(), String> {
+    // Validate all fields
+    validate_account_fields(
+        &account.name,
+        &account.cli_command,
+        account.window_duration_hours,
+        &account.color,
+    )?;
+
     let pool = get_pool(&db).await?;
     let id = account.id.ok_or("Account ID is required")?;
 
@@ -82,7 +124,7 @@ pub async fn update_account(
         "UPDATE accounts SET
          name = ?, tool_type = ?, cli_command = ?, cli_args = ?,
          window_duration_hours = ?, color = ?, enabled = ?
-         WHERE id = ?"
+         WHERE id = ?",
     )
     .bind(&account.name)
     .bind(&account.tool_type)
@@ -94,33 +136,26 @@ pub async fn update_account(
     .bind(id)
     .execute(&pool)
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        eprintln!("Database error in update_account: {:?}", e);
+        "Failed to update account".to_string()
+    })?;
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn delete_account(db: State<'_, DbInstances>, id: i64) -> Result<(), String> {
+pub async fn delete_account(db: State<'_, DbPool>, id: i64) -> Result<(), String> {
     let pool = get_pool(&db).await?;
 
     sqlx::query("DELETE FROM accounts WHERE id = ?")
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("Database error in delete_account: {:?}", e);
+            "Failed to delete account".to_string()
+        })?;
 
     Ok(())
-}
-
-async fn get_pool(db: &State<'_, DbInstances>) -> Result<SqlitePool, String> {
-    let instances = db.0.read().await;
-    let db_pool = instances
-        .get("sqlite:c5h.db")
-        .ok_or_else(|| "Database not found".to_string())?;
-
-    match db_pool {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite database".to_string()),
-    }
 }

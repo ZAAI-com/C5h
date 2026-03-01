@@ -20,8 +20,8 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, "src-react/index.html"),
-        popover: path.resolve(__dirname, "src-react/popover.html"),
+        main: path.resolve(__dirname, "index.html"),
+        popover: path.resolve(__dirname, "popover.html"),
       },
     },
   },

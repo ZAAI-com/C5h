@@ -1,16 +1,20 @@
+use crate::db::get_pool;
 use crate::models::Settings;
-use sqlx::SqlitePool;
+use crate::validation::validate_poll_interval;
 use tauri::State;
-use tauri_plugin_sql::DbInstances;
+use crate::db::DbPool;
 
 #[tauri::command]
-pub async fn get_settings(db: State<'_, DbInstances>) -> Result<Settings, String> {
+pub async fn get_settings(db: State<'_, DbPool>) -> Result<Settings, String> {
     let pool = get_pool(&db).await?;
 
     let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM settings")
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("Database error in get_settings: {:?}", e);
+            "Failed to fetch settings".to_string()
+        })?;
 
     let mut settings = Settings::default();
 
@@ -24,7 +28,25 @@ pub async fn get_settings(db: State<'_, DbInstances>) -> Result<Settings, String
             "notify_trigger_status" => settings.notify_trigger_status = value == "true",
             "notify_weekly_summary" => settings.notify_weekly_summary = value == "true",
             "poll_interval_minutes" => {
-                settings.poll_interval_minutes = value.parse().unwrap_or(15)
+                match value.parse::<i32>() {
+                    Ok(val) if val >= 1 && val <= 60 => {
+                        settings.poll_interval_minutes = val;
+                    }
+                    Ok(val) => {
+                        eprintln!(
+                            "Warning: Invalid poll_interval_minutes value {} (must be 1-60), using default",
+                            val
+                        );
+                        settings.poll_interval_minutes = 15;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to parse poll_interval_minutes '{}': {}, using default",
+                            value, e
+                        );
+                        settings.poll_interval_minutes = 15;
+                    }
+                }
             }
             _ => {}
         }
@@ -34,10 +56,10 @@ pub async fn get_settings(db: State<'_, DbInstances>) -> Result<Settings, String
 }
 
 #[tauri::command]
-pub async fn save_settings(
-    db: State<'_, DbInstances>,
-    settings: Settings,
-) -> Result<(), String> {
+pub async fn save_settings(db: State<'_, DbPool>, settings: Settings) -> Result<(), String> {
+    // Validate poll interval
+    validate_poll_interval(settings.poll_interval_minutes)?;
+
     let pool = get_pool(&db).await?;
 
     let pairs = vec![
@@ -48,7 +70,10 @@ pub async fn save_settings(
             "notifications_enabled",
             settings.notifications_enabled.to_string(),
         ),
-        ("notify_ending_soon", settings.notify_ending_soon.to_string()),
+        (
+            "notify_ending_soon",
+            settings.notify_ending_soon.to_string(),
+        ),
         (
             "notify_trigger_status",
             settings.notify_trigger_status.to_string(),
@@ -69,21 +94,11 @@ pub async fn save_settings(
             .bind(value)
             .execute(&pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                eprintln!("Database error in save_settings for key '{}': {:?}", key, e);
+                "Failed to save settings".to_string()
+            })?;
     }
 
     Ok(())
-}
-
-async fn get_pool(db: &State<'_, DbInstances>) -> Result<SqlitePool, String> {
-    let instances = db.0.read().await;
-    let db_pool = instances
-        .get("sqlite:c5h.db")
-        .ok_or_else(|| "Database not found".to_string())?;
-
-    match db_pool {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite database".to_string()),
-    }
 }

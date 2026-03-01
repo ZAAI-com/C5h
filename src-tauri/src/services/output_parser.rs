@@ -22,7 +22,7 @@ impl Default for UsageInfo {
 
 /// Parse Claude Code /usage output
 /// Example:
-/// ```
+/// ```text
 /// Current session
 /// █████████████████████████████████████▌             75% used
 /// Resets 1:59am (Europe/Berlin)
@@ -73,7 +73,7 @@ pub fn parse_claude_output(output: &str) -> UsageInfo {
 
 /// Parse Codex /status output
 /// Example:
-/// ```
+/// ```text
 /// │  5h limit:       [████████████████████] 100% left (resets 06:44)          │
 /// │  Weekly limit:   [████████████████████] 99% left (resets 19:51 on 24 Jan) │
 /// ```
@@ -122,7 +122,7 @@ pub fn parse_codex_output(output: &str) -> UsageInfo {
 
 /// Parse Gemini usage table output
 /// Example:
-/// ```
+/// ```text
 /// │  Model Usage                 Reqs                  Usage left              │
 /// │  gemini-2.5-flash               -       99.9% (Resets in 24h)              │
 /// ```

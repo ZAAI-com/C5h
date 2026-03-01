@@ -1,12 +1,13 @@
+use crate::db::get_pool;
 use crate::models::{NewWindow, Window};
+use crate::validation::validate_usage_percent;
 use serde_json::Value;
-use sqlx::SqlitePool;
 use tauri::State;
-use tauri_plugin_sql::DbInstances;
+use crate::db::DbPool;
 
 #[tauri::command]
 pub async fn get_windows(
-    db: State<'_, DbInstances>,
+    db: State<'_, DbPool>,
     from: String,
     to: String,
     account_id: Option<i64>,
@@ -26,14 +27,17 @@ pub async fn get_windows(
                 'created_at', created_at
             ) FROM windows
             WHERE started_at >= ? AND started_at <= ? AND account_id = ?
-            ORDER BY started_at DESC"
+            ORDER BY started_at DESC",
         )
         .bind(&from)
         .bind(&to)
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            eprintln!("Database error in get_windows: {:?}", e);
+            "Failed to fetch windows".to_string()
+        })?
     } else {
         sqlx::query_as(
             "SELECT json_object(
@@ -47,18 +51,27 @@ pub async fn get_windows(
                 'created_at', created_at
             ) FROM windows
             WHERE started_at >= ? AND started_at <= ?
-            ORDER BY started_at DESC"
+            ORDER BY started_at DESC",
         )
         .bind(&from)
         .bind(&to)
         .fetch_all(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            eprintln!("Database error in get_windows: {:?}", e);
+            "Failed to fetch windows".to_string()
+        })?
     };
 
     let windows: Vec<Window> = rows
         .into_iter()
-        .filter_map(|(v,)| serde_json::from_value(v).ok())
+        .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
+            Ok(window) => Some(window),
+            Err(e) => {
+                eprintln!("Failed to deserialize window: {:?}, data: {:?}", e, v);
+                None
+            }
+        })
         .collect();
 
     Ok(windows)
@@ -66,7 +79,7 @@ pub async fn get_windows(
 
 #[tauri::command]
 pub async fn get_current_window(
-    db: State<'_, DbInstances>,
+    db: State<'_, DbPool>,
     account_id: Option<i64>,
 ) -> Result<Option<Window>, String> {
     let pool = get_pool(&db).await?;
@@ -84,12 +97,15 @@ pub async fn get_current_window(
                 'created_at', created_at
             ) FROM windows
             WHERE ended_at IS NULL AND account_id = ?
-            ORDER BY started_at DESC LIMIT 1"
+            ORDER BY started_at DESC LIMIT 1",
         )
         .bind(aid)
         .fetch_optional(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            eprintln!("Database error in get_current_window: {:?}", e);
+            "Failed to fetch current window".to_string()
+        })?
     } else {
         sqlx::query_as(
             "SELECT json_object(
@@ -103,33 +119,44 @@ pub async fn get_current_window(
                 'created_at', created_at
             ) FROM windows
             WHERE ended_at IS NULL
-            ORDER BY started_at DESC LIMIT 1"
+            ORDER BY started_at DESC LIMIT 1",
         )
         .fetch_optional(&pool)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            eprintln!("Database error in get_current_window: {:?}", e);
+            "Failed to fetch current window".to_string()
+        })?
     };
 
-    Ok(row.and_then(|(v,)| serde_json::from_value(v).ok()))
+    Ok(row.and_then(|(v,)| match serde_json::from_value(v.clone()) {
+        Ok(window) => Some(window),
+        Err(e) => {
+            eprintln!("Failed to deserialize current window: {:?}, data: {:?}", e, v);
+            None
+        }
+    }))
 }
 
 #[tauri::command]
 pub async fn create_window(
-    db: State<'_, DbInstances>,
+    db: State<'_, DbPool>,
     window: NewWindow,
 ) -> Result<Window, String> {
     let pool = get_pool(&db).await?;
     let now = chrono::Utc::now().to_rfc3339();
 
-    let result = sqlx::query(
-        "INSERT INTO windows (account_id, started_at, triggered_by) VALUES (?, ?, ?)"
-    )
-    .bind(window.account_id)
-    .bind(&now)
-    .bind(&window.triggered_by)
-    .execute(&pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let result =
+        sqlx::query("INSERT INTO windows (account_id, started_at, triggered_by) VALUES (?, ?, ?)")
+            .bind(window.account_id)
+            .bind(&now)
+            .bind(&window.triggered_by)
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Database error in create_window: {:?}", e);
+                "Failed to create window".to_string()
+            })?;
 
     let id = result.last_insert_rowid();
 
@@ -147,10 +174,13 @@ pub async fn create_window(
 
 #[tauri::command]
 pub async fn end_window(
-    db: State<'_, DbInstances>,
+    db: State<'_, DbPool>,
     id: i64,
     usage_percent: Option<i32>,
 ) -> Result<(), String> {
+    // Validate usage percent if provided
+    validate_usage_percent(usage_percent)?;
+
     let pool = get_pool(&db).await?;
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -160,20 +190,10 @@ pub async fn end_window(
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("Database error in end_window: {:?}", e);
+            "Failed to end window".to_string()
+        })?;
 
     Ok(())
-}
-
-async fn get_pool(db: &State<'_, DbInstances>) -> Result<SqlitePool, String> {
-    let instances = db.0.read().await;
-    let db_pool = instances
-        .get("sqlite:c5h.db")
-        .ok_or_else(|| "Database not found".to_string())?;
-
-    match db_pool {
-        tauri_plugin_sql::DbPool::Sqlite(pool) => Ok(pool.clone()),
-        #[allow(unreachable_patterns)]
-        _ => Err("Expected SQLite database".to_string()),
-    }
 }
