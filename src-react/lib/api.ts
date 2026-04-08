@@ -7,6 +7,7 @@ import type {
   ScheduledTrigger,
   NewScheduledTrigger,
   Settings,
+  UsageInfo,
 } from "./types";
 
 // Account commands
@@ -100,6 +101,23 @@ export async function uninstallSchedule(id: number): Promise<void> {
   return invoke<void>("uninstall_schedule", { id });
 }
 
+// Polling commands
+export async function pollAccount(accountId: number): Promise<UsageInfo> {
+  return invoke<UsageInfo>("poll_account", { accountId });
+}
+
+export async function pollAllAccounts(): Promise<[number, UsageInfo][]> {
+  return invoke<[number, UsageInfo][]>("poll_all_accounts");
+}
+
+export async function checkCliAvailability(
+  commands: string[]
+): Promise<[string, boolean, string | null][]> {
+  return invoke<[string, boolean, string | null][]>("check_cli_availability", {
+    commands,
+  });
+}
+
 // Monitor types
 export interface DetectedProcess {
   pid: number;
@@ -167,6 +185,11 @@ export async function sendNotification(
   body: string
 ): Promise<void> {
   return invoke<void>("send_notification", { title, body });
+}
+
+// Tray commands
+export async function updateTrayTitle(text: string | null): Promise<void> {
+  return invoke<void>("update_tray_title", { text });
 }
 
 // Helper to format date for API calls

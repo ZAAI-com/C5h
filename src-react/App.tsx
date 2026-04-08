@@ -1,18 +1,63 @@
-import { useAppInit, useWindowEndingAlert } from "@/hooks";
+import { useCallback, useState } from "react";
+import { useAppInit, useWindowEndingAlert, useKeyboardShortcuts } from "@/hooks";
 import { useStore } from "@/store";
 import { Layout, CalendarView, StatsView, SettingsView } from "@/components";
 import { Button } from "@/components/shadcn-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
 import { Toaster } from "@/components/shadcn-ui/sonner";
 import { Loader2, AlertCircle } from "lucide-react";
+import { getWeekBoundaries } from "@/lib/api";
+import { subWeeks, addWeeks } from "date-fns";
 
 function App() {
   const { isLoading, error } = useAppInit();
   const setError = useStore((state) => state.setError);
   const initialize = useStore((state) => state.initialize);
+  const [activeTab, setActiveTab] = useState("calendar");
 
   // Enable window ending notifications
   useWindowEndingAlert();
+
+  // Keyboard shortcuts
+  const accounts = useStore((state) => state.accounts);
+  const createWindow = useStore((state) => state.createWindow);
+  const setSelectedDate = useStore((state) => state.setSelectedDate);
+  const fetchWindows = useStore((state) => state.fetchWindows);
+  const selectedDate = useStore((state) => state.selectedDate);
+
+  const handleStartWindow = useCallback(() => {
+    const account = accounts.find((a) => a.enabled);
+    if (account?.id) {
+      createWindow(account.id, "manual");
+    }
+  }, [accounts, createWindow]);
+
+  const handleJumpToToday = useCallback(() => {
+    const today = new Date();
+    setSelectedDate(today);
+    const { start, end } = getWeekBoundaries(today);
+    fetchWindows(start, end);
+  }, [setSelectedDate, fetchWindows]);
+
+  const handleNavigateWeek = useCallback(
+    (direction: "prev" | "next") => {
+      const newDate =
+        direction === "prev"
+          ? subWeeks(selectedDate, 1)
+          : addWeeks(selectedDate, 1);
+      setSelectedDate(newDate);
+      const { start, end } = getWeekBoundaries(newDate);
+      fetchWindows(start, end);
+    },
+    [selectedDate, setSelectedDate, fetchWindows],
+  );
+
+  useKeyboardShortcuts({
+    onSwitchTab: setActiveTab,
+    onStartWindow: handleStartWindow,
+    onJumpToToday: handleJumpToToday,
+    onNavigateWeek: handleNavigateWeek,
+  });
 
   if (isLoading) {
     return (
@@ -61,6 +106,8 @@ function App() {
         calendarContent={<CalendarView />}
         statsContent={<StatsView />}
         settingsContent={<SettingsView />}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
       <Toaster />
     </>

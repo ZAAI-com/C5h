@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { toast } from "sonner";
-import type { Account, Window, ScheduledTrigger, Settings } from "@/lib/types";
+import type { Account, Window, ScheduledTrigger, Settings, UsageInfo } from "@/lib/types";
 import * as api from "@/lib/api";
+import { mapError } from "@/lib/errors";
 
 interface AppState {
   // Data
@@ -10,6 +11,7 @@ interface AppState {
   currentWindow: Window | null;
   schedules: ScheduledTrigger[];
   settings: Settings | null;
+  usageByAccount: Record<number, UsageInfo>;
 
   // UI State
   selectedDate: Date;
@@ -47,6 +49,9 @@ interface AppState {
   installSchedule: (id: number, cliCommand: string) => Promise<void>;
   uninstallSchedule: (id: number) => Promise<void>;
 
+  // Polling Actions
+  fetchUsage: () => Promise<void>;
+
   // Init
   initialize: () => Promise<void>;
 }
@@ -58,6 +63,7 @@ export const useStore = create<AppState>((set, get) => ({
   currentWindow: null,
   schedules: [],
   settings: null,
+  usageByAccount: {},
   selectedDate: new Date(),
   selectedAccountId: null,
   isLoading: false,
@@ -126,7 +132,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to create account: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -139,7 +145,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to update account: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -152,7 +158,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to delete account: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -169,7 +175,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to start window: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -185,7 +191,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to end window: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -199,7 +205,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to save settings: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -213,7 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to create schedule: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -226,7 +232,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to delete schedule: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -239,7 +245,7 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to install schedule: ${message}`);
+      toast.error(mapError(message));
       throw err;
     }
   },
@@ -252,8 +258,35 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       set({ error: message });
-      toast.error(`Failed to uninstall schedule: ${message}`);
+      toast.error(mapError(message));
       throw err;
+    }
+  },
+
+  // Polling Actions
+  fetchUsage: async () => {
+    try {
+      const results = await api.pollAllAccounts();
+      const usageByAccount: Record<number, UsageInfo> = {};
+      for (const [accountId, info] of results) {
+        usageByAccount[accountId] = info;
+      }
+      set({ usageByAccount });
+
+      // Update tray title with active account's usage %
+      const { currentWindow } = get();
+      if (currentWindow) {
+        const usage = usageByAccount[currentWindow.account_id];
+        if (usage?.session_percent != null) {
+          api.updateTrayTitle(`${Math.round(usage.session_percent)}%`).catch(() => {});
+        }
+      } else {
+        api.updateTrayTitle(null).catch(() => {});
+      }
+    } catch (err) {
+      // Polling failures are non-critical — don't set error state
+      const message = err instanceof Error ? err.message : String(err);
+      toast.warning(`Usage polling failed: ${mapError(message)}`);
     }
   },
 
@@ -261,16 +294,28 @@ export const useStore = create<AppState>((set, get) => ({
   initialize: async () => {
     set({ isLoading: true, error: null });
     try {
+      // Fetch accounts and settings first — other queries depend on them
+      await get().fetchAccounts();
+      await get().fetchSettings();
+
       const selectedDate = new Date();
       const { start, end } = api.getWeekBoundaries(selectedDate);
 
-      await Promise.all([
-        get().fetchAccounts(),
-        get().fetchSettings(),
+      // Fetch remaining data in parallel; use allSettled so partial failures
+      // don't block the entire init
+      const results = await Promise.allSettled([
         get().fetchCurrentWindow(),
         get().fetchWindows(start, end),
         get().fetchSchedules(),
       ]);
+
+      const failures = results
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+
+      if (failures.length > 0) {
+        toast.warning(`Some data failed to load: ${failures.join(", ")}`);
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     } finally {

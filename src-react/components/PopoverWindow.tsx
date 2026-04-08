@@ -21,9 +21,17 @@ export function PopoverWindow() {
     initialize();
   }, [initialize]);
 
+  const usageByAccount = useStore((state) => state.usageByAccount);
+
   const account = currentWindow
     ? accounts.find((a) => a.id === currentWindow.account_id)
     : accounts.find((a) => a.enabled);
+
+  // Use real CLI polling data when available
+  const accountUsage = currentWindow
+    ? usageByAccount[currentWindow.account_id]
+    : undefined;
+  const displayPercent = accountUsage?.session_percent ?? status.percentUsed;
 
   const handleStartWindow = async () => {
     if (account?.id) {
@@ -78,18 +86,24 @@ export function PopoverWindow() {
           </div>
 
           <div className="space-y-2">
-            <Progress value={status.percentUsed} className="h-2" />
+            <Progress value={displayPercent} className="h-2" />
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">
-                {Math.round(status.percentUsed)}% used
+                {Math.round(displayPercent)}% used
               </span>
               <span className="font-medium">
-                Resets: {status.endTime?.toLocaleTimeString([], {
+                Resets: {accountUsage?.reset_time ?? status.endTime?.toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
                 })}
               </span>
             </div>
+            {accountUsage?.weekly_percent != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Weekly</span>
+                <span>{Math.round(accountUsage.weekly_percent)}% used</span>
+              </div>
+            )}
           </div>
         </div>
       ) : (

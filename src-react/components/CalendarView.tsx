@@ -1,7 +1,24 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
 import { Button } from "@/components/shadcn-ui/button";
+import { Input } from "@/components/shadcn-ui/input";
+import { Label } from "@/components/shadcn-ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/shadcn-ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/shadcn-ui/dialog";
 import { ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react";
 import { StatusCard } from "./StatusCard";
 import { MonitoringCard } from "./MonitoringCard";
@@ -26,6 +43,37 @@ export function CalendarView() {
   const accounts = useStore((state) => state.accounts);
   const schedules = useStore((state) => state.schedules);
   const fetchWindows = useStore((state) => state.fetchWindows);
+
+  // Current time for the "now" indicator line
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const createSchedule = useStore((state) => state.createSchedule);
+
+  // Click-to-schedule state
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleAccountId, setScheduleAccountId] = useState<string>("");
+
+  const enabledAccounts = accounts.filter((a) => a.enabled);
+
+  const handleCellClick = (day: Date, hour: number) => {
+    setScheduleDate(format(day, "yyyy-MM-dd"));
+    setScheduleTime(`${hour.toString().padStart(2, "0")}:00`);
+    setScheduleAccountId(enabledAccounts[0]?.id?.toString() ?? "");
+    setScheduleDialogOpen(true);
+  };
+
+  const handleCreateSchedule = async () => {
+    if (!scheduleAccountId || !scheduleDate || !scheduleTime) return;
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    await createSchedule(parseInt(scheduleAccountId), scheduledAt);
+    setScheduleDialogOpen(false);
+  };
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate);
@@ -72,6 +120,14 @@ export function CalendarView() {
     return accounts.find((a) => a.id === accountId)?.color ?? "#6366f1";
   };
 
+  const getAccountName = (accountId: number) => {
+    return accounts.find((a) => a.id === accountId)?.name ?? "Unknown";
+  };
+
+  const formatHour = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-4">
@@ -100,7 +156,18 @@ export function CalendarView() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 relative">
+            {windows.length === 0 && schedules.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                <div className="text-center p-6 bg-background/80 rounded-lg">
+                  <CalendarIcon className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">
+                    No usage windows this week. Click any cell to schedule one,
+                    or start using a CLI tool to track automatically.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <div className="min-w-[700px]">
                 {/* Header with days */}
@@ -131,6 +198,17 @@ export function CalendarView() {
 
                 {/* Time grid */}
                 <div className="relative">
+                  {/* Current time indicator line */}
+                  {weekDays.some((day) => isToday(day)) && (
+                    <div
+                      className="absolute left-0 right-0 border-t-2 border-red-500 z-20 pointer-events-none"
+                      style={{
+                        top: `${((now.getHours() * 60 + now.getMinutes()) / (24 * 60)) * 100}%`,
+                      }}
+                    >
+                      <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-red-500" />
+                    </div>
+                  )}
                   {HOURS.map((hour) => (
                     <div key={hour} className="grid grid-cols-8 border-b h-8">
                       <div className="p-1 text-xs text-muted-foreground text-right pr-2 border-r">
@@ -162,23 +240,37 @@ export function CalendarView() {
                         return (
                           <div
                             key={`${day.toISOString()}-${hour}`}
-                            className={`border-r relative ${
+                            className={`border-r relative cursor-pointer hover:bg-muted/50 ${
                               isToday(day) ? "bg-primary/5" : ""
                             }`}
+                            onClick={() => handleCellClick(day, hour)}
                           >
-                            {windowsAtHour.map((w, i) => (
-                              <div
-                                key={w.id}
-                                className="absolute inset-0 opacity-60"
-                                style={{
-                                  backgroundColor: getAccountColor(
-                                    w.account_id
-                                  ),
-                                  marginLeft: `${i * 4}px`,
-                                }}
-                                title={`Window #${w.id}`}
-                              />
-                            ))}
+                            {windowsAtHour.map((w, i) => {
+                              const startTime = new Date(w.started_at);
+                              const endTime = w.ended_at
+                                ? new Date(w.ended_at)
+                                : null;
+                              const name = getAccountName(w.account_id);
+                              const usageLabel = w.usage_percent != null
+                                ? ` (${w.usage_percent}%)`
+                                : "";
+                              const timeRange = endTime
+                                ? `${formatHour(startTime)}–${formatHour(endTime)}`
+                                : `${formatHour(startTime)}–now`;
+                              return (
+                                <div
+                                  key={w.id}
+                                  className="absolute inset-0 opacity-60"
+                                  style={{
+                                    backgroundColor: getAccountColor(
+                                      w.account_id
+                                    ),
+                                    marginLeft: `${i * 4}px`,
+                                  }}
+                                  title={`${name} ${timeRange}${usageLabel}`}
+                                />
+                              );
+                            })}
                             {schedulesAtHour.map((s, i) => (
                               <div
                                 key={s.id}
@@ -201,6 +293,76 @@ export function CalendarView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Click-to-schedule dialog */}
+      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Window</DialogTitle>
+            <DialogDescription>
+              Create a scheduled trigger for the selected time slot.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="schedule-account">Account</Label>
+              <Select
+                value={scheduleAccountId}
+                onValueChange={setScheduleAccountId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {enabledAccounts.map((account) => (
+                    <SelectItem key={account.id} value={String(account.id)}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: account.color }}
+                        />
+                        {account.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="schedule-date">Date</Label>
+              <Input
+                id="schedule-date"
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="schedule-time">Time</Label>
+              <Input
+                id="schedule-time"
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setScheduleDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSchedule}
+              disabled={!scheduleAccountId || !scheduleDate || !scheduleTime}
+            >
+              Create Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

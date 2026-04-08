@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,8 +14,8 @@ import {
   Legend,
   Cell,
 } from "recharts";
-import { Activity, Clock, Calendar, TrendingUp } from "lucide-react";
-import { format, startOfWeek, eachDayOfInterval, isSameDay, getDay, getHours } from "date-fns";
+import { Activity, Clock, Calendar, TrendingUp, BarChart3 } from "lucide-react";
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, eachWeekOfInterval, isSameDay, getDay, getHours, subWeeks, isWithinInterval } from "date-fns";
 
 export function StatsView() {
   const windows = useStore((state) => state.windows);
@@ -112,6 +114,54 @@ export function StatsView() {
       count,
     }));
   }, [windows]);
+
+  // Avg duration trend: last 8 weeks
+  const trendData = useMemo(() => {
+    const now = new Date();
+    const eightWeeksAgo = subWeeks(now, 8);
+    const weekStarts = eachWeekOfInterval({ start: eightWeeksAgo, end: now });
+
+    return weekStarts.map((weekStart) => {
+      const weekEnd = endOfWeek(weekStart);
+      const weekWindows = windows.filter((w) => {
+        const d = new Date(w.started_at);
+        return isWithinInterval(d, { start: weekStart, end: weekEnd });
+      });
+
+      let avgHours = 0;
+      if (weekWindows.length > 0) {
+        const totalHours = weekWindows.reduce((acc, w) => {
+          const start = new Date(w.started_at);
+          const account = accounts.find((a) => a.id === w.account_id);
+          const end = w.ended_at
+            ? new Date(w.ended_at)
+            : new Date(start.getTime() + (account?.window_duration_hours ?? 5) * 3600000);
+          return acc + (end.getTime() - start.getTime()) / 3600000;
+        }, 0);
+        avgHours = Math.round((totalHours / weekWindows.length) * 10) / 10;
+      }
+
+      return {
+        week: format(weekStart, "MMM d"),
+        avgHours,
+        windows: weekWindows.length,
+      };
+    });
+  }, [windows, accounts]);
+
+  // Empty state
+  if (windows.length === 0 && accounts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <BarChart3 className="h-16 w-16 text-muted-foreground/30 mb-4" />
+        <h2 className="text-xl font-semibold mb-2">No Statistics Yet</h2>
+        <p className="text-muted-foreground max-w-md">
+          Create an account and start using your AI coding tools to see usage
+          statistics here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -282,6 +332,47 @@ export function StatsView() {
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Avg Duration Trend */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Average Duration Trend (8 Weeks)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                />
+                <YAxis
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  unit="h"
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "var(--radius)",
+                  }}
+                  labelStyle={{ color: "hsl(var(--foreground))" }}
+                  formatter={(value: number) => [`${value}h`, "Avg Duration"]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="avgHours"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </CardContent>

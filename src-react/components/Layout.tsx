@@ -7,16 +7,25 @@ interface LayoutProps {
   calendarContent: ReactNode;
   statsContent: ReactNode;
   settingsContent: ReactNode;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
 export function Layout({
   calendarContent,
   statsContent,
   settingsContent,
+  activeTab,
+  onTabChange,
 }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background">
-      <Tabs defaultValue="calendar" className="w-full h-full">
+      <Tabs
+        value={activeTab}
+        defaultValue="calendar"
+        onValueChange={onTabChange}
+        className="w-full h-full"
+      >
         <div className="border-b bg-card">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-14">

@@ -1,4 +1,5 @@
 use crate::db::get_pool;
+use crate::errors::db_err;
 use crate::models::{NewWindow, Window};
 use crate::validation::validate_usage_percent;
 use serde_json::Value;
@@ -34,10 +35,7 @@ pub async fn get_windows(
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_windows: {:?}", e);
-            "Failed to fetch windows".to_string()
-        })?
+        .map_err(db_err("fetch windows"))?
     } else {
         sqlx::query_as(
             "SELECT json_object(
@@ -57,10 +55,7 @@ pub async fn get_windows(
         .bind(&to)
         .fetch_all(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_windows: {:?}", e);
-            "Failed to fetch windows".to_string()
-        })?
+        .map_err(db_err("fetch windows"))?
     };
 
     let windows: Vec<Window> = rows
@@ -68,7 +63,7 @@ pub async fn get_windows(
         .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
             Ok(window) => Some(window),
             Err(e) => {
-                eprintln!("Failed to deserialize window: {:?}, data: {:?}", e, v);
+                eprintln!("Skipping malformed window record: {}", e);
                 None
             }
         })
@@ -102,10 +97,7 @@ pub async fn get_current_window(
         .bind(aid)
         .fetch_optional(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_current_window: {:?}", e);
-            "Failed to fetch current window".to_string()
-        })?
+        .map_err(db_err("fetch current window"))?
     } else {
         sqlx::query_as(
             "SELECT json_object(
@@ -123,16 +115,13 @@ pub async fn get_current_window(
         )
         .fetch_optional(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_current_window: {:?}", e);
-            "Failed to fetch current window".to_string()
-        })?
+        .map_err(db_err("fetch current window"))?
     };
 
     Ok(row.and_then(|(v,)| match serde_json::from_value(v.clone()) {
         Ok(window) => Some(window),
         Err(e) => {
-            eprintln!("Failed to deserialize current window: {:?}, data: {:?}", e, v);
+            eprintln!("Skipping malformed current window record: {}", e);
             None
         }
     }))
@@ -153,10 +142,7 @@ pub async fn create_window(
             .bind(&window.triggered_by)
             .execute(&pool)
             .await
-            .map_err(|e| {
-                eprintln!("Database error in create_window: {:?}", e);
-                "Failed to create window".to_string()
-            })?;
+            .map_err(db_err("create window"))?;
 
     let id = result.last_insert_rowid();
 
@@ -190,10 +176,7 @@ pub async fn end_window(
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in end_window: {:?}", e);
-            "Failed to end window".to_string()
-        })?;
+        .map_err(db_err("end window"))?;
 
     Ok(())
 }

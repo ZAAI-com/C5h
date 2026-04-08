@@ -1,4 +1,5 @@
 use crate::db::get_pool;
+use crate::errors::db_err;
 use crate::models::Settings;
 use crate::validation::validate_poll_interval;
 use tauri::State;
@@ -11,10 +12,7 @@ pub async fn get_settings(db: State<'_, DbPool>) -> Result<Settings, String> {
     let rows: Vec<(String, String)> = sqlx::query_as("SELECT key, value FROM settings")
         .fetch_all(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_settings: {:?}", e);
-            "Failed to fetch settings".to_string()
-        })?;
+        .map_err(db_err("fetch settings"))?;
 
     let mut settings = Settings::default();
 
@@ -94,10 +92,7 @@ pub async fn save_settings(db: State<'_, DbPool>, settings: Settings) -> Result<
             .bind(value)
             .execute(&pool)
             .await
-            .map_err(|e| {
-                eprintln!("Database error in save_settings for key '{}': {:?}", key, e);
-                "Failed to save settings".to_string()
-            })?;
+            .map_err(db_err("save settings"))?;
     }
 
     Ok(())

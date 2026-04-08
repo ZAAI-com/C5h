@@ -1,4 +1,5 @@
 use crate::db::get_pool;
+use crate::errors::db_err;
 use crate::models::{Account, NewAccount};
 use crate::validation::{
     validate_account_name, validate_cli_command, validate_color, validate_window_duration_hours,
@@ -40,17 +41,14 @@ pub async fn get_accounts(db: State<'_, DbPool>) -> Result<Vec<Account>, String>
     )
     .fetch_all(&pool)
     .await
-    .map_err(|e| {
-        eprintln!("Database error in get_accounts: {:?}", e);
-        "Failed to fetch accounts".to_string()
-    })?;
+    .map_err(db_err("fetch accounts"))?;
 
     let accounts: Vec<Account> = rows
         .into_iter()
         .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
             Ok(account) => Some(account),
             Err(e) => {
-                eprintln!("Failed to deserialize account: {:?}, data: {:?}", e, v);
+                eprintln!("Skipping malformed account record: {}", e);
                 None
             }
         })
@@ -87,10 +85,7 @@ pub async fn create_account(
     .bind(account.enabled)
     .execute(&pool)
     .await
-    .map_err(|e| {
-        eprintln!("Database error in create_account: {:?}", e);
-        "Failed to create account".to_string()
-    })?;
+    .map_err(db_err("create account"))?;
 
     let id = result.last_insert_rowid();
 
@@ -136,10 +131,7 @@ pub async fn update_account(db: State<'_, DbPool>, account: Account) -> Result<(
     .bind(id)
     .execute(&pool)
     .await
-    .map_err(|e| {
-        eprintln!("Database error in update_account: {:?}", e);
-        "Failed to update account".to_string()
-    })?;
+    .map_err(db_err("update account"))?;
 
     Ok(())
 }
@@ -152,10 +144,7 @@ pub async fn delete_account(db: State<'_, DbPool>, id: i64) -> Result<(), String
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in delete_account: {:?}", e);
-            "Failed to delete account".to_string()
-        })?;
+        .map_err(db_err("delete account"))?;
 
     Ok(())
 }

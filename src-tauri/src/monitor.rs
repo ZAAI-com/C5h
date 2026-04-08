@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 
@@ -39,7 +39,8 @@ impl Default for MonitorConfig {
 
         Self {
             cli_patterns: patterns,
-            poll_interval_secs: 5,
+            // Default to 30 seconds; will be overridden by settings poll_interval_minutes
+            poll_interval_secs: 30,
         }
     }
 }
@@ -69,7 +70,7 @@ impl ProcessMonitor {
         system.refresh_processes_specifics(
             ProcessesToUpdate::All,
             true,
-            ProcessRefreshKind::everything(),
+            ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always),
         );
 
         let mut detected = Vec::new();
@@ -260,7 +261,7 @@ mod tests {
     fn test_monitor_config_default() {
         let config = MonitorConfig::default();
 
-        assert_eq!(config.poll_interval_secs, 5);
+        assert_eq!(config.poll_interval_secs, 30);
         assert!(config.cli_patterns.contains_key("claude"));
         assert!(config.cli_patterns.contains_key("codex"));
         assert!(config.cli_patterns.contains_key("gemini"));

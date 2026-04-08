@@ -11,9 +11,17 @@ export function StatusCard() {
   const createWindow = useStore((state) => state.createWindow);
   const status = useCurrentWindow();
 
+  const usageByAccount = useStore((state) => state.usageByAccount);
+
   const account = currentWindow
     ? accounts.find((a) => a.id === currentWindow.account_id)
     : accounts.find((a) => a.enabled);
+
+  // Use real CLI polling data when available, fall back to time-based calculation
+  const accountUsage = currentWindow
+    ? usageByAccount[currentWindow.account_id]
+    : undefined;
+  const displayPercent = accountUsage?.session_percent ?? status.percentUsed;
 
   const handleStartWindow = async () => {
     if (account?.id) {
@@ -69,13 +77,27 @@ export function StatusCard() {
               {status.hoursRemaining}h {status.minutesRemaining}m
             </span>
           </div>
-          <Progress value={status.percentUsed} className="h-2" />
+          <Progress value={displayPercent} className="h-2" />
         </div>
 
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Used</span>
-          <span>{Math.round(status.percentUsed)}%</span>
+          <span>{Math.round(displayPercent)}%</span>
         </div>
+
+        {accountUsage?.weekly_percent != null && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Weekly</span>
+            <span>{Math.round(accountUsage.weekly_percent)}% used</span>
+          </div>
+        )}
+
+        {accountUsage?.reset_time && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Resets</span>
+            <span>{accountUsage.reset_time}</span>
+          </div>
+        )}
 
         {status.endTime && (
           <div className="flex justify-between text-sm">

@@ -4,11 +4,10 @@ use tauri::{
     AppHandle, Manager, async_runtime,
 };
 use tauri_plugin_positioner::{Position, WindowExt};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 mod commands;
 mod db;
+mod errors;
 mod models;
 mod monitor;
 mod services;
@@ -26,6 +25,16 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// Update tray icon title to show usage percentage
+#[tauri::command]
+fn update_tray_title(app: AppHandle, text: Option<String>) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray.set_title(text.as_deref())
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -67,6 +76,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             show_main_window,
+            update_tray_title,
             // Account commands
             commands::accounts::get_accounts,
             commands::accounts::create_account,
@@ -86,6 +96,10 @@ pub fn run() {
             commands::scheduler::delete_schedule,
             commands::scheduler::install_schedule,
             commands::scheduler::uninstall_schedule,
+            // Polling commands
+            commands::polling::poll_account,
+            commands::polling::poll_all_accounts,
+            commands::polling::check_cli_availability,
             // Monitor commands
             monitor::start_monitoring,
             monitor::stop_monitoring,
@@ -101,7 +115,7 @@ pub fn run() {
         .setup(|app| {
             // Initialize database
             let app_data_dir = app.path().app_data_dir()
-                .expect("Failed to get app data directory");
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
             let db_state = app.state::<db::DbPool>();
             let db_pool_arc = db_state.0.clone();
@@ -109,7 +123,7 @@ pub fn run() {
             // Initialize database synchronously using block_on
             let pool = async_runtime::block_on(async {
                 db::init_db(app_data_dir).await
-            }).expect("Failed to initialize database");
+            }).map_err(|e| Box::<dyn std::error::Error>::from(e))?;
 
             // Store the pool in state
             async_runtime::block_on(async {
@@ -123,7 +137,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             // Create tray icon with icon from tauri.conf.json
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon()
                     .ok_or("Default window icon not configured")?
                     .clone())

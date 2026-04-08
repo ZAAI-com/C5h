@@ -63,6 +63,21 @@ export interface Settings {
   poll_interval_minutes: number;
 }
 
+// Usage data from CLI polling
+export interface UsageInfo {
+  session_percent: number | null;
+  weekly_percent: number | null;
+  reset_time: string | null;
+  weekly_reset_time: string | null;
+}
+
+// CLI availability check result
+export interface CliAvailability {
+  command: string;
+  available: boolean;
+  resolved_path: string | null;
+}
+
 // Utility types
 export type ToolType = "claude" | "codex" | "gemini";
 

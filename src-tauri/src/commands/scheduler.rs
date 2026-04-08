@@ -1,4 +1,5 @@
 use crate::db::get_pool;
+use crate::errors::db_err;
 use crate::models::{NewScheduledTrigger, ScheduledTrigger};
 use crate::validation::{escape_for_plist, validate_cli_command, validate_scheduled_at};
 use chrono::{Datelike, Timelike};
@@ -83,10 +84,7 @@ pub async fn get_schedules(
         .bind(aid)
         .fetch_all(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_schedules: {:?}", e);
-            "Failed to fetch schedules".to_string()
-        })?
+        .map_err(db_err("fetch schedules"))?
     } else {
         sqlx::query_as(
             "SELECT json_object(
@@ -102,10 +100,7 @@ pub async fn get_schedules(
         )
         .fetch_all(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in get_schedules: {:?}", e);
-            "Failed to fetch schedules".to_string()
-        })?
+        .map_err(db_err("fetch schedules"))?
     };
 
     let schedules: Vec<ScheduledTrigger> = rows
@@ -114,7 +109,7 @@ pub async fn get_schedules(
             match serde_json::from_value(v.clone()) {
                 Ok(schedule) => Some(schedule),
                 Err(e) => {
-                    eprintln!("Failed to deserialize schedule: {:?}, data: {:?}", e, v);
+                    eprintln!("Skipping malformed schedule record: {}", e);
                     None
                 }
             }
@@ -134,6 +129,45 @@ pub async fn create_schedule(
 
     let pool = get_pool(&db).await?;
 
+    // Check for schedule conflicts: overlapping windows for the same account
+    let new_dt = chrono::DateTime::parse_from_rfc3339(&schedule.scheduled_at)
+        .map_err(|e| format!("Invalid datetime: {}", e))?;
+
+    // Get the account's window_duration_hours for overlap calculation
+    let duration_row: Option<(i32,)> = sqlx::query_as(
+        "SELECT window_duration_hours FROM accounts WHERE id = ?",
+    )
+    .bind(schedule.account_id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(db_err("fetch account duration"))?;
+
+    let window_duration_hours = duration_row.map(|(h,)| h).unwrap_or(5) as i64;
+
+    // Check existing pending schedules for the same account that would overlap
+    let existing: Vec<(String,)> = sqlx::query_as(
+        "SELECT scheduled_at FROM scheduled_triggers WHERE account_id = ? AND status = 'pending'",
+    )
+    .bind(schedule.account_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(db_err("check schedule conflicts"))?;
+
+    for (existing_at,) in &existing {
+        if let Ok(existing_dt) = chrono::DateTime::parse_from_rfc3339(existing_at) {
+            let diff_hours = (new_dt.signed_duration_since(existing_dt)).num_hours().abs();
+            if diff_hours < window_duration_hours {
+                return Err(format!(
+                    "Schedule conflict: an existing schedule at {} is within {}h of the requested time. \
+                     Windows are {}h long, so these would overlap.",
+                    existing_dt.format("%b %d at %H:%M"),
+                    diff_hours,
+                    window_duration_hours,
+                ));
+            }
+        }
+    }
+
     let result = sqlx::query(
         "INSERT INTO scheduled_triggers (account_id, scheduled_at, status) VALUES (?, ?, 'pending')"
     )
@@ -141,10 +175,7 @@ pub async fn create_schedule(
     .bind(&schedule.scheduled_at)
     .execute(&pool)
     .await
-    .map_err(|e| {
-        eprintln!("Database error in create_schedule: {:?}", e);
-        "Failed to create schedule".to_string()
-    })?;
+    .map_err(db_err("create schedule"))?;
 
     let id = result.last_insert_rowid();
 
@@ -171,10 +202,7 @@ pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), Strin
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error in delete_schedule: {:?}", e);
-            "Failed to delete schedule".to_string()
-        })?;
+        .map_err(db_err("delete schedule"))?;
 
     Ok(())
 }
@@ -197,10 +225,7 @@ pub async fn install_schedule(
     .bind(id)
     .fetch_optional(&pool)
     .await
-    .map_err(|e| {
-        eprintln!("Database error in install_schedule: {:?}", e);
-        "Failed to fetch schedule".to_string()
-    })?;
+    .map_err(db_err("fetch schedule for install"))?;
 
     let scheduled_at = row.ok_or("Schedule not found")?.0;
 
@@ -260,10 +285,7 @@ pub async fn install_schedule(
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(|e| {
-            eprintln!("Database error updating plist_path: {:?}", e);
-            "Failed to update schedule with plist path".to_string()
-        })?;
+        .map_err(db_err("update schedule plist path"))?;
 
     Ok(plist_path_str)
 }
