@@ -160,25 +160,35 @@ mod tests {
 
     #[test]
     fn test_validate_cli_command_valid() {
+        // Absolute paths
         assert!(validate_cli_command("/usr/local/bin/claude").is_ok());
         assert!(validate_cli_command("/opt/homebrew/bin/codex").is_ok());
+        // Bare command names (resolved via `which` at runtime)
+        assert!(validate_cli_command("claude").is_ok());
+        assert!(validate_cli_command("codex").is_ok());
+        assert!(validate_cli_command("gemini").is_ok());
+        assert!(validate_cli_command("my-tool_v2.1").is_ok());
     }
 
     #[test]
     fn test_validate_cli_command_invalid() {
         // Empty
         assert!(validate_cli_command("").is_err());
-        // Not absolute
-        assert!(validate_cli_command("claude").is_err());
+        // Relative paths with separators
         assert!(validate_cli_command("./claude").is_err());
-        // Shell metacharacters
+        assert!(validate_cli_command("bin/claude").is_err());
+        // Shell metacharacters in absolute path
         assert!(validate_cli_command("/bin/sh; rm -rf /").is_err());
         assert!(validate_cli_command("/bin/sh | cat /etc/passwd").is_err());
         assert!(validate_cli_command("/bin/sh && malicious").is_err());
         assert!(validate_cli_command("/bin/sh$(whoami)").is_err());
         assert!(validate_cli_command("/bin/sh`id`").is_err());
+        // Shell metacharacters in bare command
+        assert!(validate_cli_command("claude;rm").is_err());
+        assert!(validate_cli_command("claude evil").is_err());
         // Path traversal
         assert!(validate_cli_command("/usr/../etc/passwd").is_err());
+        assert!(validate_cli_command("..").is_err());
     }
 
     #[test]
