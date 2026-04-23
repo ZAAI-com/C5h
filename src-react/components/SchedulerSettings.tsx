@@ -207,6 +207,7 @@ export function SchedulerSettings() {
                       variant="ghost"
                       size="icon"
                       title={isInstalled ? "Uninstall from launchd" : "Install to launchd"}
+                      aria-label={isInstalled ? "Uninstall schedule" : "Install schedule"}
                       onClick={() =>
                         schedule.id &&
                         handleToggleInstall(schedule.id, isInstalled, schedule.account_id)
@@ -221,6 +222,7 @@ export function SchedulerSettings() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Delete schedule"
                       onClick={() => schedule.id && handleDeleteSchedule(schedule.id)}
                     >
                       <Trash2 className="h-4 w-4" />

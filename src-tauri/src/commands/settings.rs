@@ -31,14 +31,14 @@ pub async fn get_settings(db: State<'_, DbPool>) -> Result<Settings, String> {
                         settings.poll_interval_minutes = val;
                     }
                     Ok(val) => {
-                        eprintln!(
+                        log::warn!(
                             "Warning: Invalid poll_interval_minutes value {} (must be 1-60), using default",
                             val
                         );
                         settings.poll_interval_minutes = 15;
                     }
                     Err(e) => {
-                        eprintln!(
+                        log::warn!(
                             "Warning: Failed to parse poll_interval_minutes '{}': {}, using default",
                             value, e
                         );

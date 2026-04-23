@@ -109,7 +109,7 @@ pub async fn get_schedules(
             match serde_json::from_value(v.clone()) {
                 Ok(schedule) => Some(schedule),
                 Err(e) => {
-                    eprintln!("Skipping malformed schedule record: {}", e);
+                    log::warn!("Skipping malformed schedule record: {}", e);
                     None
                 }
             }
@@ -193,7 +193,7 @@ pub async fn create_schedule(
 pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), String> {
     // First uninstall if installed (ignore errors - file may not exist)
     if let Err(e) = uninstall_schedule_impl(id) {
-        eprintln!("Warning: Failed to uninstall schedule during delete: {}", e);
+        log::warn!("Warning: Failed to uninstall schedule during delete: {}", e);
     }
 
     let pool = get_pool(&db).await?;
@@ -261,7 +261,7 @@ pub async fn install_schedule(
         .output();
 
     if let Err(e) = unload_result {
-        eprintln!("Warning: Failed to unload existing plist: {}", e);
+        log::warn!("Warning: Failed to unload existing plist: {}", e);
     }
 
     // Write plist file
@@ -309,10 +309,10 @@ fn uninstall_schedule_impl(id: i64) -> Result<(), String> {
         if let Ok(output) = unload_result {
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("Warning: launchctl unload failed: {}", stderr);
+                log::warn!("Warning: launchctl unload failed: {}", stderr);
             }
         } else if let Err(e) = unload_result {
-            eprintln!("Warning: Failed to execute launchctl unload: {}", e);
+            log::warn!("Warning: Failed to execute launchctl unload: {}", e);
         }
 
         // Delete plist file

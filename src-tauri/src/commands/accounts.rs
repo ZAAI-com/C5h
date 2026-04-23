@@ -48,7 +48,7 @@ pub async fn get_accounts(db: State<'_, DbPool>) -> Result<Vec<Account>, String>
         .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
             Ok(account) => Some(account),
             Err(e) => {
-                eprintln!("Skipping malformed account record: {}", e);
+                log::warn!("Skipping malformed account record: {}", e);
                 None
             }
         })

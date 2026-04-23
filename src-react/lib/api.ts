@@ -187,6 +187,13 @@ export async function sendNotification(
   return invoke<void>("send_notification", { title, body });
 }
 
+// Data retention
+export async function purgeOldWindows(retentionDays?: number): Promise<number> {
+  return invoke<number>("purge_old_windows", {
+    retentionDays: retentionDays ?? null,
+  });
+}
+
 // Tray commands
 export async function updateTrayTitle(text: string | null): Promise<void> {
   return invoke<void>("update_tray_title", { text });

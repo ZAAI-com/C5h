@@ -82,14 +82,14 @@ pub async fn poll_all_accounts(
                         results.push((account_id, info));
                     }
                     Err(e) => {
-                        eprintln!("Failed to poll account {}: {}", account_id, e);
+                        log::warn!("Failed to poll account {}: {}", account_id, e);
                         // Return default UsageInfo for failed polls
                         results.push((account_id, UsageInfo::default()));
                     }
                 }
             }
             Err(e) => {
-                eprintln!("CLI not found for account {}: {}", account_id, e);
+                log::warn!("CLI not found for account {}: {}", account_id, e);
                 results.push((account_id, UsageInfo::default()));
             }
         }

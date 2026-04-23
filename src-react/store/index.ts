@@ -307,6 +307,7 @@ export const useStore = create<AppState>((set, get) => ({
         get().fetchCurrentWindow(),
         get().fetchWindows(start, end),
         get().fetchSchedules(),
+        api.purgeOldWindows(),
       ]);
 
       const failures = results

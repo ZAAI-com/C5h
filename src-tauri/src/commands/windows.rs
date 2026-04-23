@@ -6,14 +6,20 @@ use serde_json::Value;
 use tauri::State;
 use crate::db::DbPool;
 
+const DEFAULT_RETENTION_DAYS: i64 = 90;
+
 #[tauri::command]
 pub async fn get_windows(
     db: State<'_, DbPool>,
     from: String,
     to: String,
     account_id: Option<i64>,
+    limit: Option<i64>,
+    offset: Option<i64>,
 ) -> Result<Vec<Window>, String> {
     let pool = get_pool(&db).await?;
+    let limit = limit.unwrap_or(500);
+    let offset = offset.unwrap_or(0);
 
     let rows: Vec<(Value,)> = if let Some(aid) = account_id {
         sqlx::query_as(
@@ -28,11 +34,14 @@ pub async fn get_windows(
                 'created_at', created_at
             ) FROM windows
             WHERE started_at >= ? AND started_at <= ? AND account_id = ?
-            ORDER BY started_at DESC",
+            ORDER BY started_at DESC
+            LIMIT ? OFFSET ?",
         )
         .bind(&from)
         .bind(&to)
         .bind(aid)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&pool)
         .await
         .map_err(db_err("fetch windows"))?
@@ -49,10 +58,13 @@ pub async fn get_windows(
                 'created_at', created_at
             ) FROM windows
             WHERE started_at >= ? AND started_at <= ?
-            ORDER BY started_at DESC",
+            ORDER BY started_at DESC
+            LIMIT ? OFFSET ?",
         )
         .bind(&from)
         .bind(&to)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&pool)
         .await
         .map_err(db_err("fetch windows"))?
@@ -63,7 +75,7 @@ pub async fn get_windows(
         .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
             Ok(window) => Some(window),
             Err(e) => {
-                eprintln!("Skipping malformed window record: {}", e);
+                log::warn!("Skipping malformed window record: {}", e);
                 None
             }
         })
@@ -121,7 +133,7 @@ pub async fn get_current_window(
     Ok(row.and_then(|(v,)| match serde_json::from_value(v.clone()) {
         Ok(window) => Some(window),
         Err(e) => {
-            eprintln!("Skipping malformed current window record: {}", e);
+            log::warn!("Skipping malformed current window record: {}", e);
             None
         }
     }))
@@ -179,4 +191,27 @@ pub async fn end_window(
         .map_err(db_err("end window"))?;
 
     Ok(())
+}
+
+/// Purge completed windows older than the retention period.
+/// Only deletes windows that have ended (ended_at IS NOT NULL).
+#[tauri::command]
+pub async fn purge_old_windows(
+    db: State<'_, DbPool>,
+    retention_days: Option<i64>,
+) -> Result<u64, String> {
+    let pool = get_pool(&db).await?;
+    let days = retention_days.unwrap_or(DEFAULT_RETENTION_DAYS);
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(days);
+    let cutoff_str = cutoff.to_rfc3339();
+
+    let result = sqlx::query(
+        "DELETE FROM windows WHERE ended_at IS NOT NULL AND started_at < ?",
+    )
+    .bind(&cutoff_str)
+    .execute(&pool)
+    .await
+    .map_err(db_err("purge old windows"))?;
+
+    Ok(result.rows_affected())
 }

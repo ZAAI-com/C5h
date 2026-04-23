@@ -62,13 +62,13 @@ impl From<C5hError> for String {
         // Log the internal error details for debugging
         match &err {
             C5hError::Database { operation, source } => {
-                eprintln!("Database error in {}: {:?}", operation, source);
+                log::error!("Database error in {}: {:?}", operation, source);
             }
             C5hError::Io { operation, source } => {
-                eprintln!("IO error in {}: {:?}", operation, source);
+                log::error!("IO error in {}: {:?}", operation, source);
             }
             C5hError::Cli { tool, detail } => {
-                eprintln!("CLI error for {}: {}", tool, detail);
+                log::error!("CLI error for {}: {}", tool, detail);
             }
             _ => {}
         }

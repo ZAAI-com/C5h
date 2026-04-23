@@ -57,6 +57,7 @@ fn toggle_popover(app: &AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         // Tauri plugins
+        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -87,6 +88,7 @@ pub fn run() {
             commands::windows::get_current_window,
             commands::windows::create_window,
             commands::windows::end_window,
+            commands::windows::purge_old_windows,
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,

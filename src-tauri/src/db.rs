@@ -53,7 +53,7 @@ pub async fn init_db(app_data_dir: std::path::PathBuf) -> Result<SqlitePool, Str
 async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
     let migration_sql = get_migration_sql();
 
-    sqlx::query(&migration_sql)
+    sqlx::raw_sql(&migration_sql)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to run migrations: {}", e))?;

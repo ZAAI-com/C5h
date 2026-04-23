@@ -102,27 +102,53 @@ export function CalendarView() {
     await fetchWindows(start, end);
   };
 
-  const getWindowsForDay = (day: Date) => {
-    return windows.filter((w) => {
-      const windowDate = new Date(w.started_at);
-      return isSameDay(windowDate, day);
-    });
-  };
+  // Pre-compute per-day lookups once when data changes
+  const windowsByDay = useMemo(() => {
+    const map = new Map<string, typeof windows>();
+    for (const day of weekDays) {
+      const key = day.toISOString();
+      map.set(
+        key,
+        windows.filter((w) => isSameDay(new Date(w.started_at), day)),
+      );
+    }
+    return map;
+  }, [windows, weekDays]);
 
-  const getSchedulesForDay = (day: Date) => {
-    return schedules.filter((s) => {
-      const scheduleDate = new Date(s.scheduled_at);
-      return isSameDay(scheduleDate, day);
-    });
-  };
+  const schedulesByDay = useMemo(() => {
+    const map = new Map<string, typeof schedules>();
+    for (const day of weekDays) {
+      const key = day.toISOString();
+      map.set(
+        key,
+        schedules.filter((s) => isSameDay(new Date(s.scheduled_at), day)),
+      );
+    }
+    return map;
+  }, [schedules, weekDays]);
 
-  const getAccountColor = (accountId: number) => {
-    return accounts.find((a) => a.id === accountId)?.color ?? "#6366f1";
-  };
+  // Pre-compute account lookup maps
+  const accountColorMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const a of accounts) {
+      if (a.id != null) map.set(a.id, a.color);
+    }
+    return map;
+  }, [accounts]);
 
-  const getAccountName = (accountId: number) => {
-    return accounts.find((a) => a.id === accountId)?.name ?? "Unknown";
-  };
+  const accountNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const a of accounts) {
+      if (a.id != null) map.set(a.id, a.name);
+    }
+    return map;
+  }, [accounts]);
+
+  const getAccountColor = (accountId: number) =>
+    accountColorMap.get(accountId) ?? "#6366f1";
+
+  const getAccountName = (accountId: number) =>
+    accountNameMap.get(accountId) ?? "Unknown";
 
   const formatHour = (date: Date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -144,13 +170,13 @@ export function CalendarView() {
                 {format(selectedDate, "MMMM yyyy")}
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handlePrevWeek}>
+                <Button variant="outline" size="sm" onClick={handlePrevWeek} aria-label="Previous week">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleToday}>
                   Today
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleNextWeek}>
+                <Button variant="outline" size="sm" onClick={handleNextWeek} aria-label="Next week">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -172,7 +198,7 @@ export function CalendarView() {
               <div className="min-w-[700px]">
                 {/* Header with days */}
                 <div className="grid grid-cols-8 border-b">
-                  <div className="p-2 text-center text-xs text-muted-foreground border-r">
+                  <div className="p-2 text-center text-xs text-muted-foreground border-r" title={Intl.DateTimeFormat().resolvedOptions().timeZone}>
                     Time
                   </div>
                   {weekDays.map((day) => (
@@ -197,7 +223,7 @@ export function CalendarView() {
                 </div>
 
                 {/* Time grid */}
-                <div className="relative">
+                <div className="relative" role="grid" aria-label="Weekly usage calendar">
                   {/* Current time indicator line */}
                   {weekDays.some((day) => isToday(day)) && (
                     <div
@@ -210,13 +236,13 @@ export function CalendarView() {
                     </div>
                   )}
                   {HOURS.map((hour) => (
-                    <div key={hour} className="grid grid-cols-8 border-b h-8">
+                    <div key={hour} className="grid grid-cols-8 border-b h-8" role="row">
                       <div className="p-1 text-xs text-muted-foreground text-right pr-2 border-r">
                         {hour.toString().padStart(2, "0")}:00
                       </div>
                       {weekDays.map((day) => {
-                        const dayWindows = getWindowsForDay(day);
-                        const daySchedules = getSchedulesForDay(day);
+                        const dayWindows = windowsByDay.get(day.toISOString()) ?? [];
+                        const daySchedules = schedulesByDay.get(day.toISOString()) ?? [];
 
                         const windowsAtHour = dayWindows.filter((w) => {
                           const windowStart = new Date(w.started_at);
@@ -240,10 +266,19 @@ export function CalendarView() {
                         return (
                           <div
                             key={`${day.toISOString()}-${hour}`}
-                            className={`border-r relative cursor-pointer hover:bg-muted/50 ${
+                            role="gridcell"
+                            tabIndex={0}
+                            aria-label={`${format(day, "EEEE, MMM d")} at ${hour.toString().padStart(2, "0")}:00`}
+                            className={`border-r relative cursor-pointer hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset outline-none ${
                               isToday(day) ? "bg-primary/5" : ""
                             }`}
                             onClick={() => handleCellClick(day, hour)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleCellClick(day, hour);
+                              }
+                            }}
                           >
                             {windowsAtHour.map((w, i) => {
                               const startTime = new Date(w.started_at);
