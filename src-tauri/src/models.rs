@@ -1,4 +1,24 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize a bool from either a JSON boolean or a SQLite INTEGER (0/1).
+///
+/// SQLite stores booleans as integers, and `json_object()` reflects that —
+/// without this shim, `serde_json::from_value` rejects `Number(1)` for `bool`.
+fn bool_from_int<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    use serde::de::Error;
+    let v = serde_json::Value::deserialize(d)?;
+    match v {
+        serde_json::Value::Bool(b) => Ok(b),
+        serde_json::Value::Number(n) => n
+            .as_i64()
+            .map(|i| i != 0)
+            .ok_or_else(|| D::Error::custom(format!("expected integer for bool, got {}", n))),
+        other => Err(D::Error::custom(format!(
+            "expected bool or integer, got {:?}",
+            other
+        ))),
+    }
+}
 
 /// Supported AI tool types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,6 +46,7 @@ pub struct Account {
     pub cli_args: Option<String>,
     pub window_duration_hours: i32,
     pub color: String,
+    #[serde(deserialize_with = "bool_from_int")]
     pub enabled: bool,
     pub created_at: Option<String>,
 }

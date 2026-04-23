@@ -1,19 +1,19 @@
+# Homebrew cask template for C5h.
+#
+# This is a TEMPLATE — replace VERSION_PLACEHOLDER and SHA256_PLACEHOLDER before
+# copying into the tap repo at github.com/ZAAI/homebrew-tap.
+#
+# See Docs/RELEASING.md for the full release procedure.
 cask "c5h" do
-  version "0.2.0"
-  sha256 :no_check # Update with actual SHA256 for release
+  version "VERSION_PLACEHOLDER"
+  sha256 "SHA256_PLACEHOLDER"
 
-  url "https://github.com/zaai/c5h/releases/download/v#{version}/C5h_#{version}_aarch64.dmg",
-      verified: "github.com/zaai/c5h/"
-
-  # For Intel Macs
-  on_intel do
-    url "https://github.com/zaai/c5h/releases/download/v#{version}/C5h_#{version}_x86_64.dmg",
-        verified: "github.com/zaai/c5h/"
-  end
+  url "https://github.com/ZAAI/c5h/releases/download/v#{version}/C5h_#{version}_universal.dmg",
+      verified: "github.com/ZAAI/c5h/"
 
   name "C5h"
-  desc "AI Tool Usage Tracker - Visualize and optimize your Claude Code, Codex, and Gemini usage windows"
-  homepage "https://github.com/zaai/c5h"
+  desc "AI coding-tool usage window tracker for Claude Code, Codex, and Gemini"
+  homepage "https://github.com/ZAAI/c5h"
 
   livecheck do
     url :url
@@ -21,7 +21,7 @@ cask "c5h" do
   end
 
   auto_updates true
-  depends_on macos: ">= :ventura"
+  depends_on macos: ">= :monterey"
 
   app "C5h.app"
 
@@ -29,6 +29,7 @@ cask "c5h" do
     "~/Library/Application Support/com.zaai.c5h",
     "~/Library/Caches/com.zaai.c5h",
     "~/Library/LaunchAgents/com.zaai.c5h.trigger.*.plist",
+    "~/Library/Logs/com.zaai.c5h",
     "~/Library/Preferences/com.zaai.c5h.plist",
     "~/Library/Saved Application State/com.zaai.c5h.savedState",
   ]

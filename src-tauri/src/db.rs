@@ -1,4 +1,6 @@
 use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+#[cfg(test)]
+use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -49,16 +51,48 @@ pub async fn init_db(app_data_dir: std::path::PathBuf) -> Result<SqlitePool, Str
     Ok(pool)
 }
 
-/// Run database migrations
+/// Run database migrations.
+///
+/// `raw_sql().execute()` only consumes the first statement's result on SQLite,
+/// so we split on `;` and execute each non-empty statement individually.
 async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
     let migration_sql = get_migration_sql();
 
-    sqlx::raw_sql(&migration_sql)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to run migrations: {}", e))?;
+    for statement in migration_sql.split(';') {
+        let trimmed = statement.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        sqlx::query(trimmed)
+            .execute(pool)
+            .await
+            .map_err(|e| format!("Failed to run migration statement '{}': {}", trimmed, e))?;
+    }
 
     Ok(())
+}
+
+/// Initialize an in-memory SQLite pool with migrations applied.
+///
+/// Each `sqlite::memory:` connection gets its own private database, so we
+/// pin the pool to exactly one connection (kept alive forever) to ensure
+/// migrations and subsequent queries see the same DB.
+#[cfg(test)]
+pub async fn init_test_pool() -> SqlitePool {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .min_connections(1)
+        .idle_timeout(None)
+        .max_lifetime(None)
+        .connect("sqlite::memory:")
+        .await
+        .expect("Failed to connect to in-memory SQLite");
+
+    run_migrations(&pool)
+        .await
+        .expect("Failed to run migrations on test pool");
+
+    pool
 }
 
 /// Get the migration SQL

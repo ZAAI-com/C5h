@@ -144,4 +144,45 @@ mod tests {
         let args = get_poll_args("unknown_tool");
         assert!(args.is_empty());
     }
+
+    #[tokio::test]
+    async fn resolve_cli_path_passes_through_absolute_paths() {
+        // Doesn't matter if the file exists — the function returns absolute paths verbatim
+        let path = resolve_cli_path("/usr/local/bin/some-binary-that-does-not-exist").await.unwrap();
+        assert_eq!(path, "/usr/local/bin/some-binary-that-does-not-exist");
+    }
+
+    #[tokio::test]
+    async fn resolve_cli_path_finds_common_command() {
+        // `sh` is on every macOS/Linux system
+        let path = resolve_cli_path("sh").await.unwrap();
+        assert!(path.starts_with('/'), "expected absolute path, got: {}", path);
+        assert!(path.contains("sh"));
+    }
+
+    #[tokio::test]
+    async fn resolve_cli_path_errors_for_missing_binary() {
+        let err = resolve_cli_path("definitely-not-a-real-command-xyzzy-9000").await.unwrap_err();
+        assert!(err.contains("not found"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn poll_account_rejects_unknown_tool_type() {
+        // /bin/date always produces output, so we get past the empty-output guard
+        // and reach the tool_type match
+        let err = poll_account("/bin/date", "not_a_real_tool").await.unwrap_err();
+        assert!(err.contains("Unknown tool type"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn poll_account_errors_when_command_missing() {
+        let err = poll_account("/path/to/nothing-real-1234", "claude_code").await.unwrap_err();
+        assert!(err.to_lowercase().contains("failed to run") || err.to_lowercase().contains("no such"));
+    }
+
+    #[tokio::test]
+    async fn check_cli_available_returns_false_for_missing() {
+        let exists = check_cli_available("definitely-not-real-xyzzy-9001").await;
+        assert!(!exists);
+    }
 }

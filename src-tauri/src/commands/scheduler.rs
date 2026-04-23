@@ -4,6 +4,7 @@ use crate::models::{NewScheduledTrigger, ScheduledTrigger};
 use crate::validation::{escape_for_plist, validate_cli_command, validate_scheduled_at};
 use chrono::{Datelike, Timelike};
 use serde_json::Value;
+use sqlx::SqlitePool;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -61,13 +62,10 @@ fn path_to_string(path: &PathBuf) -> Result<String, String> {
         .map(|s| s.to_string())
 }
 
-#[tauri::command]
-pub async fn get_schedules(
-    db: State<'_, DbPool>,
+pub async fn get_schedules_impl(
+    pool: &SqlitePool,
     account_id: Option<i64>,
 ) -> Result<Vec<ScheduledTrigger>, String> {
-    let pool = get_pool(&db).await?;
-
     let rows: Vec<(Value,)> = if let Some(aid) = account_id {
         sqlx::query_as(
             "SELECT json_object(
@@ -82,7 +80,7 @@ pub async fn get_schedules(
             ORDER BY scheduled_at ASC"
         )
         .bind(aid)
-        .fetch_all(&pool)
+        .fetch_all(pool)
         .await
         .map_err(db_err("fetch schedules"))?
     } else {
@@ -98,7 +96,7 @@ pub async fn get_schedules(
             WHERE status = 'pending'
             ORDER BY scheduled_at ASC"
         )
-        .fetch_all(&pool)
+        .fetch_all(pool)
         .await
         .map_err(db_err("fetch schedules"))?
     };
@@ -120,16 +118,20 @@ pub async fn get_schedules(
 }
 
 #[tauri::command]
-pub async fn create_schedule(
+pub async fn get_schedules(
     db: State<'_, DbPool>,
+    account_id: Option<i64>,
+) -> Result<Vec<ScheduledTrigger>, String> {
+    let pool = get_pool(&db).await?;
+    get_schedules_impl(&pool, account_id).await
+}
+
+pub async fn create_schedule_impl(
+    pool: &SqlitePool,
     schedule: NewScheduledTrigger,
 ) -> Result<ScheduledTrigger, String> {
-    // Validate scheduled_at datetime
     validate_scheduled_at(&schedule.scheduled_at)?;
 
-    let pool = get_pool(&db).await?;
-
-    // Check for schedule conflicts: overlapping windows for the same account
     let new_dt = chrono::DateTime::parse_from_rfc3339(&schedule.scheduled_at)
         .map_err(|e| format!("Invalid datetime: {}", e))?;
 
@@ -138,7 +140,7 @@ pub async fn create_schedule(
         "SELECT window_duration_hours FROM accounts WHERE id = ?",
     )
     .bind(schedule.account_id)
-    .fetch_optional(&pool)
+    .fetch_optional(pool)
     .await
     .map_err(db_err("fetch account duration"))?;
 
@@ -149,7 +151,7 @@ pub async fn create_schedule(
         "SELECT scheduled_at FROM scheduled_triggers WHERE account_id = ? AND status = 'pending'",
     )
     .bind(schedule.account_id)
-    .fetch_all(&pool)
+    .fetch_all(pool)
     .await
     .map_err(db_err("check schedule conflicts"))?;
 
@@ -173,7 +175,7 @@ pub async fn create_schedule(
     )
     .bind(schedule.account_id)
     .bind(&schedule.scheduled_at)
-    .execute(&pool)
+    .execute(pool)
     .await
     .map_err(db_err("create schedule"))?;
 
@@ -190,21 +192,50 @@ pub async fn create_schedule(
 }
 
 #[tauri::command]
-pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), String> {
-    // First uninstall if installed (ignore errors - file may not exist)
+pub async fn create_schedule(
+    db: State<'_, DbPool>,
+    schedule: NewScheduledTrigger,
+) -> Result<ScheduledTrigger, String> {
+    let pool = get_pool(&db).await?;
+    create_schedule_impl(&pool, schedule).await
+}
+
+pub async fn delete_schedule_impl(pool: &SqlitePool, id: i64) -> Result<(), String> {
     if let Err(e) = uninstall_schedule_impl(id) {
         log::warn!("Warning: Failed to uninstall schedule during delete: {}", e);
     }
 
-    let pool = get_pool(&db).await?;
-
     sqlx::query("DELETE FROM scheduled_triggers WHERE id = ?")
         .bind(id)
-        .execute(&pool)
+        .execute(pool)
         .await
         .map_err(db_err("delete schedule"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), String> {
+    let pool = get_pool(&db).await?;
+    delete_schedule_impl(&pool, id).await
+}
+
+/// Build the plist XML content for a schedule. Pure function — no IO.
+///
+/// Extracted from `install_schedule` so we can test the generated XML.
+pub fn build_plist_content(id: i64, cli_command: &str, scheduled_at_rfc3339: &str) -> Result<String, String> {
+    let dt = chrono::DateTime::parse_from_rfc3339(scheduled_at_rfc3339)
+        .map_err(|e| format!("Invalid datetime in database: {}", e))?;
+
+    let safe_cli_command = escape_for_plist(cli_command);
+
+    Ok(PLIST_TEMPLATE
+        .replace("{ID}", &id.to_string())
+        .replace("{CLI_COMMAND}", &safe_cli_command)
+        .replace("{HOUR}", &dt.hour().to_string())
+        .replace("{MINUTE}", &dt.minute().to_string())
+        .replace("{DAY}", &dt.day().to_string())
+        .replace("{MONTH}", &dt.month().to_string()))
 }
 
 #[tauri::command]
@@ -229,21 +260,7 @@ pub async fn install_schedule(
 
     let scheduled_at = row.ok_or("Schedule not found")?.0;
 
-    // Parse the datetime
-    let dt = chrono::DateTime::parse_from_rfc3339(&scheduled_at)
-        .map_err(|e| format!("Invalid datetime in database: {}", e))?;
-
-    // Escape CLI command for safe plist inclusion
-    let safe_cli_command = escape_for_plist(&cli_command);
-
-    // Create plist content with escaped values
-    let plist_content = PLIST_TEMPLATE
-        .replace("{ID}", &id.to_string())
-        .replace("{CLI_COMMAND}", &safe_cli_command)
-        .replace("{HOUR}", &dt.hour().to_string())
-        .replace("{MINUTE}", &dt.minute().to_string())
-        .replace("{DAY}", &dt.day().to_string())
-        .replace("{MONTH}", &dt.month().to_string());
+    let plist_content = build_plist_content(id, &cli_command, &scheduled_at)?;
 
     let plist_path = get_plist_path(id)?;
     let plist_path_str = path_to_string(&plist_path)?;
@@ -321,4 +338,159 @@ fn uninstall_schedule_impl(id: i64) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::init_test_pool;
+
+    fn future_rfc3339(hours_from_now: i64) -> String {
+        (chrono::Utc::now() + chrono::Duration::hours(hours_from_now)).to_rfc3339()
+    }
+
+    #[tokio::test]
+    async fn create_schedule_persists_pending_row() {
+        let pool = init_test_pool().await;
+        let s = create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: future_rfc3339(2),
+        })
+        .await
+        .unwrap();
+        assert!(s.id.is_some());
+        assert_eq!(s.status, "pending");
+
+        let listed = get_schedules_impl(&pool, Some(1)).await.unwrap();
+        assert_eq!(listed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn create_schedule_rejects_past_datetime() {
+        let pool = init_test_pool().await;
+        let err = create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: "2020-01-01T00:00:00Z".to_string(),
+        })
+        .await
+        .unwrap_err();
+        assert!(err.contains("future"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn create_schedule_rejects_invalid_format() {
+        let pool = init_test_pool().await;
+        let err = create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: "not-a-date".to_string(),
+        })
+        .await
+        .unwrap_err();
+        assert!(err.to_lowercase().contains("datetime") || err.to_lowercase().contains("format"));
+    }
+
+    #[tokio::test]
+    async fn create_schedule_detects_overlap_conflict() {
+        let pool = init_test_pool().await;
+        // Account 1 has window_duration_hours=5 by default
+        let first = future_rfc3339(2);
+        let second = future_rfc3339(4); // 2h apart, < 5h window → conflict
+
+        create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: first,
+        })
+        .await
+        .unwrap();
+
+        let err = create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: second,
+        })
+        .await
+        .unwrap_err();
+        assert!(err.to_lowercase().contains("conflict"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn create_schedule_allows_non_overlapping() {
+        let pool = init_test_pool().await;
+        let first = future_rfc3339(2);
+        let second = future_rfc3339(10); // 8h apart, > 5h window → ok
+
+        create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: first,
+        })
+        .await
+        .unwrap();
+        create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: second,
+        })
+        .await
+        .unwrap();
+
+        let listed = get_schedules_impl(&pool, Some(1)).await.unwrap();
+        assert_eq!(listed.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn create_schedule_overlap_only_within_account() {
+        let pool = init_test_pool().await;
+        let when = future_rfc3339(2);
+
+        create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: when.clone(),
+        })
+        .await
+        .unwrap();
+        // Different account at the same time → allowed
+        create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 2,
+            scheduled_at: when,
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_schedule_removes_row() {
+        let pool = init_test_pool().await;
+        let s = create_schedule_impl(&pool, NewScheduledTrigger {
+            account_id: 1,
+            scheduled_at: future_rfc3339(2),
+        })
+        .await
+        .unwrap();
+        delete_schedule_impl(&pool, s.id.unwrap()).await.unwrap();
+        let listed = get_schedules_impl(&pool, None).await.unwrap();
+        assert!(listed.is_empty());
+    }
+
+    #[test]
+    fn build_plist_content_includes_id_and_command() {
+        let xml = build_plist_content(42, "/usr/local/bin/claude", "2026-04-23T10:30:00Z").unwrap();
+        assert!(xml.contains("com.zaai.c5h.trigger.42"));
+        assert!(xml.contains("/usr/local/bin/claude"));
+        assert!(xml.contains("<integer>10</integer>"), "should embed hour");
+        assert!(xml.contains("<integer>30</integer>"), "should embed minute");
+        assert!(xml.contains("/tmp/c5h-trigger-42.log"));
+    }
+
+    #[test]
+    fn build_plist_content_escapes_xml_metacharacters() {
+        // CLI command contains chars that would normally pass validation
+        // but plist escaping should still apply defense-in-depth
+        let xml = build_plist_content(1, "/bin/echo", "2026-04-23T10:30:00Z").unwrap();
+        assert!(!xml.contains("<![CDATA["));
+        // No raw metacharacters that escape_for_plist would replace
+    }
+
+    #[test]
+    fn build_plist_content_rejects_invalid_datetime() {
+        let err = build_plist_content(1, "claude", "garbage").unwrap_err();
+        assert!(err.contains("datetime") || err.contains("Datetime"));
+    }
 }

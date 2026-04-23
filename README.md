@@ -139,12 +139,20 @@ The app uses a hybrid approach:
 
 Frontend tests:
 ```bash
-bun test
+bun test           # watch mode
+bun test:run       # single run (CI)
+bun test:coverage  # with V8 coverage report
 ```
 
 Backend tests:
 ```bash
-cargo test
+cd src-tauri && cargo test
+```
+
+Backend coverage (requires `cargo install cargo-llvm-cov`):
+```bash
+cd src-tauri && cargo llvm-cov --open    # generates HTML report and opens it
+cd src-tauri && cargo llvm-cov --summary-only
 ```
 
 ### Code Structure

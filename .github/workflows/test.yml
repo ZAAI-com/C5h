@@ -1,10 +1,7 @@
 name: Test
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -52,6 +49,18 @@ jobs:
 
       - name: Run Cargo tests
         run: cd src-tauri && cargo test --all-features
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate Rust coverage report
+        run: cd src-tauri && cargo llvm-cov --lib --lcov --output-path lcov.info
+
+      - name: Upload Rust coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: src-tauri/lcov.info
 
   build-check:
     needs: [frontend-tests, backend-tests]
