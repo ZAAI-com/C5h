@@ -1,0 +1,73 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// @ts-expect-error process is a nodejs global
+const host = process.env.TAURI_DEV_HOST;
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
+// https://vite.dev/config/
+export default defineConfig(async () => ({
+  plugins: [react(), tailwindcss()],
+  publicDir: "./src-react/public",
+  resolve: {
+    alias: {
+      "@": path.resolve(rootDir, "./src-react"),
+    },
+  },
+
+  // Multi-page setup for main app and popover
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(rootDir, "index.html"),
+        popover: path.resolve(rootDir, "popover.html"),
+      },
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+
+          if (id.includes("recharts")) {
+            return "charts-vendor";
+          }
+
+          if (
+            id.includes("@radix-ui") ||
+            id.includes("lucide-react") ||
+            id.includes("@ilamy/calendar")
+          ) {
+            return "ui-vendor";
+          }
+
+          return "vendor";
+        },
+      },
+    },
+  },
+
+  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
+  //
+  // 1. prevent Vite from obscuring rust errors
+  clearScreen: false,
+  // 2. tauri expects a fixed port, fail if that port is not available
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: host || false,
+    hmr: host
+      ? {
+          protocol: "ws",
+          host,
+          port: 1421,
+        }
+      : undefined,
+    watch: {
+      // 3. tell Vite to ignore watching `src-tauri`
+      ignored: ["**/src-tauri/**"],
+    },
+  },
+}));

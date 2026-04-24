@@ -1,0 +1,52 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Restore Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Run bun lint
+        run: bun lint
+
+      - name: Run bun test:run
+        run: bun test:run
+
+      - name: Run bun run build
+        run: bun run build
+
+      - name: Run cargo test
+        run: cd src-tauri && cargo test --all-features
+
+      - name: Run cargo check
+        run: cd src-tauri && cargo check --all-features
+
+      - name: Run cargo clippy
+        run: cd src-tauri && cargo clippy --all-features -- -D warnings

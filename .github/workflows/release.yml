@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify requested version matches repository manifests
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import sys
+
+          requested = "${{ inputs.version }}"
+          with open("package.json", "r", encoding="utf-8") as handle:
+              package_version = json.load(handle)["version"]
+          with open("src-tauri/tauri.conf.json", "r", encoding="utf-8") as handle:
+              tauri_version = json.load(handle)["version"]
+
+          if package_version != requested or tauri_version != requested:
+              print(
+                  f"Version mismatch: requested={requested}, package.json={package_version}, tauri.conf.json={tauri_version}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
+
+  build:
+    needs: validate-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            arch: aarch64
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            arch: x86_64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # Code signing + notarization activates when APPLE_* secrets are configured.
+      # If a secret is empty the build runs unsigned. See Docs/RELEASING.md for setup.
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v${{ inputs.version }}
+          releaseName: C5h v${{ inputs.version }}
+          releaseBody: |
+            ## C5h - AI Tool Usage Tracker
+
+            Track and optimize your AI coding tool usage windows (Claude Code, Codex, Gemini).
+
+            ### Installation
+
+            **macOS (Apple Silicon):**
+            Download `C5h_*_aarch64.dmg`
+
+            **macOS (Intel):**
+            Download `C5h_*_x86_64.dmg`
+
+            ### Homebrew
+            ```bash
+            brew install --cask zaai/tap/c5h
+            ```
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: c5h-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+
+  # Fuse aarch64 + x86_64 into a single universal .app bundle, then repackage as DMG.
+  universal:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download aarch64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: c5h-aarch64
+          path: aarch64
+
+      - name: Download x86_64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: c5h-x86_64
+          path: x86_64
+
+      - name: Fuse architectures with lipo
+        run: |
+          set -euo pipefail
+
+          # Locate each per-arch .app bundle
+          AARCH64_APP=$(find aarch64 -name "*.app" -type d | head -n1)
+          X86_64_APP=$(find x86_64 -name "*.app" -type d | head -n1)
+
+          if [ -z "$AARCH64_APP" ] || [ -z "$X86_64_APP" ]; then
+            echo "::error::Missing .app bundle (aarch64=$AARCH64_APP, x86_64=$X86_64_APP)"
+            exit 1
+          fi
+
+          APP_NAME=$(basename "$AARCH64_APP")
+          BINARY_NAME="${APP_NAME%.app}"
+
+          # Start from the aarch64 bundle (preserves Info.plist, resources, signing layout)
+          mkdir -p universal
+          cp -R "$AARCH64_APP" "universal/$APP_NAME"
+
+          # Replace the Mach-O binary with a fat one combining both arches
+          lipo -create \
+            "$AARCH64_APP/Contents/MacOS/$BINARY_NAME" \
+            "$X86_64_APP/Contents/MacOS/$BINARY_NAME" \
+            -output "universal/$APP_NAME/Contents/MacOS/$BINARY_NAME"
+
+          # Verify
+          lipo -info "universal/$APP_NAME/Contents/MacOS/$BINARY_NAME"
+
+      - name: Re-sign universal binary
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "No APPLE_SIGNING_IDENTITY configured — skipping re-sign (DMG will be unsigned)."
+            exit 0
+          fi
+
+          # Import certificate into a temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          APP=$(find universal -name "*.app" -type d | head -n1)
+          codesign --deep --force --options runtime \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP"
+
+      - name: Build universal DMG
+        run: |
+          set -euo pipefail
+          APP=$(find universal -name "*.app" -type d | head -n1)
+          APP_NAME=$(basename "$APP")
+          VERSION="${{ inputs.version }}"
+          DMG_NAME="C5h_${VERSION}_universal.dmg"
+
+          # Stage the .app in a clean dir so the DMG only contains the app
+          mkdir -p dmg-staging
+          cp -R "$APP" "dmg-staging/$APP_NAME"
+
+          hdiutil create -volname "C5h" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          ls -lh "$DMG_NAME"
+
+      - name: Upload universal DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: c5h-universal
+          path: C5h_*_universal.dmg
