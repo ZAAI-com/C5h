@@ -33,6 +33,8 @@ import {
   subWeeks,
 } from "date-fns";
 import { getWeekBoundaries } from "@/lib/api";
+import { localDateTimeToOffsetRfc3339 } from "@/lib/datetime";
+import { getEffectiveWindowEnd } from "@/lib/windowing";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -70,7 +72,10 @@ export function CalendarView() {
 
   const handleCreateSchedule = async () => {
     if (!scheduleAccountId || !scheduleDate || !scheduleTime) return;
-    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    const scheduledAt = localDateTimeToOffsetRfc3339(
+      scheduleDate,
+      scheduleTime
+    );
     await createSchedule(parseInt(scheduleAccountId), scheduledAt);
     setScheduleDialogOpen(false);
   };
@@ -144,11 +149,22 @@ export function CalendarView() {
     return map;
   }, [accounts]);
 
+  const accountDurationMap = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const a of accounts) {
+      if (a.id != null) map.set(a.id, a.window_duration_hours);
+    }
+    return map;
+  }, [accounts]);
+
   const getAccountColor = (accountId: number) =>
     accountColorMap.get(accountId) ?? "#6366f1";
 
   const getAccountName = (accountId: number) =>
     accountNameMap.get(accountId) ?? "Unknown";
+
+  const getAccountDurationHours = (accountId: number) =>
+    accountDurationMap.get(accountId) ?? 5;
 
   const formatHour = (date: Date) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -246,11 +262,11 @@ export function CalendarView() {
 
                         const windowsAtHour = dayWindows.filter((w) => {
                           const windowStart = new Date(w.started_at);
-                          const windowEnd = w.ended_at
-                            ? new Date(w.ended_at)
-                            : new Date(
-                                windowStart.getTime() + 5 * 60 * 60 * 1000
-                              );
+                          const windowEnd = getEffectiveWindowEnd(w, {
+                            window_duration_hours: getAccountDurationHours(
+                              w.account_id
+                            ),
+                          });
                           const hourStart = new Date(day);
                           hourStart.setHours(hour, 0, 0, 0);
                           const hourEnd = new Date(day);
@@ -280,22 +296,44 @@ export function CalendarView() {
                               }
                             }}
                           >
+                            {(windowsAtHour.length > 0 ||
+                              schedulesAtHour.length > 0) && (
+                              <span className="sr-only">
+                                {windowsAtHour.map((windowItem) => {
+                                  const startTime = new Date(windowItem.started_at);
+                                  const endTime = getEffectiveWindowEnd(windowItem, {
+                                    window_duration_hours: getAccountDurationHours(
+                                      windowItem.account_id
+                                    ),
+                                  });
+                                  return `${getAccountName(windowItem.account_id)} window ${formatHour(startTime)} to ${formatHour(endTime)}`;
+                                }).join(". ")}
+                                {schedulesAtHour.map((scheduleItem) =>
+                                  `Scheduled trigger for ${getAccountName(scheduleItem.account_id)} at ${format(
+                                    new Date(scheduleItem.scheduled_at),
+                                    "HH:mm"
+                                  )}`
+                                ).join(". ")}
+                              </span>
+                            )}
                             {windowsAtHour.map((w, i) => {
                               const startTime = new Date(w.started_at);
-                              const endTime = w.ended_at
-                                ? new Date(w.ended_at)
-                                : null;
+                              const endTime = getEffectiveWindowEnd(w, {
+                                window_duration_hours: getAccountDurationHours(
+                                  w.account_id
+                                ),
+                              });
                               const name = getAccountName(w.account_id);
                               const usageLabel = w.usage_percent != null
                                 ? ` (${w.usage_percent}%)`
                                 : "";
-                              const timeRange = endTime
-                                ? `${formatHour(startTime)}–${formatHour(endTime)}`
-                                : `${formatHour(startTime)}–now`;
+                              const timeRange = `${formatHour(startTime)}–${formatHour(endTime)}`;
                               return (
                                 <div
                                   key={w.id}
                                   className="absolute inset-0 opacity-60"
+                                  role="img"
+                                  aria-label={`${name} window ${timeRange}${usageLabel}`}
                                   style={{
                                     backgroundColor: getAccountColor(
                                       w.account_id
@@ -310,6 +348,10 @@ export function CalendarView() {
                               <div
                                 key={s.id}
                                 className="absolute inset-1 rounded border-2 border-dashed border-orange-500 bg-orange-500/10"
+                                role="img"
+                                aria-label={`Scheduled trigger for ${getAccountName(
+                                  s.account_id
+                                )} at ${format(new Date(s.scheduled_at), "HH:mm")}`}
                                 style={{ marginLeft: `${i * 4}px` }}
                                 title={`Scheduled trigger at ${format(
                                   new Date(s.scheduled_at),

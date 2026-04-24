@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, async_runtime,
+    async_runtime, AppHandle, Emitter, Manager,
 };
 use tauri_plugin_positioner::{Position, WindowExt};
 
@@ -21,10 +21,15 @@ fn greet(name: &str) -> String {
 
 // Command to show the main window from the popover
 #[tauri::command]
-fn show_main_window(app: AppHandle) -> Result<(), String> {
+fn show_main_window(app: AppHandle, tab: Option<String>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        if let Some(tab) = tab {
+            window
+                .emit("navigate-to-tab", tab)
+                .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -59,15 +64,7 @@ pub fn run() {
         // Tauri plugins
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_autostart::init(
-                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                Some(vec!["--hidden"]),
-            )
-        )
         .plugin(tauri_plugin_positioner::init())
         // Database pool state (initialized in setup)
         .manage(db::DbPool::default())
@@ -92,6 +89,8 @@ pub fn run() {
             // Settings commands
             commands::settings::get_settings,
             commands::settings::save_settings,
+            // Stats commands
+            commands::stats::get_stats,
             // Scheduler commands
             commands::scheduler::get_schedules,
             commands::scheduler::create_schedule,
@@ -125,7 +124,7 @@ pub fn run() {
             // Initialize database synchronously using block_on
             let pool = async_runtime::block_on(async {
                 db::init_db(app_data_dir).await
-            }).map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+            }).map_err(Box::<dyn std::error::Error>::from)?;
 
             // Store the pool in state
             async_runtime::block_on(async {
@@ -171,7 +170,7 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        toggle_popover(&app);
+                        toggle_popover(app);
                     }
                 })
                 .build(app)?;

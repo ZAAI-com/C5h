@@ -23,6 +23,10 @@ export function useKeyboardShortcuts({
 }: KeyboardShortcutOptions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.repeat) {
+        return;
+      }
+
       const meta = e.metaKey || e.ctrlKey;
       const target = e.target as HTMLElement;
       const isInput =

@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState } from "react";
 import { useStore } from "@/store";
+import { getEffectiveWindowEnd, getWindowDurationHours } from "@/lib/windowing";
 
 interface WindowStatus {
   isActive: boolean;
@@ -37,10 +38,9 @@ export function useCurrentWindow(): WindowStatus {
     }
 
     const account = accounts.find((a) => a.id === currentWindow.account_id);
-    const windowDurationHours = account?.window_duration_hours ?? 5;
-
     const startedAt = new Date(currentWindow.started_at);
-    const endTime = new Date(startedAt.getTime() + windowDurationHours * 60 * 60 * 1000);
+    const windowDurationHours = getWindowDurationHours(account);
+    const endTime = getEffectiveWindowEnd(currentWindow, account);
 
     const totalMs = windowDurationHours * 60 * 60 * 1000;
     const elapsedMs = now.getTime() - startedAt.getTime();

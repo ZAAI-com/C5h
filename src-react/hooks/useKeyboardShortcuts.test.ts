@@ -18,6 +18,17 @@ function dispatchKey(key: string, opts: { meta?: boolean; target?: HTMLElement }
   return event;
 }
 
+function dispatchRepeatedKey(key: string) {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    repeat: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  window.dispatchEvent(event);
+  return event;
+}
+
 describe("useKeyboardShortcuts", () => {
   let onSwitchTab: ReturnType<typeof vi.fn>;
   let onStartWindow: ReturnType<typeof vi.fn>;
@@ -97,5 +108,11 @@ describe("useKeyboardShortcuts", () => {
     unmount();
     dispatchKey("1", { meta: true });
     expect(onSwitchTab).not.toHaveBeenCalled();
+  });
+
+  it("ignores auto-repeat keydown events", () => {
+    renderHook(() => useKeyboardShortcuts({ onNavigateWeek }));
+    dispatchRepeatedKey("ArrowLeft");
+    expect(onNavigateWeek).not.toHaveBeenCalled();
   });
 });

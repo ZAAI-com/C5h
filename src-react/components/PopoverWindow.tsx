@@ -5,7 +5,8 @@ import { Progress } from "@/components/shadcn-ui/progress";
 import { Button } from "@/components/shadcn-ui/button";
 import { Separator } from "@/components/shadcn-ui/separator";
 import { Play, Settings, LayoutDashboard, Clock, AlertCircle } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+import * as api from "@/lib/api";
+import { getWindowDurationInHours } from "@/lib/windowing";
 
 export function PopoverWindow() {
   const currentWindow = useStore((state) => state.currentWindow);
@@ -23,9 +24,9 @@ export function PopoverWindow() {
 
   const usageByAccount = useStore((state) => state.usageByAccount);
 
-  const account = currentWindow
-    ? accounts.find((a) => a.id === currentWindow.account_id)
-    : accounts.find((a) => a.enabled);
+  const account =
+    accounts.find((a) => a.id === currentWindow?.account_id) ??
+    accounts.find((a) => a.enabled);
 
   // Use real CLI polling data when available
   const accountUsage = currentWindow
@@ -40,26 +41,18 @@ export function PopoverWindow() {
   };
 
   const handleOpenApp = async () => {
-    // Show main window using our custom command
-    await invoke("show_main_window").catch(console.error);
+    await api.showMainWindow().catch(console.error);
   };
 
   const handleOpenSettings = async () => {
-    // Show main window and navigate to settings (via URL hash or state)
-    await handleOpenApp();
+    await api.showMainWindow("settings").catch(console.error);
   };
 
   // Calculate week statistics
   const thisWeekWindows = windows.length;
   const totalHours = windows.reduce((acc, w) => {
     const windowAccount = accounts.find((a) => a.id === w.account_id);
-    const duration = windowAccount?.window_duration_hours ?? 5;
-    if (w.ended_at) {
-      const start = new Date(w.started_at);
-      const end = new Date(w.ended_at);
-      return acc + (end.getTime() - start.getTime()) / (60 * 60 * 1000);
-    }
-    return acc + duration;
+    return acc + getWindowDurationInHours(w, windowAccount);
   }, 0);
 
   // Get next scheduled trigger

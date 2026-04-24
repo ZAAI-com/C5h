@@ -1,7 +1,12 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, beforeEach, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import { StatsView } from "./StatsView";
 import { useStore } from "@/store";
+import * as api from "@/lib/api";
+
+vi.mock("@/lib/api", () => ({
+  getWindows: vi.fn().mockResolvedValue([]),
+}));
 
 const account = {
   id: 1,
@@ -16,10 +21,13 @@ const account = {
 
 describe("StatsView", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getWindows).mockResolvedValue([]);
     useStore.setState({
       accounts: [],
       windows: [],
       selectedDate: new Date("2024-01-15T12:00:00Z"),
+      selectedAccountId: null,
     });
   });
 
@@ -151,5 +159,19 @@ describe("StatsView", () => {
     render(<StatsView />);
     // Two windows
     expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("fetches a dedicated 8-week range for trend data", async () => {
+    useStore.setState({
+      accounts: [account],
+      windows: [],
+      selectedDate: new Date("2024-01-15T12:00:00Z"),
+    });
+
+    render(<StatsView />);
+
+    await waitFor(() => {
+      expect(api.getWindows).toHaveBeenCalledTimes(1);
+    });
   });
 });
