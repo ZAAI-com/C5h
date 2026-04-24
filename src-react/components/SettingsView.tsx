@@ -22,12 +22,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/shadcn-ui/dialog";
-import { Settings, Bell, Palette, Plus, Pencil, Trash2 } from "lucide-react";
+import { Settings, Bell, Plus, Pencil, Trash2 } from "lucide-react";
 import type { Account, NewAccount } from "@/lib/types";
 import { SchedulerSettings } from "./SchedulerSettings";
 
 const TOOL_TYPES = ["claude", "codex", "gemini"];
-const THEME_OPTIONS = ["system", "light", "dark"];
 const COLORS = [
   "#6366f1", // Indigo
   "#10a37f", // Green
@@ -38,6 +37,16 @@ const COLORS = [
   "#06b6d4", // Cyan
   "#ec4899", // Pink
 ];
+const COLOR_LABELS: Record<string, string> = {
+  "#6366f1": "Indigo",
+  "#10a37f": "Green",
+  "#4285f4": "Blue",
+  "#f59e0b": "Amber",
+  "#ef4444": "Red",
+  "#8b5cf6": "Purple",
+  "#06b6d4": "Cyan",
+  "#ec4899": "Pink",
+};
 
 export function SettingsView() {
   const settings = useStore((state) => state.settings);
@@ -49,6 +58,7 @@ export function SettingsView() {
 
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [accountPendingDelete, setAccountPendingDelete] = useState<Account | null>(null);
   const [accountForm, setAccountForm] = useState<NewAccount>({
     name: "",
     tool_type: "claude",
@@ -104,10 +114,13 @@ export function SettingsView() {
     setIsAccountDialogOpen(false);
   };
 
-  const handleDeleteAccount = async (id: number) => {
-    if (confirm("Are you sure you want to delete this account?")) {
-      await deleteAccount(id);
+  const handleDeleteAccount = async () => {
+    if (!accountPendingDelete?.id) {
+      return;
     }
+
+    await deleteAccount(accountPendingDelete.id);
+    setAccountPendingDelete(null);
   };
 
   if (!settings) {
@@ -121,47 +134,11 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            General
+            Monitoring
           </CardTitle>
-          <CardDescription>Configure app behavior</CardDescription>
+          <CardDescription>Configure the active monitoring loop</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="launch_at_login">Launch at Login</Label>
-              <p className="text-sm text-muted-foreground">
-                Start C5h automatically when you log in
-              </p>
-            </div>
-            <Switch
-              id="launch_at_login"
-              checked={settings.launch_at_login}
-              onCheckedChange={(checked) =>
-                handleSettingChange("launch_at_login", checked)
-              }
-            />
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="show_in_menu_bar">Show in Menu Bar</Label>
-              <p className="text-sm text-muted-foreground">
-                Display status icon in the menu bar
-              </p>
-            </div>
-            <Switch
-              id="show_in_menu_bar"
-              checked={settings.show_in_menu_bar}
-              onCheckedChange={(checked) =>
-                handleSettingChange("show_in_menu_bar", checked)
-              }
-            />
-          </div>
-
-          <Separator />
-
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="poll_interval">Poll Interval</Label>
@@ -183,42 +160,6 @@ export function SettingsView() {
                 <SelectItem value="10">10</SelectItem>
                 <SelectItem value="15">15</SelectItem>
                 <SelectItem value="30">30</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Appearance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            Appearance
-          </CardTitle>
-          <CardDescription>Customize the look and feel</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="theme">Theme</Label>
-              <p className="text-sm text-muted-foreground">
-                Choose your preferred color scheme
-              </p>
-            </div>
-            <Select
-              value={settings.theme}
-              onValueChange={(value) => handleSettingChange("theme", value)}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {THEME_OPTIONS.map((theme) => (
-                  <SelectItem key={theme} value={theme}>
-                    {theme.charAt(0).toUpperCase() + theme.slice(1)}
-                  </SelectItem>
-                ))}
               </SelectContent>
             </Select>
           </div>
@@ -266,40 +207,6 @@ export function SettingsView() {
               disabled={!settings.notifications_enabled}
               onCheckedChange={(checked) =>
                 handleSettingChange("notify_ending_soon", checked)
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="notify_trigger_status">Trigger Status</Label>
-              <p className="text-sm text-muted-foreground">
-                Notify about scheduled trigger results
-              </p>
-            </div>
-            <Switch
-              id="notify_trigger_status"
-              checked={settings.notify_trigger_status}
-              disabled={!settings.notifications_enabled}
-              onCheckedChange={(checked) =>
-                handleSettingChange("notify_trigger_status", checked)
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="notify_weekly_summary">Weekly Summary</Label>
-              <p className="text-sm text-muted-foreground">
-                Send a weekly usage summary
-              </p>
-            </div>
-            <Switch
-              id="notify_weekly_summary"
-              checked={settings.notify_weekly_summary}
-              disabled={!settings.notifications_enabled}
-              onCheckedChange={(checked) =>
-                handleSettingChange("notify_weekly_summary", checked)
               }
             />
           </div>
@@ -381,6 +288,24 @@ export function SettingsView() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="cli_args">Scheduled Trigger Args</Label>
+                    <Input
+                      id="cli_args"
+                      value={accountForm.cli_args ?? ""}
+                      onChange={(e) =>
+                        setAccountForm({
+                          ...accountForm,
+                          cli_args: e.target.value,
+                        })
+                      }
+                      placeholder='-p "1+1"'
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Applied only when launchd runs this account&apos;s scheduled trigger.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="window_duration">Window Duration (hours)</Label>
                     <Input
                       id="window_duration"
@@ -409,6 +334,8 @@ export function SettingsView() {
                               ? "border-foreground"
                               : "border-transparent"
                           }`}
+                          aria-label={`Select ${COLOR_LABELS[color]} color`}
+                          aria-pressed={accountForm.color === color}
                           style={{ backgroundColor: color }}
                           onClick={() =>
                             setAccountForm({ ...accountForm, color })
@@ -458,12 +385,15 @@ export function SettingsView() {
                   <div className="flex items-center gap-3">
                     <div
                       className="w-4 h-4 rounded-full"
+                      role="img"
+                      aria-label={`${account.name} color`}
                       style={{ backgroundColor: account.color }}
                     />
                     <div>
                       <p className="font-medium">{account.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {account.cli_command} · {account.window_duration_hours}h
+                        {account.cli_command}
+                        {account.cli_args ? ` ${account.cli_args}` : ""} · {account.window_duration_hours}h
                         window
                       </p>
                     </div>
@@ -475,6 +405,7 @@ export function SettingsView() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Edit ${account.name}`}
                       onClick={() => handleOpenAccountDialog(account)}
                     >
                       <Pencil className="h-4 w-4" />
@@ -482,7 +413,8 @@ export function SettingsView() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => account.id && handleDeleteAccount(account.id)}
+                      aria-label={`Delete ${account.name}`}
+                      onClick={() => setAccountPendingDelete(account)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -496,6 +428,37 @@ export function SettingsView() {
 
       {/* Scheduler */}
       <SchedulerSettings />
+
+      <Dialog
+        open={!!accountPendingDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAccountPendingDelete(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Account</DialogTitle>
+            <DialogDescription>
+              {accountPendingDelete
+                ? `Delete ${accountPendingDelete.name}? This also removes its windows and schedules.`
+                : "Delete this account?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAccountPendingDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAccount}>
+              Delete Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

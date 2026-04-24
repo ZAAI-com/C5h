@@ -60,6 +60,8 @@ export function StatusCard() {
           {account && (
             <div
               className="w-3 h-3 rounded-full"
+              role="img"
+              aria-label={`${account.name} color`}
               style={{ backgroundColor: account.color }}
             />
           )}
@@ -77,7 +79,14 @@ export function StatusCard() {
               {status.hoursRemaining}h {status.minutesRemaining}m
             </span>
           </div>
-          <Progress value={displayPercent} className="h-2" />
+          <Progress
+            value={displayPercent}
+            className="h-2"
+            aria-label="Window usage"
+            aria-valuenow={Math.round(displayPercent)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          />
         </div>
 
         <div className="flex justify-between text-sm">

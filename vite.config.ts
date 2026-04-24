@@ -2,9 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -12,7 +14,7 @@ export default defineConfig(async () => ({
   publicDir: "./src-react/public",
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src-react"),
+      "@": path.resolve(rootDir, "./src-react"),
     },
   },
 
@@ -20,8 +22,8 @@ export default defineConfig(async () => ({
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, "index.html"),
-        popover: path.resolve(__dirname, "popover.html"),
+        main: path.resolve(rootDir, "index.html"),
+        popover: path.resolve(rootDir, "popover.html"),
       },
     },
   },

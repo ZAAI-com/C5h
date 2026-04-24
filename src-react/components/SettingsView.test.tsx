@@ -91,6 +91,48 @@ describe("SettingsView", () => {
     expect(screen.getByText(/claude · 5h window/i)).toBeInTheDocument();
   });
 
+  it("adds accessible labels to account action buttons", () => {
+    useStore.setState({
+      accounts: [
+        {
+          id: 1,
+          name: "Claude Code",
+          tool_type: "claude",
+          cli_command: "claude",
+          cli_args: null,
+          window_duration_hours: 5,
+          color: "#6366f1",
+          enabled: true,
+        },
+      ],
+    });
+
+    render(<SettingsView />);
+
+    expect(
+      screen.getByRole("img", { name: /claude code color/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /edit claude code/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /delete claude code/i })
+    ).toBeInTheDocument();
+  });
+
+  it("adds accessible labels and selected state to color swatches", () => {
+    render(<SettingsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add account/i }));
+
+    expect(
+      screen.getByRole("button", { name: /select indigo color/i })
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /select green color/i })
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
   it("shows Disabled badge for disabled accounts", () => {
     useStore.setState({
       accounts: [

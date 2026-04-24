@@ -63,12 +63,7 @@ echo ""
 # Install frontend dependencies
 echo "Installing frontend dependencies..."
 bun install
-
-if [ $? -eq 0 ]; then
-    check_pass "Frontend dependencies installed"
-else
-    check_fail "Failed to install frontend dependencies" "Check output above"
-fi
+check_pass "Frontend dependencies installed"
 
 echo ""
 echo "=== Setup Complete! ==="

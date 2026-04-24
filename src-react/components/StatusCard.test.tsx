@@ -27,6 +27,7 @@ describe("StatusCard", () => {
         },
       ],
       currentWindow: null,
+      usageByAccount: {},
     });
   });
 
@@ -74,6 +75,12 @@ describe("StatusCard", () => {
     expect(screen.getByText(/claude code/i)).toBeInTheDocument();
     expect(screen.getByText(/3h/)).toBeInTheDocument();
     expect(screen.getByText(/40%/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /claude code color/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("progressbar", { name: /window usage/i })
+    ).toBeInTheDocument();
   });
 
   it("should show ending soon alert when isEndingSoon is true", () => {

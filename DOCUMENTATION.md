@@ -61,8 +61,8 @@ C5h is a **macOS menu bar application** designed to visualize and optimize AI co
 
 ### Project Structure
 
-```
-phoenix/
+```text
+c5h/
 ├── src-react/                 # React frontend
 │   ├── components/            # UI components
 │   │   ├── shadcn-ui/         # Base UI (button, card, dialog, etc.)
@@ -109,7 +109,7 @@ phoenix/
 
 ### Data Flow
 
-```
+```text
 ┌─────────────────┐     IPC      ┌─────────────────┐
 │  React Frontend │ ◄──────────► │   Rust Backend  │
 │                 │   (invoke)   │                 │
@@ -163,9 +163,10 @@ phoenix/
 
 **Account Configuration**:
 - **Name**: Display name (e.g., "Claude Code")
-- **Tool Type**: claude_code, codex, gemini, other
+- **Tool Type**: claude, codex, gemini, other
 - **CLI Command**: Full path to CLI executable
 - **CLI Args**: Arguments for triggering (e.g., `-p "1+1"`)
+  Quotes in shell examples are for readability. When saving args in the app, store the literal values the CLI should receive, e.g. `-p 1+1`.
 - **Window Duration**: Hours per window (default: 5)
 - **Color**: Hex color for visual distinction
 - **Enabled**: Toggle account on/off
@@ -188,7 +189,7 @@ phoenix/
 **Implementation**:
 - Creates plist files in `~/Library/LaunchAgents/`
 - One-time schedules (not recurring)
-- Triggers CLI: `{cli_command} -p "1+1"`
+- Triggers CLI: `{cli_command} -p 1+1`
 - Can wake Mac from sleep
 - Status tracking: pending → completed/failed/cancelled
 
@@ -274,9 +275,10 @@ bun tauri build
 2. Click **"Add Account"**
 3. Fill in configuration:
    - Name: `Claude Code`
-   - Tool Type: `claude_code`
+   - Tool Type: `claude`
    - CLI Command: `/usr/local/bin/claude` (find with `which claude`)
    - CLI Args: `-p "1+1"`
+     Save the literal argument values the CLI should receive. In this case, store `-p 1+1` unless the quotes are part of the argument itself.
    - Duration: `5` hours
    - Color: Pick a color
 4. Click **Save**
@@ -293,7 +295,7 @@ bun tauri build
 |--------|------|-------------|
 | id | INTEGER | Primary key |
 | name | TEXT | Display name |
-| tool_type | TEXT | claude_code, codex, gemini, other |
+| tool_type | TEXT | claude, codex, gemini, other |
 | cli_command | TEXT | Full path to CLI |
 | cli_args | TEXT | CLI arguments |
 | window_duration_hours | INTEGER | Window duration |
@@ -353,9 +355,9 @@ const accounts = await invoke<Account[]>('get_accounts');
 const account = await invoke<Account>('create_account', {
   account: {
     name: "Claude Code",
-    tool_type: "claude_code",
+    tool_type: "claude",
     cli_command: "/usr/local/bin/claude",
-    cli_args: "-p \"1+1\"",
+    cli_args: "-p 1+1",
     window_duration_hours: 5,
     color: "#6366f1",
     enabled: true

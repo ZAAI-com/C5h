@@ -22,6 +22,7 @@ import {
 } from "@/components/shadcn-ui/dialog";
 import { Calendar, Clock, Plus, Trash2, Play, Square } from "lucide-react";
 import { format } from "date-fns";
+import { localDateTimeToOffsetRfc3339 } from "@/lib/datetime";
 
 export function SchedulerSettings() {
   const accounts = useStore((state) => state.accounts);
@@ -35,13 +36,17 @@ export function SchedulerSettings() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [schedulePendingDelete, setSchedulePendingDelete] = useState<number | null>(null);
 
   const enabledAccounts = accounts.filter((a) => a.enabled);
 
   const handleCreateSchedule = async () => {
     if (!selectedAccountId || !scheduledDate || !scheduledTime) return;
 
-    const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+    const scheduledAt = localDateTimeToOffsetRfc3339(
+      scheduledDate,
+      scheduledTime
+    );
     await createSchedule(parseInt(selectedAccountId), scheduledAt);
     setIsDialogOpen(false);
     setSelectedAccountId("");
@@ -49,10 +54,13 @@ export function SchedulerSettings() {
     setScheduledTime("");
   };
 
-  const handleDeleteSchedule = async (id: number) => {
-    if (confirm("Are you sure you want to delete this scheduled trigger?")) {
-      await deleteSchedule(id);
+  const handleDeleteSchedule = async () => {
+    if (schedulePendingDelete == null) {
+      return;
     }
+
+    await deleteSchedule(schedulePendingDelete);
+    setSchedulePendingDelete(null);
   };
 
   const handleToggleInstall = async (scheduleId: number, isInstalled: boolean, accountId: number) => {
@@ -223,7 +231,7 @@ export function SchedulerSettings() {
                       variant="ghost"
                       size="icon"
                       aria-label="Delete schedule"
-                      onClick={() => schedule.id && handleDeleteSchedule(schedule.id)}
+                      onClick={() => schedule.id && setSchedulePendingDelete(schedule.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -241,6 +249,35 @@ export function SchedulerSettings() {
           </p>
         </div>
       </CardContent>
+
+      <Dialog
+        open={schedulePendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSchedulePendingDelete(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Scheduled Trigger</DialogTitle>
+            <DialogDescription>
+              Delete this scheduled trigger? This removes the launchd entry if it is installed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSchedulePendingDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSchedule}>
+              Delete Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

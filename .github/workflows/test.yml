@@ -45,7 +45,7 @@ jobs:
         run: cd src-tauri && cargo check --all-features
 
       - name: Run Cargo clippy
-        run: cd src-tauri && cargo clippy --all-features -- -D warnings || true
+        run: cd src-tauri && cargo clippy --all-features -- -D warnings
 
       - name: Run Cargo tests
         run: cd src-tauri && cargo test --all-features

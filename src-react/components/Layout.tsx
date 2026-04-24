@@ -31,15 +31,15 @@ export function Layout({
             <div className="flex items-center justify-between h-14">
               <h1 className="text-lg font-semibold">C5h</h1>
               <TabsList className="grid grid-cols-3 w-auto">
-                <TabsTrigger value="calendar" className="gap-2">
+                <TabsTrigger value="calendar" className="gap-2" aria-label="Calendar">
                   <Calendar className="h-4 w-4" />
                   <span className="hidden sm:inline">Calendar</span>
                 </TabsTrigger>
-                <TabsTrigger value="stats" className="gap-2">
+                <TabsTrigger value="stats" className="gap-2" aria-label="Stats">
                   <BarChart3 className="h-4 w-4" />
                   <span className="hidden sm:inline">Stats</span>
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="gap-2">
+                <TabsTrigger value="settings" className="gap-2" aria-label="Settings">
                   <Settings className="h-4 w-4" />
                   <span className="hidden sm:inline">Settings</span>
                 </TabsTrigger>
