@@ -241,20 +241,15 @@ pub fn build_plist_content(
         .join("\n");
 
     Ok(format!(
-        "{}{}{}",
-        PLIST_PREFIX
-            .replace("{ID}", &id.to_string()),
-        format!(
-            "{}\n{}",
-            program_arguments_xml,
-            PLIST_SUFFIX
-                .replace("{ID}", &id.to_string())
-                .replace("{HOUR}", &dt.hour().to_string())
-                .replace("{MINUTE}", &dt.minute().to_string())
-                .replace("{DAY}", &dt.day().to_string())
-                .replace("{MONTH}", &dt.month().to_string())
-        ),
-        ""
+        "{}{}\n{}",
+        PLIST_PREFIX.replace("{ID}", &id.to_string()),
+        program_arguments_xml,
+        PLIST_SUFFIX
+            .replace("{ID}", &id.to_string())
+            .replace("{HOUR}", &dt.hour().to_string())
+            .replace("{MINUTE}", &dt.minute().to_string())
+            .replace("{DAY}", &dt.day().to_string())
+            .replace("{MONTH}", &dt.month().to_string())
     ))
 }
 

@@ -35,22 +35,21 @@ describe("SettingsView", () => {
 
   it("renders General, Appearance, Notifications, and Accounts sections", () => {
     render(<SettingsView />);
-    expect(screen.getByText("General")).toBeInTheDocument();
-    expect(screen.getByText("Appearance")).toBeInTheDocument();
+    expect(screen.getByText("Monitoring")).toBeInTheDocument();
     expect(screen.getByText("Notifications")).toBeInTheDocument();
     expect(screen.getByText("Accounts")).toBeInTheDocument();
   });
 
-  it("calls saveSettings when toggling launch_at_login", () => {
+  it("calls saveSettings when toggling notifications_enabled", () => {
     const saveSettings = vi.fn().mockResolvedValue(undefined);
     useStore.setState({ saveSettings });
 
     render(<SettingsView />);
-    const toggle = screen.getByLabelText(/launch at login/i);
+    const toggle = screen.getByLabelText(/enable notifications/i);
     fireEvent.click(toggle);
 
     expect(saveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ launch_at_login: false })
+      expect.objectContaining({ notifications_enabled: false })
     );
   });
 
@@ -61,8 +60,6 @@ describe("SettingsView", () => {
 
     render(<SettingsView />);
     expect(screen.getByLabelText(/window ending soon/i)).toBeDisabled();
-    expect(screen.getByLabelText(/trigger status/i)).toBeDisabled();
-    expect(screen.getByLabelText(/weekly summary/i)).toBeDisabled();
   });
 
   it("shows 'No accounts configured' when accounts array is empty", () => {

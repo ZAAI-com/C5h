@@ -18,6 +18,8 @@ vi.mock("@/lib/api", () => ({
   deleteSchedule: vi.fn(),
   installSchedule: vi.fn(),
   uninstallSchedule: vi.fn(),
+  updateMonitorConfig: vi.fn(),
+  updateTrayTitle: vi.fn(),
   getWeekBoundaries: vi.fn(() => ({
     start: "2024-01-14T00:00:00Z",
     end: "2024-01-21T00:00:00Z",
@@ -41,6 +43,8 @@ describe("Store", () => {
       error: null,
     });
     vi.clearAllMocks();
+    vi.mocked(api.updateMonitorConfig).mockResolvedValue(undefined);
+    vi.mocked(api.updateTrayTitle).mockResolvedValue(undefined);
   });
 
   describe("accounts", () => {
@@ -146,7 +150,7 @@ describe("Store", () => {
       expect(api.getWindows).toHaveBeenCalledWith(
         "2024-01-14T00:00:00Z",
         "2024-01-21T00:00:00Z",
-        undefined
+        undefined,
       );
       expect(useStore.getState().windows).toEqual(mockWindows);
     });
@@ -209,7 +213,13 @@ describe("Store", () => {
     it("should fetch settings", async () => {
       const mockSettings = {
         theme: "dark",
+        launch_at_login: true,
+        show_in_menu_bar: true,
         notifications_enabled: true,
+        notify_ending_soon: true,
+        notify_trigger_status: true,
+        notify_weekly_summary: true,
+        poll_interval_minutes: 15,
       };
 
       vi.mocked(api.getSettings).mockResolvedValueOnce(mockSettings);
@@ -221,13 +231,23 @@ describe("Store", () => {
     });
 
     it("should save settings", async () => {
-      const newSettings = { theme: "light", notifications_enabled: true };
+      const newSettings = {
+        theme: "light",
+        launch_at_login: true,
+        show_in_menu_bar: true,
+        notifications_enabled: true,
+        notify_ending_soon: true,
+        notify_trigger_status: true,
+        notify_weekly_summary: true,
+        poll_interval_minutes: 15,
+      };
 
       vi.mocked(api.saveSettings).mockResolvedValueOnce(undefined);
 
       await useStore.getState().saveSettings(newSettings);
 
       expect(api.saveSettings).toHaveBeenCalledWith(newSettings);
+      expect(api.updateMonitorConfig).toHaveBeenCalledWith([]);
       expect(useStore.getState().settings).toEqual(newSettings);
     });
   });

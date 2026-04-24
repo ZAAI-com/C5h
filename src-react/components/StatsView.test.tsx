@@ -5,8 +5,55 @@ import { useStore } from "@/store";
 import * as api from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
-  getWindows: vi.fn().mockResolvedValue([]),
+  getStats: vi.fn(),
 }));
+
+const makeStatsPayload = () => ({
+  summary: {
+    total_windows: 2,
+    total_hours: 10,
+    avg_duration_hours: 5,
+  },
+  week_data: [
+    {
+      day: "Mon",
+      date: "Jan 15",
+      window_count: 2,
+      account_counts: {
+        account_1: 2,
+      },
+    },
+  ],
+  day_of_week: [
+    {
+      day: "Monday",
+      count: 2,
+      intensity: 1,
+    },
+  ],
+  time_of_day: [
+    {
+      hour: "10am",
+      count: 2,
+    },
+  ],
+  duration_trend: [
+    {
+      week: "Jan 15",
+      avg_hours: 5,
+      windows: 2,
+    },
+  ],
+  account_breakdown: [
+    {
+      account_id: 1,
+      window_count: 2,
+      total_hours: 10,
+    },
+  ],
+  selected_week_label: "Jan 14 - Jan 20",
+  is_current_week: false,
+});
 
 const account = {
   id: 1,
@@ -22,7 +69,7 @@ const account = {
 describe("StatsView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.getWindows).mockResolvedValue([]);
+    vi.mocked(api.getStats).mockResolvedValue(makeStatsPayload());
     useStore.setState({
       accounts: [],
       windows: [],
@@ -32,6 +79,7 @@ describe("StatsView", () => {
   });
 
   it("shows empty state when no accounts and no windows", () => {
+    vi.mocked(api.getStats).mockImplementationOnce(() => new Promise(() => {}));
     render(<StatsView />);
     expect(screen.getByText(/no statistics yet/i)).toBeInTheDocument();
     expect(
@@ -103,7 +151,7 @@ describe("StatsView", () => {
     expect(screen.getByText(/windows per day/i)).toBeInTheDocument();
   });
 
-  it("shows account-by-account breakdown", () => {
+  it("shows account-by-account breakdown", async () => {
     useStore.setState({
       accounts: [account],
       windows: [
@@ -129,10 +177,10 @@ describe("StatsView", () => {
     });
     render(<StatsView />);
     expect(screen.getByText(/by account/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 windows · 10h/i)).toBeInTheDocument();
+    expect(await screen.findByText(/2 windows · 10h/i)).toBeInTheDocument();
   });
 
-  it("shows total window count in summary", () => {
+  it("shows total window count in summary", async () => {
     useStore.setState({
       accounts: [account],
       windows: [
@@ -157,8 +205,9 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
-    // Two windows
-    expect(screen.getByText("2")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("2")).toBeInTheDocument();
+    });
   });
 
   it("fetches a dedicated 8-week range for trend data", async () => {
@@ -171,7 +220,11 @@ describe("StatsView", () => {
     render(<StatsView />);
 
     await waitFor(() => {
-      expect(api.getWindows).toHaveBeenCalledTimes(1);
+      expect(api.getStats).toHaveBeenCalledWith(
+        "2024-01-15T12:00:00.000Z",
+        undefined,
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
     });
   });
 });

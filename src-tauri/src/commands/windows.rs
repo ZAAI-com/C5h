@@ -166,7 +166,7 @@ pub async fn create_window_impl(
         Ok(result) => result,
         Err(error)
             if error
-                .as_database()
+                .as_database_error()
                 .map(|database_error| database_error.is_unique_violation())
                 .unwrap_or(false) =>
         {

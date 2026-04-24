@@ -68,6 +68,13 @@ export function StatsView() {
       }),
     [accounts, stats]
   );
+  const peakDayLabel =
+    stats && stats.day_of_week.length > 0
+      ? stats.day_of_week.reduce(
+          (top, current) => (current.count > top.count ? current : top),
+          stats.day_of_week[0]
+        ).day
+      : "None";
 
   if (accounts.length === 0 && !stats) {
     return (
@@ -196,11 +203,7 @@ export function StatsView() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Peak selected-week day:{" "}
-            {stats?.day_of_week.reduce((top, current) =>
-              current.count > top.count ? current : top,
-            stats?.day_of_week[0] ?? { day: "None", count: 0, intensity: 0 }).day ?? "None"}
-            .
+            Peak selected-week day: {peakDayLabel}.
           </p>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
