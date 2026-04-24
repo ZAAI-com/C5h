@@ -20,7 +20,7 @@ pub async fn poll_account(
     cli_command: &str,
     tool_type: &str,
 ) -> Result<UsageInfo, String> {
-    let args = get_poll_args(tool_type);
+    let args = get_poll_args(tool_type)?;
 
     let cmd_result = timeout(
         Duration::from_secs(CLI_TIMEOUT_SECS),
@@ -44,12 +44,12 @@ pub async fn poll_account(
 }
 
 /// Get the CLI arguments needed to query usage for a given tool type.
-fn get_poll_args(tool_type: &str) -> Vec<String> {
+fn get_poll_args(tool_type: &str) -> Result<Vec<String>, String> {
     match tool_type {
-        "claude_code" | "claude" => vec!["-p".to_string(), "/usage".to_string()],
-        "codex" => vec!["-p".to_string(), "/status".to_string()],
-        "gemini" => vec![], // Gemini shows usage on startup
-        _ => vec![],
+        "claude_code" | "claude" => Ok(vec!["-p".to_string(), "/usage".to_string()]),
+        "codex" => Ok(vec!["-p".to_string(), "/status".to_string()]),
+        "gemini" => Ok(vec![]), // Gemini shows usage on startup
+        other => Err(format!("Unknown tool type: {}", other)),
     }
 }
 
@@ -65,6 +65,21 @@ async fn run_cli_command(command: &str, args: &[String]) -> Result<String, Strin
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if !output.status.success() {
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else if !stdout.trim().is_empty() {
+            stdout.trim().to_string()
+        } else {
+            "no error output".to_string()
+        };
+
+        return Err(format!(
+            "CLI '{}' exited with status {}: {}",
+            command, output.status, detail
+        ));
+    }
 
     // Combine stdout and stderr since some tools write to stderr
     let combined = if stderr.is_empty() {
@@ -108,41 +123,35 @@ pub async fn resolve_cli_path(command: &str) -> Result<String, String> {
 
     Ok(path)
 }
-
-/// Check if a CLI tool is available on the system.
-pub async fn check_cli_available(command: &str) -> bool {
-    resolve_cli_path(command).await.is_ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_get_poll_args_claude() {
-        let args = get_poll_args("claude_code");
+        let args = get_poll_args("claude_code").unwrap();
         assert_eq!(args, vec!["-p", "/usage"]);
 
-        let args = get_poll_args("claude");
+        let args = get_poll_args("claude").unwrap();
         assert_eq!(args, vec!["-p", "/usage"]);
     }
 
     #[test]
     fn test_get_poll_args_codex() {
-        let args = get_poll_args("codex");
+        let args = get_poll_args("codex").unwrap();
         assert_eq!(args, vec!["-p", "/status"]);
     }
 
     #[test]
     fn test_get_poll_args_gemini() {
-        let args = get_poll_args("gemini");
+        let args = get_poll_args("gemini").unwrap();
         assert!(args.is_empty());
     }
 
     #[test]
     fn test_get_poll_args_unknown() {
-        let args = get_poll_args("unknown_tool");
-        assert!(args.is_empty());
+        let err = get_poll_args("unknown_tool").unwrap_err();
+        assert!(err.contains("Unknown tool type"), "got: {err}");
     }
 
     #[tokio::test]
@@ -180,9 +189,4 @@ mod tests {
         assert!(err.to_lowercase().contains("failed to run") || err.to_lowercase().contains("no such"));
     }
 
-    #[tokio::test]
-    async fn check_cli_available_returns_false_for_missing() {
-        let exists = check_cli_available("definitely-not-real-xyzzy-9001").await;
-        assert!(!exists);
-    }
 }

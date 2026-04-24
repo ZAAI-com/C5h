@@ -34,13 +34,14 @@ pub async fn poll_account(
 
     // Update the current window's usage_percent if one is active
     if let Some(percent) = usage_info.session_percent {
-        let _ = sqlx::query(
+        sqlx::query(
             "UPDATE windows SET usage_percent = ? WHERE account_id = ? AND ended_at IS NULL",
         )
         .bind(percent as i32)
         .bind(account_id)
         .execute(&pool)
-        .await;
+        .await
+        .map_err(db_err("update polled usage"))?;
     }
 
     Ok(usage_info)
@@ -71,13 +72,20 @@ pub async fn poll_all_accounts(
                     Ok(info) => {
                         // Update usage_percent on active window
                         if let Some(percent) = info.session_percent {
-                            let _ = sqlx::query(
+                            if let Err(err) = sqlx::query(
                                 "UPDATE windows SET usage_percent = ? WHERE account_id = ? AND ended_at IS NULL",
                             )
                             .bind(percent as i32)
                             .bind(account_id)
                             .execute(&pool)
-                            .await;
+                            .await
+                            {
+                                log::warn!(
+                                    "Failed to persist usage_percent for account {}: {}",
+                                    account_id,
+                                    db_err("update polled usage")(err)
+                                );
+                            }
                         }
                         results.push((account_id, info));
                     }

@@ -11,7 +11,7 @@ pub async fn notify_window_ending_soon(
     app.notification()
         .builder()
         .title("Window Ending Soon")
-        .body(&format!(
+        .body(format!(
             "Your {} window expires in {} minutes",
             account_name, minutes_remaining
         ))
@@ -43,7 +43,7 @@ pub async fn notify_scheduled_trigger(
     app.notification()
         .builder()
         .title(title)
-        .body(&body)
+        .body(body)
         .show()
         .map_err(|e| e.to_string())?;
 
@@ -60,7 +60,7 @@ pub async fn notify_weekly_summary(
     app.notification()
         .builder()
         .title("Weekly Summary")
-        .body(&format!(
+        .body(format!(
             "This week: {} windows used, avg {:.1}h each",
             total_windows, avg_duration
         ))
@@ -79,8 +79,8 @@ pub async fn send_notification(
 ) -> Result<(), String> {
     app.notification()
         .builder()
-        .title(&title)
-        .body(&body)
+        .title(title)
+        .body(body)
         .show()
         .map_err(|e| e.to_string())?;
 

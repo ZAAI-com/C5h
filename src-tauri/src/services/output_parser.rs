@@ -2,23 +2,12 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UsageInfo {
     pub session_percent: Option<f32>,
     pub weekly_percent: Option<f32>,
     pub reset_time: Option<String>,
     pub weekly_reset_time: Option<String>,
-}
-
-impl Default for UsageInfo {
-    fn default() -> Self {
-        Self {
-            session_percent: None,
-            weekly_percent: None,
-            reset_time: None,
-            weekly_reset_time: None,
-        }
-    }
 }
 
 // Pre-compiled regexes for Claude Code output parsing
