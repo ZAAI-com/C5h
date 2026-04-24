@@ -25,6 +25,27 @@ export default defineConfig(async () => ({
         main: path.resolve(rootDir, "index.html"),
         popover: path.resolve(rootDir, "popover.html"),
       },
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+
+          if (id.includes("recharts")) {
+            return "charts-vendor";
+          }
+
+          if (
+            id.includes("@radix-ui") ||
+            id.includes("lucide-react") ||
+            id.includes("@ilamy/calendar")
+          ) {
+            return "ui-vendor";
+          }
+
+          return "vendor";
+        },
+      },
     },
   },
 

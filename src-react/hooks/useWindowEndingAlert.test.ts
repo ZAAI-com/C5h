@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { useWindowEndingAlert } from "./useWindowEndingAlert";
 import { useStore } from "@/store";
 import * as api from "@/lib/api";
@@ -167,8 +167,10 @@ describe("useWindowEndingAlert", () => {
     expect(api.notifyWindowEndingSoon).toHaveBeenCalledTimes(1);
 
     // New window with same time-remaining should re-fire 30-min alert
-    useStore.setState({
-      currentWindow: { ...activeWindow, id: 200 },
+    act(() => {
+      useStore.setState({
+        currentWindow: { ...activeWindow, id: 200 },
+      });
     });
     setStatus({ isActive: true, hours: 0, minutes: 25 });
     rerender();

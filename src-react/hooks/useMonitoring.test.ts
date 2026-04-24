@@ -70,6 +70,10 @@ describe("useMonitoring", () => {
   });
 
   it("subscribes to monitoring-status, process-started, and process-stopped events", () => {
+    vi.mocked(api.getMonitoringStatus).mockImplementationOnce(
+      () => new Promise(() => {})
+    );
+
     renderHook(() => useMonitoring());
 
     expect(listen).toHaveBeenCalledWith("monitoring-status", expect.any(Function));

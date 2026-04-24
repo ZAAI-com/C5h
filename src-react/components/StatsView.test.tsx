@@ -4,6 +4,26 @@ import { StatsView } from "./StatsView";
 import { useStore } from "@/store";
 import * as api from "@/lib/api";
 
+vi.mock("recharts", () => {
+  const passthrough = ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  );
+
+  return {
+    ResponsiveContainer: passthrough,
+    BarChart: passthrough,
+    Bar: passthrough,
+    LineChart: passthrough,
+    Line: passthrough,
+    XAxis: passthrough,
+    YAxis: passthrough,
+    CartesianGrid: passthrough,
+    Tooltip: passthrough,
+    Legend: passthrough,
+    Cell: passthrough,
+  };
+});
+
 vi.mock("@/lib/api", () => ({
   getStats: vi.fn(),
 }));
@@ -66,6 +86,10 @@ const account = {
   enabled: true,
 };
 
+async function waitForStatsToLoad() {
+  await screen.findByText(/Peak selected-week day: Monday\./i);
+}
+
 describe("StatsView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,7 +111,7 @@ describe("StatsView", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders summary cards when data exists", () => {
+  it("renders summary cards when data exists", async () => {
     useStore.setState({
       accounts: [account],
       windows: [
@@ -103,13 +127,14 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
+    await waitForStatsToLoad();
     expect(screen.getByText("Total Windows")).toBeInTheDocument();
     expect(screen.getByText("Total Hours")).toBeInTheDocument();
     expect(screen.getByText("Avg Window Duration")).toBeInTheDocument();
     expect(screen.getByText("Active Accounts")).toBeInTheDocument();
   });
 
-  it("renders trend chart card title", () => {
+  it("renders trend chart card title", async () => {
     useStore.setState({
       accounts: [account],
       windows: [
@@ -125,12 +150,13 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
+    await waitForStatsToLoad();
     expect(
       screen.getByText(/average duration trend \(8 weeks\)/i)
     ).toBeInTheDocument();
   });
 
-  it("renders day-of-week and time-of-day chart titles", () => {
+  it("renders day-of-week and time-of-day chart titles", async () => {
     useStore.setState({
       accounts: [account],
       windows: [
@@ -146,6 +172,7 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
+    await waitForStatsToLoad();
     expect(screen.getByText(/usage by day of week/i)).toBeInTheDocument();
     expect(screen.getByText(/usage by time of day/i)).toBeInTheDocument();
     expect(screen.getByText(/windows per day/i)).toBeInTheDocument();
@@ -176,6 +203,7 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
+    await waitForStatsToLoad();
     expect(screen.getByText(/by account/i)).toBeInTheDocument();
     expect(await screen.findByText(/2 windows · 10h/i)).toBeInTheDocument();
   });
@@ -205,6 +233,7 @@ describe("StatsView", () => {
       ],
     });
     render(<StatsView />);
+    await waitForStatsToLoad();
     await waitFor(() => {
       expect(screen.getByText("2")).toBeInTheDocument();
     });
