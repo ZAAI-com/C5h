@@ -69,18 +69,10 @@ pub async fn get_windows_impl(
         .map_err(db_err("fetch windows"))?
     };
 
-    let windows: Vec<Window> = rows
+    rows
         .into_iter()
-        .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
-            Ok(window) => Some(window),
-            Err(e) => {
-                log::warn!("Skipping malformed window record: {}", e);
-                None
-            }
-        })
-        .collect();
-
-    Ok(windows)
+        .map(|(v,)| serde_json::from_value(v).map_err(|e| e.to_string()))
+        .collect()
 }
 
 #[tauri::command]
@@ -139,13 +131,8 @@ pub async fn get_current_window_impl(
         .map_err(db_err("fetch current window"))?
     };
 
-    Ok(row.and_then(|(v,)| match serde_json::from_value(v.clone()) {
-        Ok(window) => Some(window),
-        Err(e) => {
-            log::warn!("Skipping malformed current window record: {}", e);
-            None
-        }
-    }))
+    row.map(|(v,)| serde_json::from_value(v).map_err(|e| e.to_string()))
+        .transpose()
 }
 
 #[tauri::command]
@@ -161,6 +148,10 @@ pub async fn create_window_impl(
     pool: &SqlitePool,
     window: NewWindow,
 ) -> Result<Window, String> {
+    if let Some(existing_window) = get_current_window_impl(pool, Some(window.account_id)).await? {
+        return Ok(existing_window);
+    }
+
     let now = chrono::Utc::now().to_rfc3339();
 
     let result =
@@ -169,8 +160,22 @@ pub async fn create_window_impl(
             .bind(&now)
             .bind(&window.triggered_by)
             .execute(pool)
-            .await
-            .map_err(db_err("create window"))?;
+            .await;
+
+    let result = match result {
+        Ok(result) => result,
+        Err(error)
+            if error
+                .as_database()
+                .map(|database_error| database_error.is_unique_violation())
+                .unwrap_or(false) =>
+        {
+            return get_current_window_impl(pool, Some(window.account_id))
+                .await?
+                .ok_or_else(|| "Failed to recover active window after duplicate start".to_string());
+        }
+        Err(error) => return Err(db_err("create window")(error)),
+    };
 
     let id = result.last_insert_rowid();
 
@@ -288,6 +293,40 @@ mod tests {
         assert!(w.ended_at.is_none());
         // started_at should parse as RFC3339
         chrono::DateTime::parse_from_rfc3339(&w.started_at).unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_window_is_idempotent_per_account() {
+        let pool = init_test_pool().await;
+
+        let first = create_window_impl(
+            &pool,
+            NewWindow {
+                account_id: 1,
+                triggered_by: "manual".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let second = create_window_impl(
+            &pool,
+            NewWindow {
+                account_id: 1,
+                triggered_by: "auto-detected".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(first.id, second.id);
+
+        let active_rows: Vec<(i64,)> =
+            sqlx::query_as("SELECT id FROM windows WHERE account_id = 1 AND ended_at IS NULL")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(active_rows.len(), 1);
     }
 
     #[tokio::test]

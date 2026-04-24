@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 
 /// Deserialize a bool from either a JSON boolean or a SQLite INTEGER (0/1).
 ///
@@ -21,18 +22,31 @@ fn bool_from_int<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
 }
 
 /// Supported AI tool types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolType {
-    ClaudeCode,
+    #[default]
+    #[serde(alias = "claude_code")]
+    Claude,
     Codex,
     Gemini,
     Other,
 }
 
-impl Default for ToolType {
-    fn default() -> Self {
-        ToolType::ClaudeCode
+impl ToolType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ToolType::Claude => "claude",
+            ToolType::Codex => "codex",
+            ToolType::Gemini => "gemini",
+            ToolType::Other => "other",
+        }
+    }
+}
+
+impl fmt::Display for ToolType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -41,7 +55,7 @@ impl Default for ToolType {
 pub struct Account {
     pub id: Option<i64>,
     pub name: String,
-    pub tool_type: String,
+    pub tool_type: ToolType,
     pub cli_command: String,
     pub cli_args: Option<String>,
     pub window_duration_hours: i32,
@@ -55,7 +69,7 @@ pub struct Account {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewAccount {
     pub name: String,
-    pub tool_type: String,
+    pub tool_type: ToolType,
     pub cli_command: String,
     pub cli_args: Option<String>,
     pub window_duration_hours: i32,
@@ -129,28 +143,56 @@ pub struct NewScheduledTrigger {
     pub scheduled_at: String,
 }
 
-/// Schedule status options
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum ScheduleStatus {
-    Pending,
-    Completed,
-    Failed,
-    Cancelled,
-}
-
-/// Statistics for usage windows
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WindowStats {
+pub struct StatsSummary {
     pub total_windows: i64,
-    pub avg_duration_minutes: f64,
-    pub windows_this_week: i64,
-    pub windows_by_day: Vec<DayStats>,
+    pub avg_duration_hours: f64,
+    pub total_hours: f64,
 }
 
-/// Daily statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DayStats {
+pub struct WeeklyDayStats {
+    pub day: String,
     pub date: String,
+    pub window_count: i64,
+    pub account_counts: std::collections::HashMap<String, i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayOfWeekStat {
+    pub day: String,
     pub count: i64,
+    pub intensity: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeOfDayStat {
+    pub hour: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DurationTrendPoint {
+    pub week: String,
+    pub avg_hours: f64,
+    pub windows: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountBreakdownStat {
+    pub account_id: i64,
+    pub window_count: i64,
+    pub total_hours: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatsPayload {
+    pub summary: StatsSummary,
+    pub week_data: Vec<WeeklyDayStats>,
+    pub day_of_week: Vec<DayOfWeekStat>,
+    pub time_of_day: Vec<TimeOfDayStat>,
+    pub duration_trend: Vec<DurationTrendPoint>,
+    pub account_breakdown: Vec<AccountBreakdownStat>,
+    pub selected_week_label: String,
+    pub is_current_week: bool,
 }

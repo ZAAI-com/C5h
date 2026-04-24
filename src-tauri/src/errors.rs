@@ -87,14 +87,3 @@ pub fn db_err(operation: &'static str) -> impl FnOnce(sqlx::Error) -> String {
         String::from(err)
     }
 }
-
-/// Helper to convert IO errors with context
-pub fn io_err(operation: &'static str) -> impl FnOnce(std::io::Error) -> String {
-    move |e| {
-        let err = C5hError::Io {
-            operation,
-            source: e,
-        };
-        String::from(err)
-    }
-}

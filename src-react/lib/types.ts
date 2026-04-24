@@ -1,9 +1,16 @@
+export type ToolType =
+  | "claude"
+  | "codex"
+  | "gemini"
+  | "other"
+  | "claude_code";
+
 // TypeScript types matching Rust models
 
 export interface Account {
   id?: number;
   name: string;
-  tool_type: string;
+  tool_type: ToolType;
   cli_command: string;
   cli_args?: string;
   window_duration_hours: number;
@@ -14,7 +21,7 @@ export interface Account {
 
 export interface NewAccount {
   name: string;
-  tool_type: string;
+  tool_type: ToolType;
   cli_command: string;
   cli_args?: string;
   window_duration_hours: number;
@@ -78,23 +85,53 @@ export interface CliAvailability {
   resolved_path: string | null;
 }
 
-// Utility types
-export type ToolType = "claude" | "codex" | "gemini";
-
 export interface WindowWithAccount extends Window {
   account?: Account;
 }
 
-// Statistics types
-export interface DayStats {
-  date: string;
-  windows_count: number;
-  total_hours: number;
-}
-
-export interface WindowStats {
+export interface StatsSummary {
   total_windows: number;
   avg_duration_hours: number;
   total_hours: number;
-  windows_this_week: number;
+}
+
+export interface WeeklyDayStats {
+  day: string;
+  date: string;
+  window_count: number;
+  account_counts: Record<string, number>;
+}
+
+export interface DayOfWeekStat {
+  day: string;
+  count: number;
+  intensity: number;
+}
+
+export interface TimeOfDayStat {
+  hour: string;
+  count: number;
+}
+
+export interface DurationTrendPoint {
+  week: string;
+  avg_hours: number;
+  windows: number;
+}
+
+export interface AccountBreakdownStat {
+  account_id: number;
+  window_count: number;
+  total_hours: number;
+}
+
+export interface StatsPayload {
+  summary: StatsSummary;
+  week_data: WeeklyDayStats[];
+  day_of_week: DayOfWeekStat[];
+  time_of_day: TimeOfDayStat[];
+  duration_trend: DurationTrendPoint[];
+  account_breakdown: AccountBreakdownStat[];
+  selected_week_label: string;
+  is_current_week: boolean;
 }

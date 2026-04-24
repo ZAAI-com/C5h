@@ -60,6 +60,21 @@ pub fn validate_cli_command(cli_command: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validates optional CLI arguments by ensuring they can be parsed into an argv vector.
+pub fn validate_cli_args(cli_args: Option<&str>) -> Result<(), String> {
+    let Some(cli_args) = cli_args.map(str::trim) else {
+        return Ok(());
+    };
+
+    if cli_args.is_empty() {
+        return Ok(());
+    }
+
+    shell_words::split(cli_args)
+        .map(|_| ())
+        .map_err(|e| format!("CLI arguments are not shell-parseable: {}", e))
+}
+
 /// Validates the window duration hours.
 ///
 /// Must be between 1 and 168 hours (1 week maximum).
@@ -123,7 +138,7 @@ pub fn validate_scheduled_at(scheduled_at: &str) -> Result<(), String> {
 /// Must be between 0 and 100 inclusive.
 pub fn validate_usage_percent(percent: Option<i32>) -> Result<(), String> {
     if let Some(p) = percent {
-        if p < 0 || p > 100 {
+        if !(0..=100).contains(&p) {
             return Err("Usage percentage must be between 0 and 100".to_string());
         }
     }
@@ -134,11 +149,8 @@ pub fn validate_usage_percent(percent: Option<i32>) -> Result<(), String> {
 ///
 /// Must be between 1 and 60 minutes.
 pub fn validate_poll_interval(minutes: i32) -> Result<(), String> {
-    if minutes < 1 {
-        return Err("Poll interval must be at least 1 minute".to_string());
-    }
-    if minutes > 60 {
-        return Err("Poll interval cannot exceed 60 minutes".to_string());
+    if !(1..=60).contains(&minutes) {
+        return Err("Poll interval must be between 1 and 60 minutes".to_string());
     }
     Ok(())
 }
@@ -189,6 +201,14 @@ mod tests {
         // Path traversal
         assert!(validate_cli_command("/usr/../etc/passwd").is_err());
         assert!(validate_cli_command("..").is_err());
+    }
+
+    #[test]
+    fn test_validate_cli_args() {
+        assert!(validate_cli_args(None).is_ok());
+        assert!(validate_cli_args(Some("")).is_ok());
+        assert!(validate_cli_args(Some("-p \"1+1\" --json")).is_ok());
+        assert!(validate_cli_args(Some("\"unterminated")).is_err());
     }
 
     #[test]

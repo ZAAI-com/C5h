@@ -2,7 +2,8 @@ use crate::db::get_pool;
 use crate::errors::db_err;
 use crate::models::{Account, NewAccount};
 use crate::validation::{
-    validate_account_name, validate_cli_command, validate_color, validate_window_duration_hours,
+    validate_account_name, validate_cli_args, validate_cli_command, validate_color,
+    validate_window_duration_hours,
 };
 use serde_json::Value;
 use sqlx::SqlitePool;
@@ -13,11 +14,13 @@ use crate::db::DbPool;
 fn validate_account_fields(
     name: &str,
     cli_command: &str,
+    cli_args: Option<&str>,
     window_duration_hours: i32,
     color: &str,
 ) -> Result<(), String> {
     validate_account_name(name)?;
     validate_cli_command(cli_command)?;
+    validate_cli_args(cli_args)?;
     validate_window_duration_hours(window_duration_hours)?;
     validate_color(color)?;
     Ok(())
@@ -41,18 +44,12 @@ pub async fn get_accounts_impl(pool: &SqlitePool) -> Result<Vec<Account>, String
     .await
     .map_err(db_err("fetch accounts"))?;
 
-    let accounts: Vec<Account> = rows
+    rows
         .into_iter()
-        .filter_map(|(v,)| match serde_json::from_value(v.clone()) {
-            Ok(account) => Some(account),
-            Err(e) => {
-                log::warn!("Skipping malformed account record: {}", e);
-                None
-            }
+        .map(|(v,)| {
+            serde_json::from_value(v).map_err(|e| format!("Malformed account record: {}", e))
         })
-        .collect();
-
-    Ok(accounts)
+        .collect()
 }
 
 #[tauri::command]
@@ -68,6 +65,7 @@ pub async fn create_account_impl(
     validate_account_fields(
         &account.name,
         &account.cli_command,
+        account.cli_args.as_deref(),
         account.window_duration_hours,
         &account.color,
     )?;
@@ -77,7 +75,7 @@ pub async fn create_account_impl(
          VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&account.name)
-    .bind(&account.tool_type)
+    .bind(account.tool_type.to_string())
     .bind(&account.cli_command)
     .bind(&account.cli_args)
     .bind(account.window_duration_hours)
@@ -115,20 +113,21 @@ pub async fn update_account_impl(pool: &SqlitePool, account: Account) -> Result<
     validate_account_fields(
         &account.name,
         &account.cli_command,
+        account.cli_args.as_deref(),
         account.window_duration_hours,
         &account.color,
     )?;
 
     let id = account.id.ok_or("Account ID is required")?;
 
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE accounts SET
          name = ?, tool_type = ?, cli_command = ?, cli_args = ?,
          window_duration_hours = ?, color = ?, enabled = ?
          WHERE id = ?",
     )
     .bind(&account.name)
-    .bind(&account.tool_type)
+    .bind(account.tool_type.to_string())
     .bind(&account.cli_command)
     .bind(&account.cli_args)
     .bind(account.window_duration_hours)
@@ -138,6 +137,10 @@ pub async fn update_account_impl(pool: &SqlitePool, account: Account) -> Result<
     .execute(pool)
     .await
     .map_err(db_err("update account"))?;
+
+    if result.rows_affected() == 0 {
+        return Err("Account not found".to_string());
+    }
 
     Ok(())
 }
@@ -149,11 +152,15 @@ pub async fn update_account(db: State<'_, DbPool>, account: Account) -> Result<(
 }
 
 pub async fn delete_account_impl(pool: &SqlitePool, id: i64) -> Result<(), String> {
-    sqlx::query("DELETE FROM accounts WHERE id = ?")
+    let result = sqlx::query("DELETE FROM accounts WHERE id = ?")
         .bind(id)
         .execute(pool)
         .await
         .map_err(db_err("delete account"))?;
+
+    if result.rows_affected() == 0 {
+        return Err("Account not found".to_string());
+    }
 
     Ok(())
 }
@@ -172,7 +179,7 @@ mod tests {
     fn sample_new_account() -> NewAccount {
         NewAccount {
             name: "Test Account".to_string(),
-            tool_type: "claude_code".to_string(),
+            tool_type: crate::models::ToolType::Claude,
             cli_command: "claude".to_string(),
             cli_args: Some("-p \"hi\"".to_string()),
             window_duration_hours: 5,
@@ -262,7 +269,7 @@ mod tests {
         let mut acct = Account {
             id: None,
             name: "x".to_string(),
-            tool_type: "claude_code".to_string(),
+            tool_type: crate::models::ToolType::Claude,
             cli_command: "claude".to_string(),
             cli_args: None,
             window_duration_hours: 5,
@@ -285,5 +292,35 @@ mod tests {
 
         let all = get_accounts_impl(&pool).await.unwrap();
         assert!(all.iter().all(|a| a.id != Some(id)));
+    }
+
+    #[tokio::test]
+    async fn update_account_errors_when_missing() {
+        let pool = init_test_pool().await;
+        let err = update_account_impl(
+            &pool,
+            Account {
+                id: Some(999_999),
+                name: "Missing".to_string(),
+                tool_type: crate::models::ToolType::Claude,
+                cli_command: "claude".to_string(),
+                cli_args: None,
+                window_duration_hours: 5,
+                color: "#abcdef".to_string(),
+                enabled: true,
+                created_at: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.contains("Account not found"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn delete_account_errors_when_missing() {
+        let pool = init_test_pool().await;
+        let err = delete_account_impl(&pool, 999_999).await.unwrap_err();
+        assert!(err.contains("Account not found"), "got: {err}");
     }
 }

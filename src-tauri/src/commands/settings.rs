@@ -25,7 +25,7 @@ pub async fn get_settings_impl(pool: &SqlitePool) -> Result<Settings, String> {
             "notify_weekly_summary" => settings.notify_weekly_summary = value == "true",
             "poll_interval_minutes" => {
                 match value.parse::<i32>() {
-                    Ok(val) if val >= 1 && val <= 60 => {
+                    Ok(val) if (1..=60).contains(&val) => {
                         settings.poll_interval_minutes = val;
                     }
                     Ok(val) => {
@@ -59,6 +59,7 @@ pub async fn get_settings(db: State<'_, DbPool>) -> Result<Settings, String> {
 
 pub async fn save_settings_impl(pool: &SqlitePool, settings: Settings) -> Result<(), String> {
     validate_poll_interval(settings.poll_interval_minutes)?;
+    let mut tx = pool.begin().await.map_err(db_err("start settings transaction"))?;
 
     let pairs = vec![
         ("launch_at_login", settings.launch_at_login.to_string()),
@@ -90,10 +91,14 @@ pub async fn save_settings_impl(pool: &SqlitePool, settings: Settings) -> Result
         sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
             .bind(key)
             .bind(value)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(db_err("save settings"))?;
     }
+
+    tx.commit()
+        .await
+        .map_err(db_err("commit settings transaction"))?;
 
     Ok(())
 }
