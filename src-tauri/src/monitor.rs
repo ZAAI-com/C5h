@@ -1,3 +1,4 @@
+use crate::db::{get_pool, DbPool};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -50,6 +51,7 @@ pub struct ProcessMonitor {
     pub is_running: Arc<Mutex<bool>>,
     pub detected_processes: Arc<Mutex<Vec<DetectedProcess>>>,
     pub config: Arc<Mutex<MonitorConfig>>,
+    pub generation: Arc<Mutex<u64>>,
 }
 
 impl Default for ProcessMonitor {
@@ -58,6 +60,7 @@ impl Default for ProcessMonitor {
             is_running: Arc::new(Mutex::new(false)),
             detected_processes: Arc::new(Mutex::new(Vec::new())),
             config: Arc::new(Mutex::new(MonitorConfig::default())),
+            generation: Arc::new(Mutex::new(0)),
         }
     }
 }
@@ -106,33 +109,44 @@ impl ProcessMonitor {
         config.cli_patterns.clear();
         for (id, cli_command) in accounts {
             // Extract the base command name
-            let cmd = cli_command.split_whitespace().next().unwrap_or(&cli_command);
+            let cmd = cli_command.split_whitespace().next().unwrap_or("").trim();
+            if cmd.is_empty() {
+                continue;
+            }
             config.cli_patterns.insert(cmd.to_lowercase(), id);
         }
     }
+
+    pub async fn set_poll_interval_secs(&self, poll_interval_secs: u64) {
+        let mut config = self.config.lock().await;
+        config.poll_interval_secs = poll_interval_secs;
+    }
 }
 
-/// Start monitoring background task
-#[tauri::command]
-pub async fn start_monitoring(
-    app: AppHandle,
-    monitor: State<'_, ProcessMonitor>,
-) -> Result<(), String> {
-    let is_running = monitor.is_running.clone();
-    let detected_processes = monitor.detected_processes.clone();
-    let config = monitor.config.clone();
+async fn load_poll_interval_secs(db: &State<'_, DbPool>) -> Result<u64, String> {
+    let pool = get_pool(db).await?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM settings WHERE key = 'poll_interval_minutes'")
+            .fetch_optional(&pool)
+            .await
+            .map_err(|e| format!("Failed to fetch poll interval: {}", e))?;
 
-    // Check if already running
-    {
-        let mut running = is_running.lock().await;
-        if *running {
-            return Ok(());
-        }
-        *running = true;
-    }
+    let poll_interval_minutes = row
+        .and_then(|(value,)| value.parse::<u64>().ok())
+        .filter(|minutes| (1..=60).contains(minutes))
+        .unwrap_or(15);
 
-    // Spawn background task
-    let app_handle = app.clone();
+    Ok(poll_interval_minutes * 60)
+}
+
+fn spawn_monitoring_task(
+    app_handle: AppHandle,
+    is_running: Arc<Mutex<bool>>,
+    detected_processes: Arc<Mutex<Vec<DetectedProcess>>>,
+    config: Arc<Mutex<MonitorConfig>>,
+    generation: Arc<Mutex<u64>>,
+    run_generation: u64,
+) {
     tokio::spawn(async move {
         let poll_interval = {
             let cfg = config.lock().await;
@@ -144,41 +158,36 @@ pub async fn start_monitoring(
         loop {
             ticker.tick().await;
 
-            // Check if we should stop
             {
                 let running = is_running.lock().await;
-                if !*running {
+                let current_generation = *generation.lock().await;
+                if !*running || current_generation != run_generation {
                     break;
                 }
             }
 
-            // Scan for processes
             let monitor = ProcessMonitor {
                 is_running: is_running.clone(),
                 detected_processes: detected_processes.clone(),
                 config: config.clone(),
+                generation: generation.clone(),
             };
 
             let new_detected = monitor.scan_processes().await;
 
-            // Update state
             {
                 let mut detected = detected_processes.lock().await;
                 let old_pids: Vec<u32> = detected.iter().map(|p| p.pid).collect();
                 let new_pids: Vec<u32> = new_detected.iter().map(|p| p.pid).collect();
 
-                // Find newly started processes
                 for proc in &new_detected {
                     if !old_pids.contains(&proc.pid) {
-                        // Emit process started event
                         let _ = app_handle.emit("process-started", proc.clone());
                     }
                 }
 
-                // Find stopped processes
                 for proc in detected.iter() {
                     if !new_pids.contains(&proc.pid) {
-                        // Emit process stopped event
                         let _ = app_handle.emit("process-stopped", proc.clone());
                     }
                 }
@@ -186,7 +195,6 @@ pub async fn start_monitoring(
                 *detected = new_detected;
             }
 
-            // Emit status update
             let status = MonitoringStatus {
                 is_running: true,
                 detected_processes: detected_processes.lock().await.clone(),
@@ -195,6 +203,80 @@ pub async fn start_monitoring(
             let _ = app_handle.emit("monitoring-status", status);
         }
     });
+}
+
+async fn restart_monitoring_if_running(
+    app: &AppHandle,
+    monitor: &State<'_, ProcessMonitor>,
+) -> Result<(), String> {
+    let is_running = *monitor.is_running.lock().await;
+    if !is_running {
+        return Ok(());
+    }
+
+    let next_generation = {
+        let mut generation = monitor.generation.lock().await;
+        *generation += 1;
+        *generation
+    };
+
+    spawn_monitoring_task(
+        app.clone(),
+        monitor.is_running.clone(),
+        monitor.detected_processes.clone(),
+        monitor.config.clone(),
+        monitor.generation.clone(),
+        next_generation,
+    );
+
+    let status = MonitoringStatus {
+        is_running: true,
+        detected_processes: monitor.detected_processes.lock().await.clone(),
+        last_check: Some(chrono::Utc::now().to_rfc3339()),
+    };
+    let _ = app.emit("monitoring-status", status);
+
+    Ok(())
+}
+
+/// Start monitoring background task
+#[tauri::command]
+pub async fn start_monitoring(
+    app: AppHandle,
+    monitor: State<'_, ProcessMonitor>,
+    db: State<'_, DbPool>,
+) -> Result<(), String> {
+    let poll_interval_secs = load_poll_interval_secs(&db).await?;
+    monitor.set_poll_interval_secs(poll_interval_secs).await;
+
+    let is_running = monitor.is_running.clone();
+    let detected_processes = monitor.detected_processes.clone();
+    let config = monitor.config.clone();
+    let generation = monitor.generation.clone();
+
+    // Check if already running
+    {
+        let mut running = is_running.lock().await;
+        if *running {
+            return Ok(());
+        }
+        *running = true;
+    }
+
+    let run_generation = {
+        let mut generation = generation.lock().await;
+        *generation += 1;
+        *generation
+    };
+
+    spawn_monitoring_task(
+        app.clone(),
+        is_running,
+        detected_processes,
+        config,
+        generation,
+        run_generation,
+    );
 
     // Emit initial status
     let status = MonitoringStatus {
@@ -212,6 +294,8 @@ pub async fn start_monitoring(
 pub async fn stop_monitoring(monitor: State<'_, ProcessMonitor>) -> Result<(), String> {
     let mut running = monitor.is_running.lock().await;
     *running = false;
+    let mut generation = monitor.generation.lock().await;
+    *generation += 1;
 
     Ok(())
 }
@@ -238,10 +322,14 @@ pub async fn get_monitoring_status(
 /// Update monitor config from accounts
 #[tauri::command]
 pub async fn update_monitor_config(
+    app: AppHandle,
     monitor: State<'_, ProcessMonitor>,
+    db: State<'_, DbPool>,
     accounts: Vec<(i64, String)>,
 ) -> Result<(), String> {
     monitor.update_config(accounts).await;
+    monitor.set_poll_interval_secs(load_poll_interval_secs(&db).await?).await;
+    restart_monitoring_if_running(&app, &monitor).await?;
     Ok(())
 }
 
@@ -279,6 +367,7 @@ mod tests {
         rt.block_on(async {
             assert!(!*monitor.is_running.lock().await);
             assert!(monitor.detected_processes.lock().await.is_empty());
+            assert_eq!(*monitor.generation.lock().await, 0);
         });
     }
 

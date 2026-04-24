@@ -1,17 +1,20 @@
 use crate::db::get_pool;
 use crate::errors::db_err;
 use crate::models::{NewScheduledTrigger, ScheduledTrigger};
-use crate::validation::{escape_for_plist, validate_cli_command, validate_scheduled_at};
+use crate::services::cli_poller;
+use crate::validation::{
+    escape_for_plist, validate_cli_args, validate_cli_command, validate_scheduled_at,
+};
 use chrono::{Datelike, Timelike};
 use serde_json::Value;
 use sqlx::SqlitePool;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::State;
 use crate::db::DbPool;
 
-const PLIST_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+const PLIST_PREFIX: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -19,10 +22,9 @@ const PLIST_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
     <string>com.zaai.c5h.trigger.{ID}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{CLI_COMMAND}</string>
-        <string>-p</string>
-        <string>1+1</string>
-    </array>
+"#;
+
+const PLIST_SUFFIX: &str = r#"    </array>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -56,7 +58,7 @@ fn get_plist_path(id: i64) -> Result<PathBuf, String> {
 }
 
 /// Convert a PathBuf to a string, with proper error handling.
-fn path_to_string(path: &PathBuf) -> Result<String, String> {
+fn path_to_string(path: &Path) -> Result<String, String> {
     path.to_str()
         .ok_or_else(|| "Path contains invalid UTF-8 characters".to_string())
         .map(|s| s.to_string())
@@ -101,20 +103,10 @@ pub async fn get_schedules_impl(
         .map_err(db_err("fetch schedules"))?
     };
 
-    let schedules: Vec<ScheduledTrigger> = rows
+    rows
         .into_iter()
-        .filter_map(|(v,)| {
-            match serde_json::from_value(v.clone()) {
-                Ok(schedule) => Some(schedule),
-                Err(e) => {
-                    log::warn!("Skipping malformed schedule record: {}", e);
-                    None
-                }
-            }
-        })
-        .collect();
-
-    Ok(schedules)
+        .map(|(v,)| serde_json::from_value(v).map_err(|e| e.to_string()))
+        .collect()
 }
 
 #[tauri::command]
@@ -223,19 +215,67 @@ pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), Strin
 /// Build the plist XML content for a schedule. Pure function — no IO.
 ///
 /// Extracted from `install_schedule` so we can test the generated XML.
-pub fn build_plist_content(id: i64, cli_command: &str, scheduled_at_rfc3339: &str) -> Result<String, String> {
+pub fn build_plist_content(
+    id: i64,
+    cli_command: &str,
+    cli_args: Option<&str>,
+    scheduled_at_rfc3339: &str,
+) -> Result<String, String> {
     let dt = chrono::DateTime::parse_from_rfc3339(scheduled_at_rfc3339)
         .map_err(|e| format!("Invalid datetime in database: {}", e))?;
 
-    let safe_cli_command = escape_for_plist(cli_command);
+    validate_cli_args(cli_args)?;
 
-    Ok(PLIST_TEMPLATE
-        .replace("{ID}", &id.to_string())
-        .replace("{CLI_COMMAND}", &safe_cli_command)
-        .replace("{HOUR}", &dt.hour().to_string())
-        .replace("{MINUTE}", &dt.minute().to_string())
-        .replace("{DAY}", &dt.day().to_string())
-        .replace("{MONTH}", &dt.month().to_string()))
+    let mut program_arguments = vec![cli_command.to_string()];
+    if let Some(cli_args) = cli_args.filter(|args| !args.trim().is_empty()) {
+        program_arguments.extend(
+            shell_words::split(cli_args)
+                .map_err(|e| format!("Invalid CLI arguments '{}': {}", cli_args, e))?,
+        );
+    }
+
+    let program_arguments_xml = program_arguments
+        .into_iter()
+        .map(|arg| format!("        <string>{}</string>", escape_for_plist(&arg)))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Ok(format!(
+        "{}{}{}",
+        PLIST_PREFIX
+            .replace("{ID}", &id.to_string()),
+        format!(
+            "{}\n{}",
+            program_arguments_xml,
+            PLIST_SUFFIX
+                .replace("{ID}", &id.to_string())
+                .replace("{HOUR}", &dt.hour().to_string())
+                .replace("{MINUTE}", &dt.minute().to_string())
+                .replace("{DAY}", &dt.day().to_string())
+                .replace("{MONTH}", &dt.month().to_string())
+        ),
+        ""
+    ))
+}
+
+fn rollback_schedule_install(plist_path: &Path, plist_path_str: &str) {
+    match Command::new("launchctl")
+        .args(["unload", plist_path_str])
+        .output()
+    {
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!("Warning: launchctl unload failed during rollback: {}", stderr);
+        }
+        Err(e) => {
+            log::warn!("Warning: Failed to execute launchctl unload during rollback: {}", e);
+        }
+        _ => {}
+    }
+
+    if let Err(e) = fs::remove_file(plist_path) {
+        log::warn!("Warning: Failed to remove plist during rollback: {}", e);
+    }
 }
 
 #[tauri::command]
@@ -246,21 +286,30 @@ pub async fn install_schedule(
 ) -> Result<String, String> {
     // Validate CLI command to prevent command injection
     validate_cli_command(&cli_command)?;
+    let resolved_cli_command = cli_poller::resolve_cli_path(&cli_command).await?;
 
     let pool = get_pool(&db).await?;
 
     // Get the schedule
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT scheduled_at FROM scheduled_triggers WHERE id = ?"
+    let row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT scheduled_triggers.scheduled_at, accounts.cli_args
+         FROM scheduled_triggers
+         JOIN accounts ON accounts.id = scheduled_triggers.account_id
+         WHERE scheduled_triggers.id = ?"
     )
     .bind(id)
     .fetch_optional(&pool)
     .await
     .map_err(db_err("fetch schedule for install"))?;
 
-    let scheduled_at = row.ok_or("Schedule not found")?.0;
+    let (scheduled_at, cli_args) = row.ok_or("Schedule not found")?;
 
-    let plist_content = build_plist_content(id, &cli_command, &scheduled_at)?;
+    let plist_content = build_plist_content(
+        id,
+        &resolved_cli_command,
+        cli_args.as_deref(),
+        &scheduled_at,
+    )?;
 
     let plist_path = get_plist_path(id)?;
     let plist_path_str = path_to_string(&plist_path)?;
@@ -293,16 +342,20 @@ pub async fn install_schedule(
 
     if !load_output.status.success() {
         let stderr = String::from_utf8_lossy(&load_output.stderr);
+        rollback_schedule_install(&plist_path, &plist_path_str);
         return Err(format!("launchctl load failed: {}", stderr));
     }
 
     // Update database with plist path
-    sqlx::query("UPDATE scheduled_triggers SET plist_path = ? WHERE id = ?")
+    if let Err(err) = sqlx::query("UPDATE scheduled_triggers SET plist_path = ? WHERE id = ?")
         .bind(&plist_path_str)
         .bind(id)
         .execute(&pool)
         .await
-        .map_err(db_err("update schedule plist path"))?;
+    {
+        rollback_schedule_install(&plist_path, &plist_path_str);
+        return Err(db_err("update schedule plist path")(err));
+    }
 
     Ok(plist_path_str)
 }
@@ -471,11 +524,19 @@ mod tests {
 
     #[test]
     fn build_plist_content_includes_id_and_command() {
-        let xml = build_plist_content(42, "/usr/local/bin/claude", "2026-04-23T10:30:00Z").unwrap();
+        let xml = build_plist_content(
+            42,
+            "/usr/local/bin/claude",
+            Some("-p \"1+1\""),
+            "2026-04-23T10:30:00+02:00",
+        )
+        .unwrap();
         assert!(xml.contains("com.zaai.c5h.trigger.42"));
         assert!(xml.contains("/usr/local/bin/claude"));
         assert!(xml.contains("<integer>10</integer>"), "should embed hour");
         assert!(xml.contains("<integer>30</integer>"), "should embed minute");
+        assert!(xml.contains("<string>-p</string>"));
+        assert!(xml.contains("<string>1+1</string>"));
         assert!(xml.contains("/tmp/c5h-trigger-42.log"));
     }
 
@@ -483,14 +544,22 @@ mod tests {
     fn build_plist_content_escapes_xml_metacharacters() {
         // CLI command contains chars that would normally pass validation
         // but plist escaping should still apply defense-in-depth
-        let xml = build_plist_content(1, "/bin/echo", "2026-04-23T10:30:00Z").unwrap();
+        let xml = build_plist_content(1, "/bin/echo", Some("-p \"1+1\""), "2026-04-23T10:30:00Z")
+            .unwrap();
         assert!(!xml.contains("<![CDATA["));
         // No raw metacharacters that escape_for_plist would replace
     }
 
     #[test]
     fn build_plist_content_rejects_invalid_datetime() {
-        let err = build_plist_content(1, "claude", "garbage").unwrap_err();
+        let err = build_plist_content(1, "claude", None, "garbage").unwrap_err();
         assert!(err.contains("datetime") || err.contains("Datetime"));
+    }
+
+    #[test]
+    fn build_plist_content_rejects_invalid_cli_args() {
+        let err = build_plist_content(1, "claude", Some("\"unterminated"), "2026-04-23T10:30:00Z")
+            .unwrap_err();
+        assert!(err.contains("Invalid CLI arguments") || err.contains("shell-parseable"));
     }
 }
