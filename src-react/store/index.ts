@@ -4,6 +4,14 @@ import type { Account, Window, ScheduledTrigger, Settings, UsageInfo } from "@/l
 import * as api from "@/lib/api";
 import { mapError } from "@/lib/errors";
 
+interface FetchOptions {
+  surfaceError?: boolean;
+}
+
+function getMappedError(err: unknown): string {
+  return mapError(err instanceof Error ? err.message : String(err));
+}
+
 interface AppState {
   // Data
   accounts: Account[];
@@ -25,11 +33,11 @@ interface AppState {
   setError: (error: string | null) => void;
 
   // Data Actions
-  fetchAccounts: () => Promise<void>;
-  fetchWindows: (from: string, to: string) => Promise<void>;
-  fetchCurrentWindow: () => Promise<void>;
-  fetchSchedules: () => Promise<void>;
-  fetchSettings: () => Promise<void>;
+  fetchAccounts: (options?: FetchOptions) => Promise<void>;
+  fetchWindows: (from: string, to: string, options?: FetchOptions) => Promise<void>;
+  fetchCurrentWindow: (options?: FetchOptions) => Promise<void>;
+  fetchSchedules: (options?: FetchOptions) => Promise<void>;
+  fetchSettings: (options?: FetchOptions) => Promise<void>;
 
   // Account Actions
   createAccount: (account: Omit<Account, "id" | "created_at">) => Promise<void>;
@@ -56,6 +64,39 @@ interface AppState {
   initialize: () => Promise<void>;
 }
 
+const USAGE_REFRESH_INTERVAL_MS = 60_000;
+const USAGE_WARNING_COOLDOWN_MS = 5 * 60_000;
+
+let usageRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let lastUsageWarning: { message: string | null; timestamp: number } = {
+  message: null,
+  timestamp: 0,
+};
+
+function stopUsageRefreshLoop() {
+  if (usageRefreshTimer) {
+    clearInterval(usageRefreshTimer);
+    usageRefreshTimer = null;
+  }
+
+  api.updateTrayTitle(null).catch(() => {});
+}
+
+function syncUsageRefreshLoop(state: Pick<AppState, "currentWindow" | "fetchUsage">) {
+  if (!state.currentWindow) {
+    stopUsageRefreshLoop();
+    return;
+  }
+
+  if (usageRefreshTimer) {
+    return;
+  }
+
+  usageRefreshTimer = setInterval(() => {
+    void state.fetchUsage();
+  }, USAGE_REFRESH_INTERVAL_MS);
+}
+
 export const useStore = create<AppState>((set, get) => ({
   // Initial state
   accounts: [],
@@ -75,51 +116,72 @@ export const useStore = create<AppState>((set, get) => ({
   setError: (error) => set({ error }),
 
   // Data fetch actions
-  fetchAccounts: async () => {
+  fetchAccounts: async (options) => {
     try {
       const accounts = await api.getAccounts();
       set({ accounts });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const mappedError = getMappedError(err);
+      if (options?.surfaceError !== false) {
+        set({ error: mappedError });
+      }
+      throw new Error(mappedError);
     }
   },
 
-  fetchWindows: async (from, to) => {
+  fetchWindows: async (from, to, options) => {
     try {
       const { selectedAccountId } = get();
       const windows = await api.getWindows(from, to, selectedAccountId ?? undefined);
       set({ windows });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const mappedError = getMappedError(err);
+      if (options?.surfaceError !== false) {
+        set({ error: mappedError });
+      }
+      throw new Error(mappedError);
     }
   },
 
-  fetchCurrentWindow: async () => {
+  fetchCurrentWindow: async (options) => {
     try {
       const { selectedAccountId } = get();
       const currentWindow = await api.getCurrentWindow(selectedAccountId ?? undefined);
       set({ currentWindow });
+      syncUsageRefreshLoop(get());
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const mappedError = getMappedError(err);
+      if (options?.surfaceError !== false) {
+        set({ error: mappedError });
+      }
+      throw new Error(mappedError);
     }
   },
 
-  fetchSchedules: async () => {
+  fetchSchedules: async (options) => {
     try {
       const { selectedAccountId } = get();
       const schedules = await api.getSchedules(selectedAccountId ?? undefined);
       set({ schedules });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const mappedError = getMappedError(err);
+      if (options?.surfaceError !== false) {
+        set({ error: mappedError });
+      }
+      throw new Error(mappedError);
     }
   },
 
-  fetchSettings: async () => {
+  fetchSettings: async (options) => {
     try {
       const settings = await api.getSettings();
       set({ settings });
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      const mappedError = getMappedError(err);
+      if (options?.surfaceError !== false) {
+        set({ error: mappedError });
+      }
+      throw new Error(mappedError);
     }
   },
 
@@ -127,39 +189,39 @@ export const useStore = create<AppState>((set, get) => ({
   createAccount: async (account) => {
     try {
       await api.createAccount(account);
-      await get().fetchAccounts();
+      await get().fetchAccounts({ surfaceError: false });
       toast.success("Account created successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   updateAccount: async (account) => {
     try {
       await api.updateAccount(account);
-      await get().fetchAccounts();
+      await get().fetchAccounts({ surfaceError: false });
       toast.success("Account updated successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   deleteAccount: async (id) => {
     try {
       await api.deleteAccount(id);
-      await get().fetchAccounts();
+      await get().fetchAccounts({ surfaceError: false });
       toast.success("Account deleted successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
@@ -167,32 +229,32 @@ export const useStore = create<AppState>((set, get) => ({
   createWindow: async (accountId, triggeredBy) => {
     try {
       await api.createWindow({ account_id: accountId, triggered_by: triggeredBy });
-      await get().fetchCurrentWindow();
+      await get().fetchCurrentWindow({ surfaceError: false });
       const { selectedDate } = get();
       const { start, end } = api.getWeekBoundaries(selectedDate);
-      await get().fetchWindows(start, end);
+      await get().fetchWindows(start, end, { surfaceError: false });
       toast.success("Window started successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   endWindow: async (id, usagePercent) => {
     try {
       await api.endWindow(id, usagePercent);
-      await get().fetchCurrentWindow();
+      await get().fetchCurrentWindow({ surfaceError: false });
       const { selectedDate } = get();
       const { start, end } = api.getWeekBoundaries(selectedDate);
-      await get().fetchWindows(start, end);
+      await get().fetchWindows(start, end, { surfaceError: false });
       toast.success("Window ended successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
@@ -201,12 +263,17 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       await api.saveSettings(settings);
       set({ settings });
+      const enabledAccountConfig: [number, string][] = get()
+        .accounts
+        .filter((account) => account.enabled && account.id != null)
+        .map((account) => [account.id!, account.cli_command]);
+      await api.updateMonitorConfig(enabledAccountConfig);
       toast.success("Settings saved successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
@@ -214,52 +281,52 @@ export const useStore = create<AppState>((set, get) => ({
   createSchedule: async (accountId, scheduledAt) => {
     try {
       await api.createSchedule({ account_id: accountId, scheduled_at: scheduledAt });
-      await get().fetchSchedules();
+      await get().fetchSchedules({ surfaceError: false });
       toast.success("Schedule created successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   deleteSchedule: async (id) => {
     try {
       await api.deleteSchedule(id);
-      await get().fetchSchedules();
+      await get().fetchSchedules({ surfaceError: false });
       toast.success("Schedule deleted successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   installSchedule: async (id, cliCommand) => {
     try {
       await api.installSchedule(id, cliCommand);
-      await get().fetchSchedules();
+      await get().fetchSchedules({ surfaceError: false });
       toast.success("Schedule installed successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
   uninstallSchedule: async (id) => {
     try {
       await api.uninstallSchedule(id);
-      await get().fetchSchedules();
+      await get().fetchSchedules({ surfaceError: false });
       toast.success("Schedule uninstalled successfully");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      set({ error: message });
-      toast.error(mapError(message));
-      throw err;
+      const mappedError = getMappedError(err);
+      set({ error: mappedError });
+      toast.error(mappedError);
+      throw new Error(mappedError);
     }
   },
 
@@ -272,6 +339,7 @@ export const useStore = create<AppState>((set, get) => ({
         usageByAccount[accountId] = info;
       }
       set({ usageByAccount });
+      lastUsageWarning = { message: null, timestamp: 0 };
 
       // Update tray title with active account's usage %
       const { currentWindow } = get();
@@ -285,8 +353,16 @@ export const useStore = create<AppState>((set, get) => ({
       }
     } catch (err) {
       // Polling failures are non-critical — don't set error state
-      const message = err instanceof Error ? err.message : String(err);
-      toast.warning(`Usage polling failed: ${mapError(message)}`);
+      const message = mapError(err instanceof Error ? err.message : String(err));
+      const now = Date.now();
+      const shouldWarn =
+        lastUsageWarning.message !== message ||
+        now - lastUsageWarning.timestamp > USAGE_WARNING_COOLDOWN_MS;
+
+      if (shouldWarn) {
+        lastUsageWarning = { message, timestamp: now };
+        toast.warning(`Usage polling failed: ${message}`);
+      }
     }
   },
 
@@ -297,16 +373,17 @@ export const useStore = create<AppState>((set, get) => ({
       // Fetch accounts and settings first — other queries depend on them
       await get().fetchAccounts();
       await get().fetchSettings();
+      await get().fetchCurrentWindow({ surfaceError: false });
 
-      const selectedDate = new Date();
+      const selectedDate = get().selectedDate;
       const { start, end } = api.getWeekBoundaries(selectedDate);
 
       // Fetch remaining data in parallel; use allSettled so partial failures
       // don't block the entire init
       const results = await Promise.allSettled([
-        get().fetchCurrentWindow(),
-        get().fetchWindows(start, end),
-        get().fetchSchedules(),
+        get().fetchWindows(start, end, { surfaceError: false }),
+        get().fetchSchedules({ surfaceError: false }),
+        get().fetchUsage(),
         api.purgeOldWindows(),
       ]);
 
@@ -318,7 +395,7 @@ export const useStore = create<AppState>((set, get) => ({
         toast.warning(`Some data failed to load: ${failures.join(", ")}`);
       }
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) });
+      set({ error: getMappedError(err) });
     } finally {
       set({ isLoading: false });
     }

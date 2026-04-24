@@ -7,56 +7,162 @@ import type {
   ScheduledTrigger,
   NewScheduledTrigger,
   Settings,
+  StatsPayload,
   UsageInfo,
 } from "./types";
 
+export type AppErrorCode = "ipc" | "timeout" | "aborted";
+
+export interface InvokeOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export class AppError extends Error {
+  code: AppErrorCode;
+  details?: unknown;
+
+  constructor(code: AppErrorCode, message: string, details?: unknown) {
+    super(message);
+    this.name = "AppError";
+    this.code = code;
+    this.details = details;
+  }
+
+  static from(error: unknown): AppError {
+    if (error instanceof AppError) {
+      return error;
+    }
+
+    if (typeof error === "string") {
+      return new AppError("ipc", error, { raw: error });
+    }
+
+    if (error instanceof Error) {
+      return new AppError("ipc", error.message, { cause: error });
+    }
+
+    return new AppError("ipc", "Unexpected application error", { raw: error });
+  }
+}
+
+async function invokeWithTimeout<T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+  options: InvokeOptions = {}
+): Promise<T> {
+  const { signal, timeoutMs = 30_000 } = options;
+
+  if (signal?.aborted) {
+    throw new AppError("aborted", "Request was cancelled", { cmd });
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const abortHandler = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      reject(new AppError("aborted", "Request was cancelled", { cmd }));
+    };
+
+    const timeoutId = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      reject(new AppError("timeout", "Request timed out", { cmd, timeoutMs }));
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener("abort", abortHandler);
+      }
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+
+    const request = args === undefined ? invoke<T>(cmd) : invoke<T>(cmd, args);
+
+    request
+      .then((value) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        resolve(value);
+      })
+      .catch((error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        reject(AppError.from(error));
+      });
+  });
+}
+
 // Account commands
 export async function getAccounts(): Promise<Account[]> {
-  return invoke<Account[]>("get_accounts");
+  return invokeWithTimeout<Account[]>("get_accounts");
 }
 
 export async function createAccount(account: NewAccount): Promise<Account> {
-  return invoke<Account>("create_account", { account });
+  return invokeWithTimeout<Account>("create_account", { account });
 }
 
 export async function updateAccount(account: Account): Promise<void> {
-  return invoke<void>("update_account", { account });
+  return invokeWithTimeout<void>("update_account", { account });
 }
 
 export async function deleteAccount(id: number): Promise<void> {
-  return invoke<void>("delete_account", { id });
+  return invokeWithTimeout<void>("delete_account", { id });
 }
 
 // Window commands
 export async function getWindows(
   from: string,
   to: string,
-  accountId?: number
+  accountId?: number,
+  options?: InvokeOptions
 ): Promise<Window[]> {
-  return invoke<Window[]>("get_windows", {
+  return invokeWithTimeout<Window[]>("get_windows", {
     from,
     to,
     accountId: accountId ?? null,
-  });
+  }, options);
 }
 
 export async function getCurrentWindow(
   accountId?: number
 ): Promise<Window | null> {
-  return invoke<Window | null>("get_current_window", {
+  return invokeWithTimeout<Window | null>("get_current_window", {
     accountId: accountId ?? null,
   });
 }
 
 export async function createWindow(window: NewWindow): Promise<Window> {
-  return invoke<Window>("create_window", { window });
+  return invokeWithTimeout<Window>("create_window", { window });
 }
 
 export async function endWindow(
   id: number,
   usagePercent?: number
 ): Promise<void> {
-  return invoke<void>("end_window", {
+  return invokeWithTimeout<void>("end_window", {
     id,
     usagePercent: usagePercent ?? null,
   });
@@ -64,18 +170,18 @@ export async function endWindow(
 
 // Settings commands
 export async function getSettings(): Promise<Settings> {
-  return invoke<Settings>("get_settings");
+  return invokeWithTimeout<Settings>("get_settings");
 }
 
 export async function saveSettings(settings: Settings): Promise<void> {
-  return invoke<void>("save_settings", { settings });
+  return invokeWithTimeout<void>("save_settings", { settings });
 }
 
 // Scheduler commands
 export async function getSchedules(
   accountId?: number
 ): Promise<ScheduledTrigger[]> {
-  return invoke<ScheduledTrigger[]>("get_schedules", {
+  return invokeWithTimeout<ScheduledTrigger[]>("get_schedules", {
     accountId: accountId ?? null,
   });
 }
@@ -83,37 +189,54 @@ export async function getSchedules(
 export async function createSchedule(
   schedule: NewScheduledTrigger
 ): Promise<ScheduledTrigger> {
-  return invoke<ScheduledTrigger>("create_schedule", { schedule });
+  return invokeWithTimeout<ScheduledTrigger>("create_schedule", { schedule });
+}
+
+export async function getStats(
+  selectedDate: string,
+  accountId?: number,
+  options?: InvokeOptions
+): Promise<StatsPayload> {
+  return invokeWithTimeout<StatsPayload>(
+    "get_stats",
+    {
+      selectedDate,
+      accountId: accountId ?? null,
+    },
+    options
+  );
 }
 
 export async function deleteSchedule(id: number): Promise<void> {
-  return invoke<void>("delete_schedule", { id });
+  return invokeWithTimeout<void>("delete_schedule", { id });
 }
 
 export async function installSchedule(
   id: number,
   cliCommand: string
 ): Promise<string> {
-  return invoke<string>("install_schedule", { id, cliCommand });
+  return invokeWithTimeout<string>("install_schedule", { id, cliCommand });
 }
 
 export async function uninstallSchedule(id: number): Promise<void> {
-  return invoke<void>("uninstall_schedule", { id });
+  return invokeWithTimeout<void>("uninstall_schedule", { id });
 }
 
 // Polling commands
 export async function pollAccount(accountId: number): Promise<UsageInfo> {
-  return invoke<UsageInfo>("poll_account", { accountId });
+  return invokeWithTimeout<UsageInfo>("poll_account", { accountId });
 }
 
-export async function pollAllAccounts(): Promise<[number, UsageInfo][]> {
-  return invoke<[number, UsageInfo][]>("poll_all_accounts");
+export async function pollAllAccounts(
+  options?: InvokeOptions
+): Promise<[number, UsageInfo][]> {
+  return invokeWithTimeout<[number, UsageInfo][]>("poll_all_accounts", undefined, options);
 }
 
 export async function checkCliAvailability(
   commands: string[]
 ): Promise<[string, boolean, string | null][]> {
-  return invoke<[string, boolean, string | null][]>("check_cli_availability", {
+  return invokeWithTimeout<[string, boolean, string | null][]>("check_cli_availability", {
     commands,
   });
 }
@@ -134,25 +257,25 @@ export interface MonitoringStatus {
 
 // Monitor commands
 export async function startMonitoring(): Promise<void> {
-  return invoke<void>("start_monitoring");
+  return invokeWithTimeout<void>("start_monitoring");
 }
 
 export async function stopMonitoring(): Promise<void> {
-  return invoke<void>("stop_monitoring");
+  return invokeWithTimeout<void>("stop_monitoring");
 }
 
 export async function getMonitoringStatus(): Promise<MonitoringStatus> {
-  return invoke<MonitoringStatus>("get_monitoring_status");
+  return invokeWithTimeout<MonitoringStatus>("get_monitoring_status");
 }
 
 export async function updateMonitorConfig(
   accounts: [number, string][]
 ): Promise<void> {
-  return invoke<void>("update_monitor_config", { accounts });
+  return invokeWithTimeout<void>("update_monitor_config", { accounts });
 }
 
 export async function scanCliProcesses(): Promise<DetectedProcess[]> {
-  return invoke<DetectedProcess[]>("scan_cli_processes");
+  return invokeWithTimeout<DetectedProcess[]>("scan_cli_processes");
 }
 
 // Notification commands
@@ -160,7 +283,7 @@ export async function notifyWindowEndingSoon(
   accountName: string,
   minutesRemaining: number
 ): Promise<void> {
-  return invoke<void>("notify_window_ending_soon", {
+  return invokeWithTimeout<void>("notify_window_ending_soon", {
     accountName,
     minutesRemaining,
   });
@@ -170,33 +293,39 @@ export async function notifyScheduledTrigger(
   accountName: string,
   success: boolean
 ): Promise<void> {
-  return invoke<void>("notify_scheduled_trigger", { accountName, success });
+  return invokeWithTimeout<void>("notify_scheduled_trigger", { accountName, success });
 }
 
 export async function notifyWeeklySummary(
   totalWindows: number,
   avgDuration: number
 ): Promise<void> {
-  return invoke<void>("notify_weekly_summary", { totalWindows, avgDuration });
+  return invokeWithTimeout<void>("notify_weekly_summary", { totalWindows, avgDuration });
 }
 
 export async function sendNotification(
   title: string,
   body: string
 ): Promise<void> {
-  return invoke<void>("send_notification", { title, body });
+  return invokeWithTimeout<void>("send_notification", { title, body });
 }
 
 // Data retention
 export async function purgeOldWindows(retentionDays?: number): Promise<number> {
-  return invoke<number>("purge_old_windows", {
+  return invokeWithTimeout<number>("purge_old_windows", {
     retentionDays: retentionDays ?? null,
   });
 }
 
 // Tray commands
 export async function updateTrayTitle(text: string | null): Promise<void> {
-  return invoke<void>("update_tray_title", { text });
+  return invokeWithTimeout<void>("update_tray_title", { text });
+}
+
+export async function showMainWindow(
+  tab?: "calendar" | "stats" | "settings"
+): Promise<void> {
+  return invokeWithTimeout<void>("show_main_window", { tab: tab ?? null });
 }
 
 // Helper to format date for API calls

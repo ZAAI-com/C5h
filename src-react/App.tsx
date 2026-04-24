@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useAppInit, useWindowEndingAlert, useKeyboardShortcuts } from "@/hooks";
 import { useStore } from "@/store";
 import { Layout, CalendarView, StatsView, SettingsView } from "@/components";
@@ -13,7 +14,7 @@ function App() {
   const { isLoading, error } = useAppInit();
   const setError = useStore((state) => state.setError);
   const initialize = useStore((state) => state.initialize);
-  const [activeTab, setActiveTab] = useState("calendar");
+  const [activeTab, setActiveTab] = useState<"calendar" | "stats" | "settings">("calendar");
 
   // Enable window ending notifications
   useWindowEndingAlert();
@@ -59,8 +60,23 @@ function App() {
     onNavigateWeek: handleNavigateWeek,
   });
 
+  useEffect(() => {
+    const unlisten = listen<"calendar" | "stats" | "settings">(
+      "navigate-to-tab",
+      (event) => {
+        setActiveTab(event.payload);
+      },
+    );
+
+    return () => {
+      unlisten.then((cleanup) => cleanup());
+    };
+  }, []);
+
+  let content: ReactNode;
+
   if (isLoading) {
-    return (
+    content = (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
@@ -69,10 +85,8 @@ function App() {
         </div>
       </div>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error) {
+    content = (
       <div className="flex items-center justify-center min-h-screen bg-background p-4">
         <Card className="max-w-md w-full">
           <CardHeader>
@@ -98,10 +112,8 @@ function App() {
         </Card>
       </div>
     );
-  }
-
-  return (
-    <>
+  } else {
+    content = (
       <Layout
         calendarContent={<CalendarView />}
         statsContent={<StatsView />}
@@ -109,7 +121,13 @@ function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
+    );
+  }
+
+  return (
+    <>
       <Toaster />
+      {content}
     </>
   );
 }

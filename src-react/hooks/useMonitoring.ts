@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
 import * as api from "@/lib/api";
 import type { DetectedProcess, MonitoringStatus } from "@/lib/api";
 import { useStore } from "@/store";
+import { mapError } from "@/lib/errors";
 
 export function useMonitoring() {
   const [status, setStatus] = useState<MonitoringStatus>({
@@ -14,11 +16,19 @@ export function useMonitoring() {
 
   const createWindow = useStore((state) => state.createWindow);
   const accounts = useStore((state) => state.accounts);
+  const pendingStartsRef = useRef(new Set<number>());
+
+  const showMonitoringError = useCallback((prefix: string, err: unknown) => {
+    const message = mapError(err instanceof Error ? err.message : String(err));
+    toast.error(`${prefix}: ${message}`);
+  }, []);
 
   // Load initial status
   useEffect(() => {
-    api.getMonitoringStatus().then(setStatus).catch(console.error);
-  }, []);
+    api.getMonitoringStatus().then(setStatus).catch((err) => {
+      showMonitoringError("Failed to load monitoring status", err);
+    });
+  }, [showMonitoringError]);
 
   // Listen for events
   useEffect(() => {
@@ -36,11 +46,14 @@ export function useMonitoring() {
         console.log("Process started:", proc);
 
         // Auto-create window when process is detected
-        if (proc.account_id) {
+        if (proc.account_id && !pendingStartsRef.current.has(proc.account_id)) {
+          pendingStartsRef.current.add(proc.account_id);
           try {
             await createWindow(proc.account_id, "auto-detected");
           } catch (err) {
-            console.error("Failed to auto-create window:", err);
+            showMonitoringError("Failed to auto-create window", err);
+          } finally {
+            pendingStartsRef.current.delete(proc.account_id);
           }
         }
       }
@@ -60,37 +73,43 @@ export function useMonitoring() {
       unlistenStarted.then((fn) => fn());
       unlistenStopped.then((fn) => fn());
     };
-  }, [createWindow]);
+  }, [createWindow, showMonitoringError]);
 
   // Update monitor config when accounts change
   useEffect(() => {
-    if (accounts.length > 0) {
-      const config: [number, string][] = accounts
-        .filter((a) => a.enabled && a.id)
-        .map((a) => [a.id!, a.cli_command]);
-      api.updateMonitorConfig(config).catch(console.error);
-    }
-  }, [accounts]);
+    const config: [number, string][] = accounts
+      .filter((a) => a.enabled && a.id)
+      .map((a) => [a.id!, a.cli_command]);
+    api.updateMonitorConfig(config).catch((err) => {
+      showMonitoringError("Failed to update monitoring config", err);
+    });
+  }, [accounts, showMonitoringError]);
 
   const startMonitoring = useCallback(async () => {
     setIsLoading(true);
     try {
       await api.startMonitoring();
       setStatus((prev) => ({ ...prev, is_running: true }));
+    } catch (err) {
+      showMonitoringError("Failed to start monitoring", err);
+      throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showMonitoringError]);
 
   const stopMonitoring = useCallback(async () => {
     setIsLoading(true);
     try {
       await api.stopMonitoring();
       setStatus((prev) => ({ ...prev, is_running: false }));
+    } catch (err) {
+      showMonitoringError("Failed to stop monitoring", err);
+      throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showMonitoringError]);
 
   const scanNow = useCallback(async () => {
     setIsLoading(true);
@@ -102,10 +121,13 @@ export function useMonitoring() {
         last_check: new Date().toISOString(),
       }));
       return processes;
+    } catch (err) {
+      showMonitoringError("Failed to scan for CLI processes", err);
+      throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [showMonitoringError]);
 
   return {
     status,

@@ -1,5 +1,126 @@
-import { describe, expect, it } from "vitest";
-import { formatDateForApi, getWeekBoundaries } from "./api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  AppError,
+  formatDateForApi,
+  getAccounts,
+  getWindows,
+  getWeekBoundaries,
+  pollAllAccounts,
+} from "./api";
+
+const mockInvoke = vi.mocked(invoke);
+
+describe("API helpers", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("wraps string IPC failures in AppError", async () => {
+    mockInvoke.mockRejectedValueOnce("Failed to fetch accounts");
+
+    const error = await getAccounts().catch((err) => err);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({
+      code: "ipc",
+      message: "Failed to fetch accounts",
+    });
+  });
+
+  it("wraps Error IPC failures in AppError", async () => {
+    mockInvoke.mockRejectedValueOnce(new Error("Boom"));
+
+    const error = await getAccounts().catch((err) => err);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({
+      code: "ipc",
+      message: "Boom",
+    });
+  });
+
+  it("rejects immediately for pre-aborted signals", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const error = await getWindows("2024-01-01", "2024-01-07", 1, {
+      signal: controller.signal,
+    }).catch((err) => err);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({
+      code: "aborted",
+      message: "Request was cancelled",
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects when a request is aborted mid-flight", async () => {
+    mockInvoke.mockImplementationOnce(() => new Promise(() => {}));
+    const controller = new AbortController();
+
+    const request = getWindows("2024-01-01", "2024-01-07", 1, {
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    const error = await request.catch((err) => err);
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({
+      code: "aborted",
+      message: "Request was cancelled",
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("get_windows", {
+      from: "2024-01-01",
+      to: "2024-01-07",
+      accountId: 1,
+    });
+  });
+
+  it("times out hung IPC requests", async () => {
+    vi.useFakeTimers();
+    mockInvoke.mockImplementationOnce(() => new Promise(() => {}));
+
+    const request = pollAllAccounts({ timeoutMs: 25 }).catch((err) => err);
+    await vi.advanceTimersByTimeAsync(25);
+    const error = await request;
+
+    expect(error).toBeInstanceOf(AppError);
+    expect(error).toMatchObject({
+      code: "timeout",
+      message: "Request timed out",
+      details: { cmd: "poll_all_accounts", timeoutMs: 25 },
+    });
+  });
+
+  it("passes getWindows args unchanged when options are provided", async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+
+    await getWindows("2024-01-01", "2024-01-07", 42, { timeoutMs: 5000 });
+
+    expect(mockInvoke).toHaveBeenCalledWith("get_windows", {
+      from: "2024-01-01",
+      to: "2024-01-07",
+      accountId: 42,
+    });
+  });
+
+  it("passes pollAllAccounts with no IPC args when options are provided", async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+
+    await pollAllAccounts({ timeoutMs: 5000 });
+
+    expect(mockInvoke).toHaveBeenCalledWith("poll_all_accounts");
+  });
+});
 
 describe("formatDateForApi", () => {
   it("returns ISO 8601 string", () => {
@@ -15,11 +136,10 @@ describe("formatDateForApi", () => {
 
 describe("getWeekBoundaries", () => {
   it("returns Sunday 00:00:00.000 as start when input is mid-week", () => {
-    // 2024-01-17 is a Wednesday. Sunday of that week is 2024-01-14.
     const wednesday = new Date(2024, 0, 17, 14, 30);
     const { start } = getWeekBoundaries(wednesday);
     const startDate = new Date(start);
-    expect(startDate.getDay()).toBe(0); // Sunday
+    expect(startDate.getDay()).toBe(0);
     expect(startDate.getHours()).toBe(0);
     expect(startDate.getMinutes()).toBe(0);
     expect(startDate.getSeconds()).toBe(0);
@@ -30,7 +150,7 @@ describe("getWeekBoundaries", () => {
     const wednesday = new Date(2024, 0, 17, 14, 30);
     const { end } = getWeekBoundaries(wednesday);
     const endDate = new Date(end);
-    expect(endDate.getDay()).toBe(6); // Saturday
+    expect(endDate.getDay()).toBe(6);
     expect(endDate.getHours()).toBe(23);
     expect(endDate.getMinutes()).toBe(59);
     expect(endDate.getSeconds()).toBe(59);
@@ -45,11 +165,10 @@ describe("getWeekBoundaries", () => {
     const diffDays = Math.floor(
       (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
     );
-    expect(diffDays).toBe(6); // 6 days, 23:59:59.999
+    expect(diffDays).toBe(6);
   });
 
   it("returns same date as start when input is already Sunday at midnight", () => {
-    // 2024-01-14 is a Sunday at local midnight
     const sunday = new Date(2024, 0, 14, 0, 0, 0, 0);
     const { start } = getWeekBoundaries(sunday);
     expect(new Date(start).getTime()).toBe(sunday.getTime());

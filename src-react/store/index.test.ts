@@ -233,12 +233,14 @@ describe("Store", () => {
   });
 
   describe("error handling", () => {
-    it("should set error on fetch failure", async () => {
+    it("should set error and rethrow on fetch failure", async () => {
       vi.mocked(api.getAccounts).mockRejectedValueOnce(
         new Error("Network error")
       );
 
-      await useStore.getState().fetchAccounts();
+      await expect(useStore.getState().fetchAccounts()).rejects.toThrow(
+        "Network error"
+      );
 
       expect(useStore.getState().error).toBe("Network error");
     });
