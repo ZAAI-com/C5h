@@ -11,7 +11,35 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify requested version matches repository manifests
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import sys
+
+          requested = "${{ inputs.version }}"
+          with open("package.json", "r", encoding="utf-8") as handle:
+              package_version = json.load(handle)["version"]
+          with open("src-tauri/tauri.conf.json", "r", encoding="utf-8") as handle:
+              tauri_version = json.load(handle)["version"]
+
+          if package_version != requested or tauri_version != requested:
+              print(
+                  f"Version mismatch: requested={requested}, package.json={package_version}, tauri.conf.json={tauri_version}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
+
   build:
+    needs: validate-version
     strategy:
       fail-fast: false
       matrix:
@@ -62,8 +90,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'C5h v__VERSION__'
+          tagName: v${{ inputs.version }}
+          releaseName: C5h v${{ inputs.version }}
           releaseBody: |
             ## C5h - AI Tool Usage Tracker
 
@@ -176,7 +204,7 @@ jobs:
           set -euo pipefail
           APP=$(find universal -name "*.app" -type d | head -n1)
           APP_NAME=$(basename "$APP")
-          VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -n1 | cut -d'"' -f4)
+          VERSION="${{ inputs.version }}"
           DMG_NAME="C5h_${VERSION}_universal.dmg"
 
           # Stage the .app in a clean dir so the DMG only contains the app

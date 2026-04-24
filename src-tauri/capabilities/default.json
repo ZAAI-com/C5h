@@ -6,19 +6,9 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "shell:default",
-    "shell:allow-execute",
-    "shell:allow-spawn",
-    "fs:default",
-    "fs:allow-read",
-    "fs:allow-write",
     "notification:default",
     "notification:allow-notify",
     "notification:allow-request-permission",
-    "autostart:default",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled",
     "positioner:default",
     "positioner:allow-move-window"
   ]

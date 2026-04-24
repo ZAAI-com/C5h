@@ -207,8 +207,8 @@ impl ProcessMonitor {
 
 **Features:**
 - Real-time process detection
-- PTY attachment for output parsing
-- Fallback to polling if PTY unavailable
+- Tool-specific polling for live usage percentages
+- Configurable monitoring cadence from persisted settings
 - Async processing with Tokio
 
 ### 5. CLI Output Parser

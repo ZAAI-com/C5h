@@ -20,10 +20,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 
 # Tauri plugins
 tauri-plugin-opener = "2"
-tauri-plugin-shell = "2"
-tauri-plugin-fs = "2"
 tauri-plugin-notification = "2"
-tauri-plugin-autostart = "2"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 
 # Logging

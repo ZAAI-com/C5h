@@ -1,17 +1,24 @@
-name: Test
+name: Validate
 
 on:
+  pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  frontend-tests:
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -21,69 +28,25 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run typecheck
+      - name: Restore Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Run bun lint
         run: bun lint
 
-      - name: Run frontend tests
-        run: bun test || echo "No tests configured yet"
+      - name: Run bun test:run
+        run: bun test:run
 
-  backend-tests:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Run bun run build
+        run: bun run build
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Run Cargo check
-        run: cd src-tauri && cargo check --all-features
-
-      - name: Run Cargo clippy
-        run: cd src-tauri && cargo clippy --all-features -- -D warnings
-
-      - name: Run Cargo tests
+      - name: Run cargo test
         run: cd src-tauri && cargo test --all-features
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Run cargo check
+        run: cd src-tauri && cargo check --all-features
 
-      - name: Generate Rust coverage report
-        run: cd src-tauri && cargo llvm-cov --lib --lcov --output-path lcov.info
-
-      - name: Upload Rust coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-coverage
-          path: src-tauri/lcov.info
-
-  build-check:
-    needs: [frontend-tests, backend-tests]
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Build application
-        run: bun tauri build --debug
+      - name: Run cargo clippy
+        run: cd src-tauri && cargo clippy --all-features -- -D warnings

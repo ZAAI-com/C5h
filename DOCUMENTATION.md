@@ -221,11 +221,9 @@ c5h/
 **Configurable Options**:
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Launch at login | Start app on macOS login | true |
-| Show in menu bar | Display tray icon | true |
-| Theme | system / light / dark | system |
 | Poll interval | Minutes between checks | 15 |
 | Notifications | Enable system notifications | true |
+| Window ending soon | Alert before an active window expires | true |
 
 ---
 
@@ -324,10 +322,8 @@ bun tauri build
 | value | TEXT | Setting value |
 
 **Default Settings**:
-- `launch_at_login`: true
-- `show_in_menu_bar`: true
-- `theme`: system
 - `notifications_enabled`: true
+- `notify_ending_soon`: true
 - `poll_interval_minutes`: 15
 
 ### Table: scheduled_triggers
@@ -336,7 +332,7 @@ bun tauri build
 |--------|------|-------------|
 | id | INTEGER | Primary key |
 | account_id | INTEGER | FK → accounts |
-| scheduled_at | TEXT | Scheduled time (ISO 8601) |
+| scheduled_at | TEXT | Scheduled local time (RFC3339 with timezone offset) |
 | status | TEXT | pending, completed, failed, cancelled |
 | plist_path | TEXT | Path to launchd plist |
 | created_at | TEXT | ISO 8601 timestamp |
@@ -357,7 +353,7 @@ const account = await invoke<Account>('create_account', {
     name: "Claude Code",
     tool_type: "claude",
     cli_command: "/usr/local/bin/claude",
-    cli_args: "-p 1+1",
+    cli_args: "-p 1+1", // used only for scheduled launchd triggers
     window_duration_hours: 5,
     color: "#6366f1",
     enabled: true
@@ -405,10 +401,8 @@ const settings = await invoke<Settings>('get_settings');
 // Save settings
 await invoke('save_settings', {
   settings: {
-    launch_at_login: true,
-    show_in_menu_bar: true,
-    theme: "dark",
     notifications_enabled: true,
+    notify_ending_soon: true,
     poll_interval_minutes: 15
   }
 });
@@ -425,7 +419,7 @@ const schedules = await invoke<Schedule[]>('get_schedules', {
 // Create schedule
 const schedule = await invoke<Schedule>('create_schedule', {
   accountId: 1,
-  scheduledAt: "2024-01-15T03:00:00Z"
+  scheduledAt: "2024-01-15T10:30:00+01:00"
 });
 
 // Install to launchd
@@ -455,6 +449,15 @@ const status = await invoke<MonitorStatus>('get_monitoring_status');
 
 // Manual scan
 const processes = await invoke<DetectedProcess[]>('scan_cli_processes');
+```
+
+### Stats Commands
+
+```typescript
+const stats = await invoke<StatsPayload>('get_stats', {
+  selectedDate: new Date().toISOString(),
+  accountId: 1, // optional
+});
 ```
 
 ### Notification Commands

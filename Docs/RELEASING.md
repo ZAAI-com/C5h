@@ -92,18 +92,21 @@ Then create `src-tauri/entitlements.plist`:
 
 ```bash
 # 1. Bump version in src-tauri/tauri.conf.json and package.json
-# 2. Commit, tag, push
+# 2. Commit and push the release commit
 git commit -am "Release v0.3.0"
-git tag v0.3.0
-git push && git push --tags
+git push
 ```
 
-The `release.yml` workflow runs automatically:
+Then dispatch `.github/workflows/release.yml` manually with `version=0.3.0`.
+The workflow now validates that `package.json`, `src-tauri/tauri.conf.json`, and the
+requested workflow input all match before any build starts.
+
+The `release.yml` workflow then:
 
 1. Builds aarch64 and x86_64 in parallel.
 2. Signs + notarizes each (if Apple secrets are set).
 3. Fuses them into a universal binary (`universal` job).
-4. Creates a draft GitHub Release with DMGs attached.
+4. Creates a draft GitHub Release tagged `v0.3.0` with DMGs attached.
 
 Review the draft release on GitHub and publish when ready.
 

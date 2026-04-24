@@ -1,19 +1,20 @@
 # C5h - AI Tool Usage Tracker
 
-A macOS menu bar application to visualize and optimize AI coding tool usage windows (Claude Code, Codex, Gemini). Track 5-hour rolling usage windows, display them in a calendar view, and schedule automatic window triggers via macOS launchd.
+A macOS menu bar application to visualize and optimize AI coding tool usage windows (Claude Code, Codex, Gemini). Track rolling usage windows, display them in a calendar view, and schedule automatic window triggers via macOS launchd.
 
 ## Features
 
-- **Real-Time Monitoring**: Instant detection of CLI usage via process monitoring and PTY attachment
+- **Real-Time Monitoring**: Detect CLI usage via local process monitoring plus periodic usage polling
 - **Menu Bar Integration**: Status at a glance with percentage display and quick popover access
 - **Calendar View**: Visual week-by-week timeline of usage windows
 - **Statistics Dashboard**:
-  - Usage by day of week heatmap
-  - Time of day distribution histogram
+  - Selected-week totals and per-day breakdowns
+  - Selected-week day-of-week and time-of-day distributions
+  - Rolling 8-week duration trend
   - Account-specific breakdowns
 - **Smart Scheduling**: Automatic window triggers via macOS launchd
 - **Multi-Account Support**: Track multiple AI tools and accounts simultaneously
-- **Notifications**: System notifications for window endings and scheduled triggers
+- **Notifications**: System notifications for window endings
 
 ## Tech Stack
 
@@ -91,7 +92,8 @@ The built application will be in `src-tauri/target/release/bundle/`.
 3. Configure:
    - Name (e.g., "Claude Code")
    - Tool Type (claude, codex, gemini)
-   - CLI Command and arguments
+   - CLI Command
+   - Scheduled trigger args (optional, used only when launchd runs the account)
    - Window duration (hours)
    - Color for visual distinction
 
@@ -104,9 +106,9 @@ The app automatically detects when you run configured CLI tools:
 
 ### Scheduling
 
-1. Enable scheduler in Settings
-2. Click on a calendar time slot to create a schedule
-3. The system will automatically trigger a new window at the scheduled time
+1. Open **Scheduled Triggers** in Settings, or click a calendar time slot
+2. Create a schedule using local date and local time
+3. Install the schedule to launchd for the chosen account
 
 ## Architecture
 
@@ -130,8 +132,8 @@ The app automatically detects when you run configured CLI tools:
 
 The app uses a hybrid approach:
 1. **Process Watcher**: Monitors running processes for CLI tools
-2. **PTY Attachment**: Reads stdout/stderr for usage data (when available)
-3. **Fallback Polling**: 15-minute polling if PTY unavailable
+2. **Usage Polling**: Refreshes live CLI usage while an active window exists
+3. **Manual Windows**: Lets you start/end windows directly if monitoring is unavailable
 
 ## Development
 
@@ -177,10 +179,9 @@ Plists stored in: `~/Library/LaunchAgents/com.zaai.c5h.trigger.{id}.plist`
 ### Settings
 
 Configurable via the Settings UI:
-- Theme (system, light, dark)
 - Notifications enabled/disabled
-- Scheduler enabled/disabled
-- Default trigger time
+- Window ending soon notifications
+- Monitoring poll interval
 
 ## Contributing
 
