@@ -1,0 +1,16 @@
+[scenario]
+name = "smoke"
+
+[[step]]
+name = "main window is on the dev URL"
+action = "assert-url"
+expected = "localhost:1420"
+
+[[step]]
+name = "page title is set"
+action = "eval"
+script = "document.title"
+
+# Add target-driven assertions (assert-text, assert-visible, click, fill, …)
+# below this line. Use `tauri-pilot snapshot -i` against a running
+# `bun run tauri:e2e` to discover stable selectors or @eN refs.

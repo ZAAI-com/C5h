@@ -157,6 +157,29 @@ cd src-tauri && cargo llvm-cov --open    # generates HTML report and opens it
 cd src-tauri && cargo llvm-cov --summary-only
 ```
 
+### E2E testing (manual, local-only)
+
+End-to-end smoke tests use [`tauri-pilot`](https://github.com/mpiton/tauri-pilot), gated behind the `e2e` Cargo feature so the test socket is never linked into a shipped binary.
+
+One-time setup:
+```bash
+rustup update stable                # tauri-pilot v0.5.0 requires rustc >= 1.95.0
+cargo install tauri-pilot-cli
+```
+
+Run the app with the `e2e` feature in one terminal:
+```bash
+bun run tauri:e2e
+```
+
+In a second terminal, drive scenarios via the CLI:
+```bash
+tauri-pilot snapshot -i        # inspect accessibility tree, get @eN refs
+bun run test:e2e               # run e2e/smoke.toml
+```
+
+Scenarios live in `e2e/*.toml`. The `tauri-plugin-pilot` dependency is `optional = true` and only compiled when `--features e2e` is passed; default `bun run tauri dev` and release builds remain unchanged.
+
 ### Code Structure
 
 See detailed documentation:
