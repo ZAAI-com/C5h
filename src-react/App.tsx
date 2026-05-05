@@ -7,7 +7,7 @@ import { Button } from "@/components/shadcn-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
 import { Toaster } from "@/components/shadcn-ui/sonner";
 import { Loader2, AlertCircle } from "lucide-react";
-import { getWeekBoundaries } from "@/lib/api";
+import { getWeekBoundaries, quitApp } from "@/lib/api";
 import { subWeeks, addWeeks } from "date-fns";
 
 function App() {
@@ -58,6 +58,9 @@ function App() {
     onStartWindow: handleStartWindow,
     onJumpToToday: handleJumpToToday,
     onNavigateWeek: handleNavigateWeek,
+    onQuit: () => {
+      quitApp().catch(console.error);
+    },
   });
 
   useEffect(() => {

@@ -75,10 +75,45 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
 }
 
 async fn run_post_migrations(pool: &SqlitePool) -> Result<(), String> {
+    add_missing_columns(pool).await?;
     repair_duplicate_active_windows(pool).await?;
     ensure_active_window_unique_index(pool).await?;
     normalize_future_schedules(pool).await?;
     reset_installed_future_schedules(pool).await?;
+    Ok(())
+}
+
+/// Idempotently add columns that were introduced after the initial schema.
+/// SQLite has no `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, so we read
+/// `pragma_table_info` and only add columns that are missing.
+async fn add_missing_columns(pool: &SqlitePool) -> Result<(), String> {
+    let needed = [
+        ("scheduled_triggers", "exit_code", "INTEGER"),
+        ("scheduled_triggers", "started_at", "TEXT"),
+        ("scheduled_triggers", "finished_at", "TEXT"),
+        ("scheduled_triggers", "stderr_tail", "TEXT"),
+    ];
+
+    for (table, column, ty) in needed {
+        let existing: Vec<String> =
+            sqlx::query_scalar(&format!("SELECT name FROM pragma_table_info('{}')", table))
+                .fetch_all(pool)
+                .await
+                .map_err(|e| format!("PRAGMA table_info({}) failed: {}", table, e))?;
+
+        if existing.iter().any(|name| name == column) {
+            continue;
+        }
+
+        sqlx::query(&format!(
+            "ALTER TABLE {} ADD COLUMN {} {}",
+            table, column, ty
+        ))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to add column {}.{}: {}", table, column, e))?;
+    }
+
     Ok(())
 }
 
@@ -236,6 +271,9 @@ pub async fn init_test_pool() -> SqlitePool {
     run_migrations(&pool)
         .await
         .expect("Failed to run migrations on test pool");
+    run_post_migrations(&pool)
+        .await
+        .expect("Failed to run post-migrations on test pool");
 
     pool
 }

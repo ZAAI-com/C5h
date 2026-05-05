@@ -11,8 +11,9 @@ use sqlx::SqlitePool;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use crate::db::DbPool;
+use crate::services::trigger_results;
 
 const PLIST_PREFIX: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -76,7 +77,11 @@ pub async fn get_schedules_impl(
                 'scheduled_at', scheduled_at,
                 'status', status,
                 'plist_path', plist_path,
-                'created_at', created_at
+                'created_at', created_at,
+                'exit_code', exit_code,
+                'started_at', started_at,
+                'finished_at', finished_at,
+                'stderr_tail', stderr_tail
             ) FROM scheduled_triggers
             WHERE account_id = ? AND status = 'pending'
             ORDER BY scheduled_at ASC"
@@ -93,7 +98,11 @@ pub async fn get_schedules_impl(
                 'scheduled_at', scheduled_at,
                 'status', status,
                 'plist_path', plist_path,
-                'created_at', created_at
+                'created_at', created_at,
+                'exit_code', exit_code,
+                'started_at', started_at,
+                'finished_at', finished_at,
+                'stderr_tail', stderr_tail
             ) FROM scheduled_triggers
             WHERE status = 'pending'
             ORDER BY scheduled_at ASC"
@@ -180,6 +189,10 @@ pub async fn create_schedule_impl(
         status: "pending".to_string(),
         plist_path: None,
         created_at: None,
+        exit_code: None,
+        started_at: None,
+        finished_at: None,
+        stderr_tail: None,
     })
 }
 
@@ -214,9 +227,15 @@ pub async fn delete_schedule(db: State<'_, DbPool>, id: i64) -> Result<(), Strin
 
 /// Build the plist XML content for a schedule. Pure function — no IO.
 ///
+/// The plist invokes `c5h-trigger.sh <schedule_id> <output_dir> <cli_command> <cli_args...>`,
+/// not the CLI directly. The wrapper captures exit code, timing, and stderr to a result file
+/// the app polls; this is the only callback path between launchd and the app.
+///
 /// Extracted from `install_schedule` so we can test the generated XML.
 pub fn build_plist_content(
     id: i64,
+    wrapper_script_path: &str,
+    output_dir: &str,
     cli_command: &str,
     cli_args: Option<&str>,
     scheduled_at_rfc3339: &str,
@@ -226,7 +245,12 @@ pub fn build_plist_content(
 
     validate_cli_args(cli_args)?;
 
-    let mut program_arguments = vec![cli_command.to_string()];
+    let mut program_arguments = vec![
+        wrapper_script_path.to_string(),
+        id.to_string(),
+        output_dir.to_string(),
+        cli_command.to_string(),
+    ];
     if let Some(cli_args) = cli_args.filter(|args| !args.trim().is_empty()) {
         program_arguments.extend(
             shell_words::split(cli_args)
@@ -273,8 +297,30 @@ fn rollback_schedule_install(plist_path: &Path, plist_path_str: &str) {
     }
 }
 
+/// Resolve the absolute path to the bundled wrapper script.
+///
+/// In dev runs the script lives at `src-tauri/resources/c5h-trigger.sh`;
+/// in release bundles it ships under `Contents/Resources/`. Tauri's
+/// resource resolver handles both via `BaseDirectory::Resource`.
+fn resolve_wrapper_script(app: &AppHandle) -> Result<String, String> {
+    use tauri::path::BaseDirectory;
+    let path = app
+        .path()
+        .resolve("resources/c5h-trigger.sh", BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve wrapper script: {}", e))?;
+    if !path.exists() {
+        return Err(format!(
+            "Wrapper script missing at expected path {}. \
+             The bundled resource may not have been installed.",
+            path.display()
+        ));
+    }
+    path_to_string(&path)
+}
+
 #[tauri::command]
 pub async fn install_schedule(
+    app: AppHandle,
     db: State<'_, DbPool>,
     id: i64,
     cli_command: String,
@@ -282,6 +328,10 @@ pub async fn install_schedule(
     // Validate CLI command to prevent command injection
     validate_cli_command(&cli_command)?;
     let resolved_cli_command = cli_poller::resolve_cli_path(&cli_command).await?;
+
+    let wrapper_path = resolve_wrapper_script(&app)?;
+    let output_dir = trigger_results::results_dir(&app)?;
+    let output_dir_str = path_to_string(&output_dir)?;
 
     let pool = get_pool(&db).await?;
 
@@ -301,6 +351,8 @@ pub async fn install_schedule(
 
     let plist_content = build_plist_content(
         id,
+        &wrapper_path,
+        &output_dir_str,
         &resolved_cli_command,
         cli_args.as_deref(),
         &scheduled_at,
@@ -517,17 +569,25 @@ mod tests {
         assert!(listed.is_empty());
     }
 
+    const TEST_WRAPPER: &str = "/Applications/C5h.app/Contents/Resources/resources/c5h-trigger.sh";
+    const TEST_OUTPUT_DIR: &str = "/Users/x/Library/Application Support/com.zaai.c5h/triggers";
+
     #[test]
-    fn build_plist_content_includes_id_and_command() {
+    fn build_plist_content_includes_id_command_and_wrapper() {
         let xml = build_plist_content(
             42,
+            TEST_WRAPPER,
+            TEST_OUTPUT_DIR,
             "/usr/local/bin/claude",
             Some("-p \"1+1\""),
             "2026-04-23T10:30:00+02:00",
         )
         .unwrap();
         assert!(xml.contains("com.zaai.c5h.trigger.42"));
-        assert!(xml.contains("/usr/local/bin/claude"));
+        assert!(xml.contains(TEST_WRAPPER), "should invoke the wrapper script");
+        assert!(xml.contains(TEST_OUTPUT_DIR), "should pass the output dir");
+        assert!(xml.contains("<string>42</string>"), "wrapper takes id as second arg");
+        assert!(xml.contains("/usr/local/bin/claude"), "CLI command still appears");
         assert!(xml.contains("<integer>10</integer>"), "should embed hour");
         assert!(xml.contains("<integer>30</integer>"), "should embed minute");
         assert!(xml.contains("<string>-p</string>"));
@@ -536,25 +596,64 @@ mod tests {
     }
 
     #[test]
+    fn build_plist_content_program_arguments_order() {
+        // Wrapper script must be argv[0], schedule_id argv[1], output_dir argv[2],
+        // CLI command argv[3]. The first <string> in the plist is the Label
+        // ("com.zaai.c5h.trigger.{ID}"), so program-argument indices start at 1.
+        let xml = build_plist_content(
+            7,
+            TEST_WRAPPER,
+            TEST_OUTPUT_DIR,
+            "claude",
+            Some("ping"),
+            "2026-04-23T10:30:00Z",
+        )
+        .unwrap();
+        let strings: Vec<&str> = xml
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("<string>"))
+            .filter_map(|l| l.strip_suffix("</string>"))
+            .collect();
+        assert_eq!(strings[0], "com.zaai.c5h.trigger.7", "Label is the first <string>");
+        assert_eq!(strings[1], TEST_WRAPPER);
+        assert_eq!(strings[2], "7");
+        assert_eq!(strings[3], TEST_OUTPUT_DIR);
+        assert_eq!(strings[4], "claude");
+        assert_eq!(strings[5], "ping");
+    }
+
+    #[test]
     fn build_plist_content_escapes_xml_metacharacters() {
-        // CLI command contains chars that would normally pass validation
-        // but plist escaping should still apply defense-in-depth
-        let xml = build_plist_content(1, "/bin/echo", Some("-p \"1+1\""), "2026-04-23T10:30:00Z")
-            .unwrap();
+        let xml = build_plist_content(
+            1,
+            TEST_WRAPPER,
+            TEST_OUTPUT_DIR,
+            "/bin/echo",
+            Some("-p \"1+1\""),
+            "2026-04-23T10:30:00Z",
+        )
+        .unwrap();
         assert!(!xml.contains("<![CDATA["));
-        // No raw metacharacters that escape_for_plist would replace
     }
 
     #[test]
     fn build_plist_content_rejects_invalid_datetime() {
-        let err = build_plist_content(1, "claude", None, "garbage").unwrap_err();
+        let err = build_plist_content(1, TEST_WRAPPER, TEST_OUTPUT_DIR, "claude", None, "garbage")
+            .unwrap_err();
         assert!(err.contains("datetime") || err.contains("Datetime"));
     }
 
     #[test]
     fn build_plist_content_rejects_invalid_cli_args() {
-        let err = build_plist_content(1, "claude", Some("\"unterminated"), "2026-04-23T10:30:00Z")
-            .unwrap_err();
+        let err = build_plist_content(
+            1,
+            TEST_WRAPPER,
+            TEST_OUTPUT_DIR,
+            "claude",
+            Some("\"unterminated"),
+            "2026-04-23T10:30:00Z",
+        )
+        .unwrap_err();
         assert!(err.contains("Invalid CLI arguments") || err.contains("shell-parseable"));
     }
 }

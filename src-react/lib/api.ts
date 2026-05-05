@@ -322,6 +322,20 @@ export async function updateTrayTitle(text: string | null): Promise<void> {
   return invokeWithTimeout<void>("update_tray_title", { text });
 }
 
+// Login-item registration on macOS. Reconciles OS state with the persisted
+// launch_at_login setting; called from the Settings UI when the toggle changes.
+export async function setAutostart(enabled: boolean): Promise<void> {
+  return invokeWithTimeout<void>("set_autostart", { enabled });
+}
+
+export async function isAutostartEnabled(): Promise<boolean> {
+  return invokeWithTimeout<boolean>("is_autostart_enabled");
+}
+
+export async function quitApp(): Promise<void> {
+  return invokeWithTimeout<void>("quit_app");
+}
+
 export async function showMainWindow(
   tab?: "calendar" | "stats" | "settings"
 ): Promise<void> {

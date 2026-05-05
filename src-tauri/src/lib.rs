@@ -3,6 +3,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     async_runtime, AppHandle, Emitter, Manager,
 };
+use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_positioner::{Position, WindowExt};
 
 mod commands;
@@ -44,6 +46,33 @@ fn update_tray_title(app: AppHandle, text: Option<String>) -> Result<(), String>
     Ok(())
 }
 
+// Sync the macOS login-item registration with the user's preference.
+// Called when the user toggles "Launch at login" and at app startup
+// to reconcile the actual OS state with the persisted setting.
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    let already = manager.is_enabled().map_err(|e| e.to_string())?;
+    if enabled && !already {
+        manager.enable().map_err(|e| e.to_string())?;
+    } else if !enabled && already {
+        manager.disable().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn is_autostart_enabled(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+// Quit the application. Used by Cmd+Q so a tray-only app (no app menu)
+// can still honor the macOS quit convention.
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 // Toggle popover window visibility near the tray icon
 fn toggle_popover(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("popover") {
@@ -58,6 +87,10 @@ fn toggle_popover(app: &AppHandle) {
     }
 }
 
+fn popover_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Digit5)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -66,7 +99,20 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_positioner::init());
+        .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if shortcut == &popover_shortcut() && event.state() == ShortcutState::Pressed {
+                        toggle_popover(app);
+                    }
+                })
+                .build(),
+        );
 
     #[cfg(feature = "e2e")]
     {
@@ -83,6 +129,9 @@ pub fn run() {
             greet,
             show_main_window,
             update_tray_title,
+            set_autostart,
+            is_autostart_enabled,
+            quit_app,
             // Account commands
             commands::accounts::get_accounts,
             commands::accounts::create_account,
@@ -134,11 +183,47 @@ pub fn run() {
                 db::init_db(app_data_dir).await
             }).map_err(Box::<dyn std::error::Error>::from)?;
 
+            // Reconcile macOS login-item with the persisted launch_at_login
+            // setting. Setting defaults to true so first run will register the
+            // app as a login item. Failures only log; we do not block startup.
+            let launch_at_login = async_runtime::block_on(async {
+                commands::settings::get_settings_impl(&pool).await
+            })
+            .map(|s| s.launch_at_login)
+            .unwrap_or(true);
+            let manager = app.autolaunch();
+            match manager.is_enabled() {
+                Ok(currently_enabled) => {
+                    if launch_at_login && !currently_enabled {
+                        if let Err(e) = manager.enable() {
+                            log::warn!("Failed to enable autostart at startup: {}", e);
+                        }
+                    } else if !launch_at_login && currently_enabled {
+                        if let Err(e) = manager.disable() {
+                            log::warn!("Failed to disable autostart at startup: {}", e);
+                        }
+                    }
+                }
+                Err(e) => log::warn!("Failed to query autostart state at startup: {}", e),
+            }
+
+            // Register the global shortcut now that the plugin is initialized.
+            if let Err(e) = app.global_shortcut().register(popover_shortcut()) {
+                log::warn!("Failed to register Cmd+Shift+5 popover shortcut: {}", e);
+            }
+
             // Store the pool in state
             async_runtime::block_on(async {
                 let mut pool_guard = db_pool_arc.write().await;
                 *pool_guard = Some(pool);
             });
+
+            // Start the background poller that ingests scheduler-trigger result
+            // files written by c5h-trigger.sh (the launchd plist wrapper).
+            services::trigger_results::spawn_polling_task(app.handle().clone());
+
+            // Schedule the recurring weekly summary notification (Sunday 18:00 local).
+            services::weekly_summary::spawn_weekly_summary_task(app.handle().clone());
 
             // Create tray menu
             let quit = MenuItem::with_id(app, "quit", "Quit C5h", true, None::<&str>)?;

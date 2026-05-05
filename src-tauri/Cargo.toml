@@ -27,6 +27,8 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
 tauri-plugin-pilot = { git = "https://github.com/mpiton/tauri-pilot", tag = "v0.5.0", optional = true }
 
 # Logging

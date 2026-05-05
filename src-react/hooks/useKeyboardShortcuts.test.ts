@@ -76,6 +76,26 @@ describe("useKeyboardShortcuts", () => {
     expect(onJumpToToday).toHaveBeenCalledTimes(1);
   });
 
+  it("Cmd+comma switches to settings tab", () => {
+    renderHook(() => useKeyboardShortcuts({ onSwitchTab }));
+    dispatchKey(",", { meta: true });
+    expect(onSwitchTab).toHaveBeenCalledWith("settings");
+  });
+
+  it("Cmd+Q calls onQuit when handler provided", () => {
+    const onQuit = vi.fn();
+    renderHook(() => useKeyboardShortcuts({ onQuit }));
+    dispatchKey("q", { meta: true });
+    expect(onQuit).toHaveBeenCalledTimes(1);
+  });
+
+  it("Cmd+Q is not intercepted when no onQuit handler is provided", () => {
+    renderHook(() => useKeyboardShortcuts({}));
+    const event = dispatchKey("q", { meta: true });
+    // No preventDefault → OS-level Cmd+Q quit can still take over
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("ArrowLeft navigates to previous week", () => {
     renderHook(() => useKeyboardShortcuts({ onNavigateWeek }));
     dispatchKey("ArrowLeft");

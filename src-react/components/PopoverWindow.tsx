@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useStore } from "@/store";
 import { useCurrentWindow } from "@/hooks";
 import { Progress } from "@/components/shadcn-ui/progress";
@@ -21,6 +22,19 @@ export function PopoverWindow() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Hide the popover when the user presses Escape — matches the menu-bar
+  // app convention where Escape dismisses transient popovers.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        getCurrentWebviewWindow().hide().catch(console.error);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const usageByAccount = useStore((state) => state.usageByAccount);
 

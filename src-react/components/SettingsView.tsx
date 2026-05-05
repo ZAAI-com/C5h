@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { useStore } from "@/store";
+import { setAutostart } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/shadcn-ui/card";
 import { Button } from "@/components/shadcn-ui/button";
 import { Input } from "@/components/shadcn-ui/input";
@@ -78,6 +80,17 @@ export function SettingsView() {
     }
   };
 
+  const handleLaunchAtLoginChange = async (checked: boolean) => {
+    if (!settings) return;
+    try {
+      await setAutostart(checked);
+      await saveSettings({ ...settings, launch_at_login: checked });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to update Launch at Login: ${message}`);
+    }
+  };
+
   const handleOpenAccountDialog = (account?: Account) => {
     if (account) {
       setEditingAccount(account);
@@ -129,7 +142,33 @@ export function SettingsView() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* General Settings */}
+      {/* General */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            General
+          </CardTitle>
+          <CardDescription>App-wide preferences</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="launch_at_login">Launch at Login</Label>
+              <p className="text-sm text-muted-foreground">
+                Open C5h automatically when you log in to macOS
+              </p>
+            </div>
+            <Switch
+              id="launch_at_login"
+              checked={settings.launch_at_login}
+              onCheckedChange={handleLaunchAtLoginChange}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Monitoring */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

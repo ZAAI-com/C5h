@@ -396,7 +396,12 @@ mod tests {
     async fn get_windows_pagination_works() {
         let pool = init_test_pool().await;
         for i in 0..10 {
-            seed_window(&pool, 1, &format!("2026-01-{:02}T10:00:00Z", i + 1), None).await;
+            // Pagination test uses historical (ended) windows. The
+            // partial unique index on windows(account_id) WHERE ended_at IS NULL
+            // forbids more than one active window per account.
+            let started = format!("2026-01-{:02}T10:00:00Z", i + 1);
+            let ended = format!("2026-01-{:02}T11:00:00Z", i + 1);
+            seed_window(&pool, 1, &started, Some(&ended)).await;
         }
 
         let page1 = get_windows_impl(

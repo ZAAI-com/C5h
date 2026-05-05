@@ -5,14 +5,17 @@ interface KeyboardShortcutOptions {
   onStartWindow?: () => void;
   onJumpToToday?: () => void;
   onNavigateWeek?: (direction: "prev" | "next") => void;
+  onQuit?: () => void;
 }
 
 /**
  * Global keyboard shortcuts for the app.
  *
  * - Cmd+1 / Cmd+2 / Cmd+3: Switch tabs (calendar, stats, settings)
+ * - Cmd+,: Open settings (macOS convention)
  * - Cmd+N: Start new window
  * - Cmd+T: Jump to today
+ * - Cmd+Q: Quit app (only fires onQuit if provided; otherwise the OS handles it)
  * - ArrowLeft / ArrowRight: Navigate weeks (when not in an input)
  */
 export function useKeyboardShortcuts({
@@ -20,6 +23,7 @@ export function useKeyboardShortcuts({
   onStartWindow,
   onJumpToToday,
   onNavigateWeek,
+  onQuit,
 }: KeyboardShortcutOptions) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -57,6 +61,19 @@ export function useKeyboardShortcuts({
       if (meta && e.key === "t") {
         e.preventDefault();
         onJumpToToday?.();
+      }
+
+      // Cmd+, → settings (macOS convention)
+      if (meta && e.key === ",") {
+        e.preventDefault();
+        onSwitchTab?.("settings");
+      }
+
+      // Cmd+Q → quit. Only intercept if a handler is provided; otherwise the
+      // macOS app-quit behavior takes over.
+      if (meta && e.key === "q" && onQuit) {
+        e.preventDefault();
+        onQuit();
       }
 
       // Arrow keys → navigate weeks (only when not focused on inputs)

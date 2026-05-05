@@ -52,6 +52,14 @@ export interface ScheduledTrigger {
   status: string;
   plist_path?: string;
   created_at?: string;
+  /** Exit code reported by the wrapper after launchd fires the trigger. */
+  exit_code?: number | null;
+  /** UTC ISO timestamp the wrapper started executing the CLI. */
+  started_at?: string | null;
+  /** UTC ISO timestamp the wrapper finished. */
+  finished_at?: string | null;
+  /** Last 4KB of stderr from the CLI invocation, truncated for display. */
+  stderr_tail?: string | null;
 }
 
 export interface NewScheduledTrigger {
