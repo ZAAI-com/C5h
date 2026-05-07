@@ -112,25 +112,28 @@ Review the draft release on GitHub and publish when ready.
 
 ## Homebrew tap
 
-The cask template lives at `distribution/homebrew/c5h.rb`. After a release is
-published, update the tap:
+Tap repo: `github.com/ZAAI-com/homebrew-tap`. Cask template lives at
+`distribution/homebrew/c5h.rb`.
 
-1. **One-time**: create `github.com/ZAAI/homebrew-tap` (public repo).
-2. For each release:
-   - Compute SHA256 of the universal DMG: `shasum -a 256 C5h_0.3.0_universal.dmg`.
-   - Copy `distribution/homebrew/c5h.rb` into the tap repo's `Casks/c5h.rb`.
-   - Replace `VERSION_PLACEHOLDER` and `SHA256_PLACEHOLDER`.
-   - Commit + push.
+`.github/workflows/release-tap.yml` runs automatically when a Release is
+published — it downloads the universal DMG, computes SHA256, renders the
+template, and pushes to the tap. Required secret on this repo:
+`HOMEBREW_TAP_REPO_COMMIT_TOKEN` (fine-grained PAT with Contents: read+write
+on the tap repo).
 
 A user can then install with:
 
 ```bash
-brew tap zaai/tap
-brew install --cask c5h
+brew install --cask zaai-com/tap/c5h
 ```
 
-> Future work: automate tap updates via a `release-tap.yml` workflow that pushes to
-> the tap repo when a release is published.
+(Homebrew strips the `homebrew-` prefix when resolving tap names, so
+`ZAAI-com/homebrew-tap` → `zaai-com/tap`.)
+
+If the workflow ever fails, the manual fallback is: compute the SHA256
+yourself (`shasum -a 256 C5h_0.3.0_universal.dmg`), copy
+`distribution/homebrew/c5h.rb` into the tap repo's `Casks/c5h.rb`, replace
+the two placeholders, commit + push.
 
 ## Troubleshooting
 

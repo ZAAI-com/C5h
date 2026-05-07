@@ -2,16 +2,17 @@ name: Update Homebrew Tap
 
 # Run automatically when a Release is published, or manually with a version.
 # Renders distribution/homebrew/c5h.rb with the published version + SHA256
-# of the universal DMG, then commits to ZAAI-com/homebrew-c5h's Casks/c5h.rb.
+# of the universal DMG, then commits to ZAAI-com/homebrew-tap's Casks/c5h.rb.
 #
-# Prerequisites (one-time, user-side):
-#   1. A separate repo at github.com/ZAAI-com/homebrew-c5h with `Casks/`
-#      directory.
-#   2. A repository secret HOMEBREW_TAP_TOKEN: a fine-grained PAT scoped to
-#      that repo with Contents: read+write.
+# Prerequisites (already configured):
+#   1. Tap repo: github.com/ZAAI-com/homebrew-tap (with a `Casks/` dir).
+#   2. Repository secret HOMEBREW_TAP_REPO_COMMIT_TOKEN: fine-grained PAT
+#      scoped to that repo with Contents: read+write.
 #
-# Once both exist, `brew install --cask zaai-com/c5h/c5h` works after each
-# release without further manual steps.
+# After publishing a release, users install with:
+#   brew install --cask zaai-com/tap/c5h
+# (Homebrew strips the `homebrew-` prefix from the repo name when resolving
+# the tap, so `homebrew-tap` becomes `zaai-com/tap`.)
 
 on:
   release:
@@ -59,8 +60,8 @@ jobs:
       - name: Checkout tap repo
         uses: actions/checkout@v4
         with:
-          repository: ZAAI-com/homebrew-c5h
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          repository: ZAAI-com/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_REPO_COMMIT_TOKEN }}
           path: tap
 
       - name: Render cask into tap
