@@ -1,9 +1,14 @@
 [scenario]
 name = "onboarding-shows-on-empty-data-dir"
 
-# Run with a clean app data directory to exercise the first-run flow.
-# `rm -rf ~/Library/Application\ Support/com.zaai.c5h` before launching
-# `bun run tauri:e2e`, then run this scenario.
+# Run with a clean app data directory to exercise the first-run flow:
+#   rm -rf ~/Library/Application\ Support/com.zaai.c5h
+#   bun run tauri:e2e            # in one terminal
+#   tauri-pilot run --window main e2e/onboarding.toml
+#
+# The --window main flag is required: by default the plugin attaches to
+# whichever window it picks first (often the popover), which doesn't
+# render the onboarding view.
 
 [[step]]
 name = "main window is on the dev URL"
@@ -12,14 +17,18 @@ expected = "localhost:1420"
 
 [[step]]
 name = "OnboardingFlow card heading is rendered"
-action = "assert-text"
-target = "h3, h2, [role=\"heading\"]"
-text = "Welcome to C5h"
+action = "assert-exists"
+target = "[data-slot=\"card-title\"]"
+
+[[step]]
+name = "Welcome heading text matches"
+action = "eval"
+script = "const el = document.querySelector('[data-slot=\"card-title\"]'); if (!el || !/Welcome to C5h/.test(el.textContent)) throw new Error('Welcome heading not found, got: ' + (el?.textContent ?? '<missing>'))"
 
 [[step]]
 name = "Get started button is rendered"
-action = "assert-exists"
-target = "button"
+action = "eval"
+script = "if (!Array.from(document.querySelectorAll('button')).some(b => /Get started/i.test(b.textContent))) throw new Error('Get started button not found')"
 
 [[step]]
 name = "capture screenshot for review"
