@@ -355,6 +355,27 @@ export async function markOnboardingCompleted(): Promise<void> {
   return invokeWithTimeout<void>("mark_onboarding_completed");
 }
 
+// Predictive insights (local-only)
+export interface Insight {
+  kind: string;
+  key: string;
+  account_id: number;
+  account_name: string;
+  weekday: number; // 0=Sunday
+  hour: number;
+  minute: number;
+  occurrences: number;
+  confidence: number;
+}
+
+export async function getInsights(): Promise<Insight[]> {
+  return invokeWithTimeout<Insight[]>("get_insights");
+}
+
+export async function dismissInsight(insightKey: string): Promise<void> {
+  return invokeWithTimeout<void>("dismiss_insight", { insightKey });
+}
+
 export async function showMainWindow(
   tab?: "calendar" | "stats" | "settings"
 ): Promise<void> {

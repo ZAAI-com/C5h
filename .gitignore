@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# tauri-pilot E2E artifacts (screenshots, failure dumps)
+e2e/.artifacts/
+tauri-pilot-failures/

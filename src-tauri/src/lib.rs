@@ -310,6 +310,9 @@ pub fn run() {
             // Onboarding completion flag
             commands::onboarding::is_onboarding_completed,
             commands::onboarding::mark_onboarding_completed,
+            // Predictive insights (local-only)
+            commands::insights::get_insights,
+            commands::insights::dismiss_insight,
             // Stats commands
             commands::stats::get_stats,
             // Scheduler commands

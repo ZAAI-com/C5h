@@ -12,7 +12,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "tauri-pilot run e2e/smoke.toml",
+    "test:e2e": "tauri-pilot run --window main e2e/smoke.toml",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

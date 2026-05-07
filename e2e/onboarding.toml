@@ -1,0 +1,27 @@
+[scenario]
+name = "onboarding-shows-on-empty-data-dir"
+
+# Run with a clean app data directory to exercise the first-run flow.
+# `rm -rf ~/Library/Application\ Support/com.zaai.c5h` before launching
+# `bun run tauri:e2e`, then run this scenario.
+
+[[step]]
+name = "main window is on the dev URL"
+action = "assert-url"
+expected = "localhost:1420"
+
+[[step]]
+name = "OnboardingFlow card heading is rendered"
+action = "assert-text"
+target = "h3, h2, [role=\"heading\"]"
+text = "Welcome to C5h"
+
+[[step]]
+name = "Get started button is rendered"
+action = "assert-exists"
+target = "button"
+
+[[step]]
+name = "capture screenshot for review"
+action = "screenshot"
+path = "e2e/.artifacts/onboarding.png"

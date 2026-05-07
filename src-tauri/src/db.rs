@@ -355,6 +355,14 @@ fn get_migration_sql() -> String {
                     ('notify_weekly_summary', 'true'),
                     ('poll_interval_minutes', '15');
 
+                -- Insights the user has dismissed. Key encodes
+                -- (kind, account_id, weekday, hour, minute) so the same habit
+                -- recomputed later still matches and stays hidden.
+                CREATE TABLE IF NOT EXISTS dismissed_insights (
+                    insight_key TEXT PRIMARY KEY,
+                    dismissed_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
                 -- Create indexes for performance
                 CREATE INDEX IF NOT EXISTS idx_windows_account_id ON windows(account_id);
                 CREATE INDEX IF NOT EXISTS idx_windows_started_at ON windows(started_at);

@@ -2,7 +2,13 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useAppInit, useWindowEndingAlert, useKeyboardShortcuts, useTraySync } from "@/hooks";
 import { useStore } from "@/store";
-import { Layout, CalendarView, StatsView, SettingsView } from "@/components";
+import {
+  Layout,
+  CalendarView,
+  StatsView,
+  SettingsView,
+  InsightBanner,
+} from "@/components";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import { Button } from "@/components/shadcn-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
@@ -145,7 +151,12 @@ function App() {
   } else {
     content = (
       <Layout
-        calendarContent={<CalendarView />}
+        calendarContent={
+          <div className="space-y-4">
+            <InsightBanner />
+            <CalendarView />
+          </div>
+        }
         statsContent={<StatsView />}
         settingsContent={<SettingsView />}
         activeTab={activeTab}

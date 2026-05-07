@@ -11,6 +11,27 @@ name = "page title is set"
 action = "eval"
 script = "document.title"
 
-# Add target-driven assertions (assert-text, assert-visible, click, fill, …)
-# below this line. Use `tauri-pilot snapshot -i` against a running
-# `bun run tauri:e2e` to discover stable selectors or @eN refs.
+# The next steps assert that the primary navigation landmarks rendered.
+# They use the M4 ARIA work: the tabs nav has aria-label="Primary" and
+# every tab has an explicit aria-label matching the user-visible name.
+# These selectors are stable across tailwind class changes.
+
+[[step]]
+name = "Primary nav landmark is present"
+action = "assert-exists"
+target = "nav[aria-label=\"Primary\"]"
+
+[[step]]
+name = "Calendar tab is reachable"
+action = "assert-exists"
+target = "[role=\"tab\"][aria-label=\"Calendar\"]"
+
+[[step]]
+name = "Settings tab is reachable"
+action = "assert-exists"
+target = "[role=\"tab\"][aria-label=\"Settings\"]"
+
+[[step]]
+name = "capture screenshot for review"
+action = "screenshot"
+path = "e2e/.artifacts/smoke.png"

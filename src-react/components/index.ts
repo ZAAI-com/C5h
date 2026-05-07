@@ -7,3 +7,4 @@ export { MonitoringCard } from "./MonitoringCard";
 export { SchedulerSettings } from "./SchedulerSettings";
 export { PopoverWindow } from "./PopoverWindow";
 export { ErrorBoundary } from "./ErrorBoundary";
+export { InsightBanner } from "./InsightBanner";
