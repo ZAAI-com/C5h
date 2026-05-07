@@ -94,6 +94,17 @@ async fn add_missing_columns(pool: &SqlitePool) -> Result<(), String> {
         ("scheduled_triggers", "stderr_tail", "TEXT"),
     ];
 
+    // Onboarding completion timestamp lives in the settings k/v table, not as
+    // a column. Seed an empty marker so reads return None until the user
+    // finishes the flow. Idempotent via INSERT OR IGNORE.
+    sqlx::query(
+        "INSERT OR IGNORE INTO settings (key, value)
+         VALUES ('onboarding_completed_at', '')",
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("seed onboarding_completed_at: {}", e))?;
+
     for (table, column, ty) in needed {
         let existing: Vec<String> =
             sqlx::query_scalar(&format!("SELECT name FROM pragma_table_info('{}')", table))

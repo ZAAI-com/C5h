@@ -322,6 +322,16 @@ export async function updateTrayTitle(text: string | null): Promise<void> {
   return invokeWithTimeout<void>("update_tray_title", { text });
 }
 
+export type TrayState =
+  | { kind: "idle" }
+  | { kind: "active"; percent: number | null; minutes_remaining: number | null }
+  | { kind: "multi_window"; entries: Array<{ percent: number }> }
+  | { kind: "error"; message: string };
+
+export async function updateTrayState(state: TrayState, reducedMotion = false): Promise<void> {
+  return invokeWithTimeout<void>("update_tray_state", { state, reducedMotion });
+}
+
 // Login-item registration on macOS. Reconciles OS state with the persisted
 // launch_at_login setting; called from the Settings UI when the toggle changes.
 export async function setAutostart(enabled: boolean): Promise<void> {
@@ -334,6 +344,15 @@ export async function isAutostartEnabled(): Promise<boolean> {
 
 export async function quitApp(): Promise<void> {
   return invokeWithTimeout<void>("quit_app");
+}
+
+// Onboarding completion flag
+export async function isOnboardingCompleted(): Promise<boolean> {
+  return invokeWithTimeout<boolean>("is_onboarding_completed");
+}
+
+export async function markOnboardingCompleted(): Promise<void> {
+  return invokeWithTimeout<void>("mark_onboarding_completed");
 }
 
 export async function showMainWindow(

@@ -78,8 +78,7 @@ function stopUsageRefreshLoop() {
     clearInterval(usageRefreshTimer);
     usageRefreshTimer = null;
   }
-
-  api.updateTrayTitle(null).catch(() => {});
+  // Tray title is owned by useTraySync — it derives Idle when currentWindow clears.
 }
 
 function syncUsageRefreshLoop(state: Pick<AppState, "currentWindow" | "fetchUsage">) {
@@ -340,17 +339,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
       set({ usageByAccount });
       lastUsageWarning = { message: null, timestamp: 0 };
-
-      // Update tray title with active account's usage %
-      const { currentWindow } = get();
-      if (currentWindow) {
-        const usage = usageByAccount[currentWindow.account_id];
-        if (usage?.session_percent != null) {
-          api.updateTrayTitle(`${Math.round(usage.session_percent)}%`).catch(() => {});
-        }
-      } else {
-        api.updateTrayTitle(null).catch(() => {});
-      }
+      // Tray title is owned by useTraySync, which reacts to usageByAccount.
     } catch (err) {
       // Polling failures are non-critical — don't set error state
       const message = mapError(err instanceof Error ? err.message : String(err));

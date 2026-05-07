@@ -39,14 +39,21 @@ export function StatusCard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            Start a new usage window to track your AI tool usage.
-          </p>
-          {account && (
-            <Button onClick={handleStartWindow} className="w-full">
-              <Play className="mr-2 h-4 w-4" />
-              Start {account.name} Window
-            </Button>
+          {account ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                Start a new usage window or press <kbd className="px-1 py-0.5 text-xs rounded bg-muted">⌘N</kbd> to track your AI tool usage.
+              </p>
+              <Button onClick={handleStartWindow} className="w-full">
+                <Play className="mr-2 h-4 w-4" />
+                Start {account.name} Window
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No accounts configured yet. Open <strong>Settings</strong> to add
+              your first AI tool account.
+            </p>
           )}
         </CardContent>
       </Card>

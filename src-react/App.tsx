@@ -1,13 +1,14 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { useAppInit, useWindowEndingAlert, useKeyboardShortcuts } from "@/hooks";
+import { useAppInit, useWindowEndingAlert, useKeyboardShortcuts, useTraySync } from "@/hooks";
 import { useStore } from "@/store";
 import { Layout, CalendarView, StatsView, SettingsView } from "@/components";
+import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import { Button } from "@/components/shadcn-ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn-ui/card";
 import { Toaster } from "@/components/shadcn-ui/sonner";
 import { Loader2, AlertCircle } from "lucide-react";
-import { getWeekBoundaries, quitApp } from "@/lib/api";
+import { getWeekBoundaries, isOnboardingCompleted, quitApp } from "@/lib/api";
 import { subWeeks, addWeeks } from "date-fns";
 
 function App() {
@@ -16,8 +17,20 @@ function App() {
   const initialize = useStore((state) => state.initialize);
   const [activeTab, setActiveTab] = useState<"calendar" | "stats" | "settings">("calendar");
 
+  // Onboarding gate. `null` means "still checking" — renders nothing rather
+  // than flashing the main UI before we know whether to show the flow.
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    isOnboardingCompleted()
+      .then(setOnboardingDone)
+      .catch(() => setOnboardingDone(true)); // fail open — never block the user
+  }, []);
+
   // Enable window ending notifications
   useWindowEndingAlert();
+
+  // Push tray-title state (single source of truth for the menu-bar text).
+  useTraySync();
 
   // Keyboard shortcuts
   const accounts = useStore((state) => state.accounts);
@@ -77,6 +90,20 @@ function App() {
   }, []);
 
   let content: ReactNode;
+
+  if (onboardingDone === false && accounts.length === 0 && !isLoading && !error) {
+    return (
+      <>
+        <Toaster />
+        <OnboardingFlow
+          onComplete={() => {
+            setOnboardingDone(true);
+            initialize();
+          }}
+        />
+      </>
+    );
+  }
 
   if (isLoading) {
     content = (

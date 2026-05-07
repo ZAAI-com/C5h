@@ -1,3 +1,4 @@
+use crate::commands::scheduler::uninstall_schedule_impl;
 use crate::db::get_pool;
 use crate::errors::db_err;
 use crate::models::{NewWindow, Window};
@@ -8,6 +9,7 @@ use tauri::State;
 use crate::db::DbPool;
 
 const DEFAULT_RETENTION_DAYS: i64 = 90;
+const DEFAULT_WINDOW_DURATION_HOURS: i64 = 5;
 
 pub async fn get_windows_impl(
     pool: &SqlitePool,
@@ -179,6 +181,20 @@ pub async fn create_window_impl(
 
     let id = result.last_insert_rowid();
 
+    // Cancel any pending scheduled triggers that would fire inside this new
+    // window. Per spec: a manual start cancels overlapping pending schedules
+    // so the user doesn't get a duplicate window-start when launchd fires
+    // mid-session.
+    if let Err(e) =
+        cancel_overlapping_pending_schedules(pool, window.account_id, &now).await
+    {
+        log::warn!(
+            "Failed to cancel overlapping schedules for new window on account {}: {}",
+            window.account_id,
+            e
+        );
+    }
+
     Ok(Window {
         id: Some(id),
         account_id: window.account_id,
@@ -189,6 +205,87 @@ pub async fn create_window_impl(
         notes: None,
         created_at: None,
     })
+}
+
+/// Find pending scheduled_triggers for this account whose scheduled_at falls
+/// within [window_start, window_start + window_duration_hours], uninstall
+/// their plists, and mark them cancelled_by_manual. Failures on individual
+/// rows are logged but don't abort the others.
+async fn cancel_overlapping_pending_schedules(
+    pool: &SqlitePool,
+    account_id: i64,
+    window_started_at_rfc3339: &str,
+) -> Result<usize, String> {
+    let started =
+        chrono::DateTime::parse_from_rfc3339(window_started_at_rfc3339).map_err(|e| {
+            format!(
+                "Invalid window started_at '{}': {}",
+                window_started_at_rfc3339, e
+            )
+        })?;
+
+    let duration_row: Option<(i32,)> = sqlx::query_as(
+        "SELECT window_duration_hours FROM accounts WHERE id = ?",
+    )
+    .bind(account_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(db_err("fetch account duration"))?;
+
+    let window_hours = duration_row
+        .map(|(h,)| h as i64)
+        .unwrap_or(DEFAULT_WINDOW_DURATION_HOURS);
+    let window_end = started + chrono::Duration::hours(window_hours);
+
+    let candidates: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT id, scheduled_at
+         FROM scheduled_triggers
+         WHERE account_id = ? AND status = 'pending'",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(db_err("fetch overlapping schedules"))?;
+
+    let mut cancelled = 0usize;
+    for (id, scheduled_at) in candidates {
+        let parsed = match chrono::DateTime::parse_from_rfc3339(&scheduled_at) {
+            Ok(dt) => dt,
+            Err(e) => {
+                log::warn!("Skipping malformed schedule {}: {}", id, e);
+                continue;
+            }
+        };
+
+        if parsed < started || parsed > window_end {
+            continue;
+        }
+
+        if let Err(e) = uninstall_schedule_impl(id) {
+            log::warn!(
+                "Failed to uninstall plist for cancelled schedule {}: {} \
+                 (continuing — DB row will still be marked cancelled)",
+                id,
+                e
+            );
+        }
+
+        if let Err(e) = sqlx::query(
+            "UPDATE scheduled_triggers
+             SET status = 'cancelled_by_manual', plist_path = NULL
+             WHERE id = ?",
+        )
+        .bind(id)
+        .execute(pool)
+        .await
+        {
+            log::warn!("Failed to mark schedule {} cancelled: {}", id, e);
+            continue;
+        }
+
+        cancelled += 1;
+    }
+    Ok(cancelled)
 }
 
 #[tauri::command]
@@ -293,6 +390,106 @@ mod tests {
         assert!(w.ended_at.is_none());
         // started_at should parse as RFC3339
         chrono::DateTime::parse_from_rfc3339(&w.started_at).unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_window_cancels_overlapping_pending_schedule() {
+        let pool = init_test_pool().await;
+
+        // Account 1 has a 5h window. Insert a pending schedule 2h from now,
+        // which sits inside the new window's [now, now+5h] interval.
+        let inside = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        sqlx::query(
+            "INSERT INTO scheduled_triggers (id, account_id, scheduled_at, status)
+             VALUES (101, 1, ?, 'pending')",
+        )
+        .bind(&inside)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        create_window_impl(
+            &pool,
+            NewWindow {
+                account_id: 1,
+                triggered_by: "manual".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let row: (String,) =
+            sqlx::query_as("SELECT status FROM scheduled_triggers WHERE id = 101")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row.0, "cancelled_by_manual");
+    }
+
+    #[tokio::test]
+    async fn create_window_leaves_distant_pending_schedule() {
+        let pool = init_test_pool().await;
+
+        // 8 hours out — outside the 5h window — must remain pending.
+        let outside = (chrono::Utc::now() + chrono::Duration::hours(8)).to_rfc3339();
+        sqlx::query(
+            "INSERT INTO scheduled_triggers (id, account_id, scheduled_at, status)
+             VALUES (202, 1, ?, 'pending')",
+        )
+        .bind(&outside)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        create_window_impl(
+            &pool,
+            NewWindow {
+                account_id: 1,
+                triggered_by: "manual".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let row: (String,) =
+            sqlx::query_as("SELECT status FROM scheduled_triggers WHERE id = 202")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row.0, "pending");
+    }
+
+    #[tokio::test]
+    async fn create_window_does_not_cancel_other_account_schedules() {
+        let pool = init_test_pool().await;
+
+        let inside = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        // Schedule for account 2, but we'll create a window on account 1.
+        sqlx::query(
+            "INSERT INTO scheduled_triggers (id, account_id, scheduled_at, status)
+             VALUES (303, 2, ?, 'pending')",
+        )
+        .bind(&inside)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        create_window_impl(
+            &pool,
+            NewWindow {
+                account_id: 1,
+                triggered_by: "manual".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let row: (String,) =
+            sqlx::query_as("SELECT status FROM scheduled_triggers WHERE id = 303")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row.0, "pending");
     }
 
     #[tokio::test]

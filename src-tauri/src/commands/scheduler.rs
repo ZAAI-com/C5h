@@ -412,7 +412,7 @@ pub async fn uninstall_schedule(id: i64) -> Result<(), String> {
     uninstall_schedule_impl(id)
 }
 
-fn uninstall_schedule_impl(id: i64) -> Result<(), String> {
+pub fn uninstall_schedule_impl(id: i64) -> Result<(), String> {
     let plist_path = get_plist_path(id)?;
 
     if plist_path.exists() {
@@ -533,6 +533,36 @@ mod tests {
 
         let listed = get_schedules_impl(&pool, Some(1)).await.unwrap();
         assert_eq!(listed.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn create_schedule_rejects_exact_same_minute_same_account() {
+        // Per spec "first wins" rule: a second schedule at the same minute for
+        // the same account is rejected. The existing overlap detection covers
+        // this case because window_duration_hours > 0 for any account.
+        let pool = init_test_pool().await;
+        let when = future_rfc3339(2);
+
+        create_schedule_impl(
+            &pool,
+            NewScheduledTrigger {
+                account_id: 1,
+                scheduled_at: when.clone(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let err = create_schedule_impl(
+            &pool,
+            NewScheduledTrigger {
+                account_id: 1,
+                scheduled_at: when,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_lowercase().contains("conflict"), "got: {err}");
     }
 
     #[tokio::test]
