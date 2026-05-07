@@ -1,15 +1,37 @@
 use crate::db::get_pool;
+use crate::db::DbPool;
 use crate::errors::db_err;
 use crate::services::cli_poller;
 use crate::services::output_parser::UsageInfo;
-use tauri::State;
-use crate::db::DbPool;
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager, State};
+
+/// Resolve `<app_data_dir>/gemini-poll-workspace`, creating it if missing.
+///
+/// Gemini refuses to run in untrusted workspaces. We poll from this app-owned
+/// directory and pair it with `GEMINI_CLI_TRUST_WORKSPACE=true` (set on the
+/// subprocess only) so polling does not depend on the user's current cwd.
+fn ensure_gemini_poll_workspace(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app_data_dir: {}", e))?
+        .join("gemini-poll-workspace");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create gemini-poll-workspace: {}", e))?;
+    Ok(dir)
+}
+
+fn is_gemini(tool_type: &str) -> bool {
+    tool_type == "gemini"
+}
 
 /// Poll a single account for usage information.
 ///
 /// Runs the account's CLI command and parses the output.
 #[tauri::command]
 pub async fn poll_account(
+    app: AppHandle,
     db: State<'_, DbPool>,
     account_id: i64,
 ) -> Result<UsageInfo, String> {
@@ -29,8 +51,23 @@ pub async fn poll_account(
     // Resolve the CLI path (handles both absolute paths and command names)
     let resolved_path = cli_poller::resolve_cli_path(&cli_command).await?;
 
-    // Poll the CLI
-    let usage_info = cli_poller::poll_account(&resolved_path, &tool_type).await?;
+    // Poll the CLI — for Gemini, scope trust + workdir to this subprocess.
+    let usage_info = if is_gemini(&tool_type) {
+        let overrides = match ensure_gemini_poll_workspace(&app) {
+            Ok(dir) => cli_poller::gemini_overrides(dir),
+            Err(e) => {
+                log::warn!(
+                    "Falling back to no Gemini overrides for account {}: {}",
+                    account_id,
+                    e
+                );
+                cli_poller::PollOverrides::default()
+            }
+        };
+        cli_poller::poll_account_with_overrides(&resolved_path, &tool_type, overrides).await?
+    } else {
+        cli_poller::poll_account(&resolved_path, &tool_type).await?
+    };
 
     // Update the current window's usage_percent if one is active
     if let Some(percent) = usage_info.session_percent {
@@ -52,6 +89,7 @@ pub async fn poll_account(
 /// Returns a list of (account_id, UsageInfo) pairs.
 #[tauri::command]
 pub async fn poll_all_accounts(
+    app: AppHandle,
     db: State<'_, DbPool>,
 ) -> Result<Vec<(i64, UsageInfo)>, String> {
     let pool = get_pool(&db).await?;
@@ -65,10 +103,33 @@ pub async fn poll_all_accounts(
 
     let mut results = Vec::new();
 
+    // Resolve the Gemini poll workspace lazily and cache for the duration of this call.
+    let mut gemini_workdir: Option<Option<PathBuf>> = None;
+
     for (account_id, cli_command, tool_type) in rows {
         match cli_poller::resolve_cli_path(&cli_command).await {
             Ok(resolved_path) => {
-                match cli_poller::poll_account(&resolved_path, &tool_type).await {
+                let poll_result = if is_gemini(&tool_type) {
+                    let dir = gemini_workdir.get_or_insert_with(|| {
+                        match ensure_gemini_poll_workspace(&app) {
+                            Ok(d) => Some(d),
+                            Err(e) => {
+                                log::warn!("Gemini poll workspace unavailable: {}", e);
+                                None
+                            }
+                        }
+                    });
+                    let overrides = match dir {
+                        Some(d) => cli_poller::gemini_overrides(d.clone()),
+                        None => cli_poller::PollOverrides::default(),
+                    };
+                    cli_poller::poll_account_with_overrides(&resolved_path, &tool_type, overrides)
+                        .await
+                } else {
+                    cli_poller::poll_account(&resolved_path, &tool_type).await
+                };
+
+                match poll_result {
                     Ok(info) => {
                         // Update usage_percent on active window
                         if let Some(percent) = info.session_percent {
