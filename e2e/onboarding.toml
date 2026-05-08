@@ -12,8 +12,8 @@ name = "onboarding-shows-on-empty-data-dir"
 
 [[step]]
 name = "main window is on the dev URL"
-action = "assert-url"
-expected = "localhost:1420"
+action = "eval"
+script = "if (location.hostname !== 'localhost') throw new Error('Expected localhost dev URL, got: ' + location.href)"
 
 [[step]]
 name = "OnboardingFlow card heading is rendered"

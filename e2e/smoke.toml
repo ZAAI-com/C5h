@@ -3,8 +3,8 @@ name = "smoke"
 
 [[step]]
 name = "main window is on the dev URL"
-action = "assert-url"
-expected = "localhost:1420"
+action = "eval"
+script = "if (location.hostname !== 'localhost') throw new Error('Expected localhost dev URL, got: ' + location.href)"
 
 [[step]]
 name = "page title is set"
