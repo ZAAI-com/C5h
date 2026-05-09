@@ -264,10 +264,11 @@ async fn cancel_overlapping_pending_schedules(
         if let Err(e) = uninstall_schedule_impl(id) {
             log::warn!(
                 "Failed to uninstall plist for cancelled schedule {}: {} \
-                 (continuing — DB row will still be marked cancelled)",
+                 (skipping DB update — plist may still be armed)",
                 id,
                 e
             );
+            continue;
         }
 
         if let Err(e) = sqlx::query(

@@ -9,7 +9,7 @@ script = "if (location.hostname !== 'localhost') throw new Error('Expected local
 [[step]]
 name = "page title is set"
 action = "eval"
-script = "document.title"
+script = "if (!document.title.trim()) throw new Error('page title is empty')"
 
 # The next steps assert that the primary navigation landmarks rendered.
 # They use the M4 ARIA work: the tabs nav has aria-label="Primary" and

@@ -89,5 +89,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onSwitchTab, onStartWindow, onJumpToToday, onNavigateWeek]);
+  }, [onSwitchTab, onStartWindow, onJumpToToday, onNavigateWeek, onQuit]);
 }

@@ -7,14 +7,15 @@ pub fn greet(name: &str) -> String {
 
 #[tauri::command]
 pub fn show_main_window(app: AppHandle, tab: Option<String>) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-        if let Some(tab) = tab {
-            window
-                .emit("navigate-to-tab", tab)
-                .map_err(|e| e.to_string())?;
-        }
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    if let Some(tab) = tab {
+        window
+            .emit("navigate-to-tab", tab)
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

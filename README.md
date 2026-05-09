@@ -163,8 +163,8 @@ End-to-end smoke tests use [`tauri-pilot`](https://github.com/mpiton/tauri-pilot
 
 One-time setup:
 ```bash
-rustup update stable                # tauri-pilot v0.5.0 requires rustc >= 1.95.0
-cargo install tauri-pilot-cli
+rustup update stable                # tauri-pilot-cli v0.4.0 requires rustc >= 1.95.0
+cargo install tauri-pilot-cli@0.4.0
 ```
 
 Run the app with the `e2e` feature in one terminal:

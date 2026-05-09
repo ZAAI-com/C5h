@@ -86,6 +86,8 @@ export function SettingsView() {
       await setAutostart(checked);
       await saveSettings({ ...settings, launch_at_login: checked });
     } catch (err) {
+      // Roll back the OS autostart change so it stays in sync with persisted settings.
+      try { await setAutostart(!checked); } catch { /* best-effort rollback */ }
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to update Launch at Login: ${message}`);
     }

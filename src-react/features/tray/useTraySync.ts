@@ -43,9 +43,11 @@ export function useTraySync() {
 
     const fingerprint = JSON.stringify({ nextState, reducedMotion });
     if (fingerprint === lastSentRef.current) return;
+    const previous = lastSentRef.current;
     lastSentRef.current = fingerprint;
 
     updateTrayState(nextState, reducedMotion).catch(() => {
+      lastSentRef.current = previous;
       // Tray push failures are non-critical; the main UI is unaffected.
     });
   }, [

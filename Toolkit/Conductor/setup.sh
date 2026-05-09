@@ -2,7 +2,7 @@
 # C5h Setup Script
 # Checks prerequisites and installs frontend dependencies.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -54,10 +54,14 @@ fi
 
 echo ""
 echo "3. Xcode Command Line Tools"
-if xcode-select -p &>/dev/null; then
-    check_pass "Xcode CLT installed"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    if xcode-select -p &>/dev/null; then
+        check_pass "Xcode CLT installed"
+    else
+        check_fail "Xcode CLT not installed" "Run: xcode-select --install"
+    fi
 else
-    check_fail "Xcode CLT not installed" "Run: xcode-select --install"
+    check_pass "Xcode CLT check skipped (non-macOS host)"
 fi
 
 echo ""

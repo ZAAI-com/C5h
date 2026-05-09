@@ -55,7 +55,7 @@ pub async fn compute_insights(pool: &SqlitePool) -> Result<Vec<Insight>, String>
          FROM windows w
          JOIN accounts a ON a.id = w.account_id
          WHERE a.enabled = 1
-           AND w.started_at >= datetime('now', ?)
+           AND datetime(w.started_at) >= datetime('now', ?)
          GROUP BY w.account_id, weekday, hour, minute
          HAVING occurrences >= ?
          ORDER BY occurrences DESC",

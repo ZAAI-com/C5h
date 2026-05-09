@@ -152,7 +152,7 @@ export function OnboardingFlow({ onComplete }: Props) {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="onboarding-tool">Tool</Label>
-                  <Select value={preset.tool_type} onValueChange={handleSelectPreset}>
+                  <Select value={preset.tool_type} onValueChange={handleSelectPreset} disabled={checking}>
                     <SelectTrigger id="onboarding-tool">
                       <SelectValue />
                     </SelectTrigger>

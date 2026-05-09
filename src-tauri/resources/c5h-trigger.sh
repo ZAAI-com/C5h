@@ -23,8 +23,13 @@ META_FINAL="$OUTPUT_DIR/${SCHEDULE_ID}.meta.json"
 STDERR_FINAL="$OUTPUT_DIR/${SCHEDULE_ID}.stderr.log"
 
 started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-"$@" 2>"$STDERR_FINAL" >/dev/null
-code=$?
+if [ "$#" -eq 0 ]; then
+    printf '%s\n' "c5h-trigger: no command provided after schedule_id and output_dir" > "$STDERR_FINAL"
+    code=64
+else
+    "$@" 2>"$STDERR_FINAL" >/dev/null
+    code=$?
+fi
 finished_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # Trim stderr to the last 4KB so result files stay small.

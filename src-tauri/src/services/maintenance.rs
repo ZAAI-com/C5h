@@ -59,14 +59,22 @@ fn sweep_orphan_trigger_files(app: &AppHandle) -> Result<usize, String> {
     let cutoff = SystemTime::now() - std::time::Duration::from_secs(ORPHAN_FILE_AGE_SECS);
     let mut removed = 0usize;
     for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if !name.ends_with(".meta.json") && !name.ends_with(".stderr.log") {
+            continue;
+        }
         let metadata = match entry.metadata() {
             Ok(m) => m,
             Err(_) => continue,
         };
+        if !metadata.is_file() {
+            continue;
+        }
         let mtime = metadata.modified().unwrap_or_else(|_| SystemTime::now());
         if mtime < cutoff {
-            if let Err(e) = std::fs::remove_file(entry.path()) {
-                log::warn!("Failed to remove orphan {}: {}", entry.path().display(), e);
+            if let Err(e) = std::fs::remove_file(&path) {
+                log::warn!("Failed to remove orphan {}: {}", path.display(), e);
             } else {
                 removed += 1;
             }

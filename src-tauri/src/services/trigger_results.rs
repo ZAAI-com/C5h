@@ -22,6 +22,18 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
+/// Read at most `max_bytes` from the tail of a file.
+fn read_tail(path: &std::path::Path, max_bytes: usize) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    let len = file.metadata()?.len();
+    let start = len.saturating_sub(max_bytes as u64);
+    file.seek(SeekFrom::Start(start))?;
+    let mut buf = Vec::with_capacity((len - start) as usize);
+    file.read_to_end(&mut buf)?;
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
 /// JSON payload written by `c5h-trigger.sh`.
 #[derive(Debug, Deserialize)]
 struct TriggerResult {
@@ -115,7 +127,7 @@ async fn consume_one(
     let parsed: TriggerResult = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
 
     let stderr_path = dir.join(format!("{}.stderr.log", parsed.schedule_id));
-    let stderr_tail = std::fs::read_to_string(&stderr_path).ok();
+    let stderr_tail = read_tail(&stderr_path, 8 * 1024).ok();
 
     let status = if parsed.exit_code == 0 {
         "completed"
