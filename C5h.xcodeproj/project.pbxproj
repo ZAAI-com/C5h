@@ -35,6 +35,8 @@
 		0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000002 /* CalendarFixtureLoader.swift */; };
 		0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000011 /* StartProviderNowSheet.swift */; };
 		0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000001 /* ManualTriggerCoordinator.swift */; };
+		0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000002 /* AppSchedulerDriver.swift */; };
+		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
 		0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
@@ -92,6 +94,8 @@
 		0A0011040000000000000002 /* CalendarFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFixtureLoader.swift; sourceTree = "<group>"; };
 		0A0011020301000000000011 /* StartProviderNowSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartProviderNowSheet.swift; sourceTree = "<group>"; };
 		0A0011060000000000000001 /* ManualTriggerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualTriggerCoordinator.swift; sourceTree = "<group>"; };
+		0A0011060000000000000002 /* AppSchedulerDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSchedulerDriver.swift; sourceTree = "<group>"; };
+		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
 		0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowEditorSheet.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -170,6 +174,8 @@
 			isa = PBXGroup;
 			children = (
 				0A0011060000000000000001 /* ManualTriggerCoordinator.swift */,
+				0A0011060000000000000002 /* AppSchedulerDriver.swift */,
+				0A0011060000000000000003 /* SchedulerTicker.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -436,6 +442,8 @@
 				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
 				0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */,
 				0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */,
+				0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */,
+				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

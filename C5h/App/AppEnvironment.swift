@@ -30,6 +30,7 @@ final class AppEnvironment {
     private(set) var cliPathResolver: (any CLIPathResolving)?
     private(set) var commandRunner: (any CommandRunning)?
     private(set) var providerRegistry: ProviderRegistry?
+    private(set) var schedulerTicker: SchedulerTicker?
 
     init() {
         Task { await self.bootstrap() }
@@ -73,10 +74,24 @@ final class AppEnvironment {
             self.commandRunner = runner
             let settingsRepo = GRDBAppSettingsRepository(database: db)
             self.appSettingsRepository = settingsRepo
-            self.providerRegistry = ProviderRegistry(adapters: [
+            let registry = ProviderRegistry(adapters: [
                 ClaudeProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo),
                 CodexProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo)
             ])
+            self.providerRegistry = registry
+
+            if let scheduledRepo = self.scheduledPromptRepository,
+               let actualRepo = self.actualWindowRepository {
+                let driver = AppSchedulerDriver(
+                    scheduledRepository: scheduledRepo,
+                    actualRepository: actualRepo,
+                    registry: registry
+                )
+                let scheduler = SchedulerService(driver: driver)
+                let ticker = SchedulerTicker(scheduler: scheduler)
+                self.schedulerTicker = ticker
+                ticker.start()
+            }
 
             #if DEBUG
             await LogsFixtureLoader.loadIfNeeded(repository: cmdRepo, appPaths: paths)
