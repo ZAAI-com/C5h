@@ -1,7 +1,12 @@
 # C5h app icon candidates
 
-Seven distinct concepts rendered at 1024×1024 PNG. Open `00-contact-sheet.png`
-for a side-by-side overview, or browse the individual files below.
+C5h = **Coding for 5 hours.** Two rounds of seven candidates each, all rendered
+at 1024×1024 PNG.
+
+- **Round 1** (`00-contact-sheet.png`) — Time-and-window concepts (clocks,
+  rings, hourglasses, dials, arcs).
+- **Round 2** (`00-contact-sheet-round2.png`) — Coding-and-window concepts
+  (terminal prompts, code braces, JSX tags, mini editors, file metaphors).
 
 To regenerate:
 
@@ -12,7 +17,7 @@ swift run --package-path Tools/IconForge IconForge
 The renderer (`Tools/IconForge`) uses Core Graphics directly so it produces
 deterministic, raster-clean output.
 
-## Candidates
+## Round 1 — Time-only concepts
 
 ### 1. Wedge Clock — `01-wedge-clock.png`
 Warm orange squircle with a white clock face and a bold 5-hour wedge sweeping
@@ -76,6 +81,76 @@ the focused window.
   warm.
 - **Risks**: less obviously a tool; reads more like a wellness/journaling
   app.
+
+---
+
+## Round 2 — Coding + 5 hours concepts
+
+These lean into the literal meaning of the product name: **Coding for 5
+hours.** Each pairs a recognisable code symbol with the 5h time signal.
+
+### 8. Terminal Prompt — `08-terminal-prompt.png`
+Dark editor with macOS traffic lights, monospace `> 5h` and a Claude-orange
+cursor block, faint `c5h` shell label. Most direct dev-tool signal.
+
+- **Strengths**: instantly reads as a CLI tool; orange cursor doubles as the
+  brand accent; the only icon that names the product.
+- **Risks**: small monospace text loses bite at 16×16; very saturated dev
+  niche.
+
+### 9. Brace Clock — `09-brace-clock.png`
+Two huge `{` `}` curly braces flanking a small clock face with a 5-hour
+wedge, on warm cream. Code + time fused in one symbol.
+
+- **Strengths**: literal "coding × 5 hours"; warm cream stands out in a dock
+  full of dark icons.
+- **Risks**: the clock-inside-braces is the entire idea — no plan B if the
+  metaphor doesn't click.
+
+### 10. JSX Tag — `10-jsx-tag.png`
+Self-closing `<5h/>` tag in bold white monospace on the Claude→Codex
+gradient. Modern web-dev typography.
+
+- **Strengths**: highly distinctive; gradient ties to the in-app brand;
+  scales beautifully.
+- **Risks**: JSX angle-brackets are web-flavoured (this app doesn't care
+  about the language).
+
+### 11. Code Editor — `11-code-editor.png`
+Mini macOS code-editor window: traffic lights, "5h.swift" title, syntax-
+highlighted code rectangles on numbered lines, and a circular 5h progress
+dial in the bottom-right.
+
+- **Strengths**: the most literal "coding for 5h"; very rich at full
+  resolution.
+- **Risks**: highest detail in the set — risks turning into a colour blob
+  at 16×16.
+
+### 12. 5h.swift — `12-filename.png`
+Document silhouette with folded corner; "5h" in big Claude orange letters
+and ".swift" in monospace below. File-as-icon metaphor.
+
+- **Strengths**: tells the whole story; recognisable at any size; warm
+  cream chrome.
+- **Risks**: locks the brand to Swift specifically; the language tag may
+  feel narrow.
+
+### 13. Block Comment — `13-block-comment.png`
+Universal-language block comment `/* 5h */` on a dark editor field, with
+the `5h` accented in Claude orange and the comment markers in dim slate.
+
+- **Strengths**: language-agnostic; minimal and confident; orange centre
+  is the focal point.
+- **Risks**: low silhouette interest at small sizes — the comment markers
+  blur into the background.
+
+### 14. Caret Play — `14-caret-play.png`
+Triangular play caret + bold `5h` on the Claude→Codex gradient. Action-
+oriented: *start the session.*
+
+- **Strengths**: highest call-to-action energy; reads instantly as "begin";
+  gradient ties to the brand.
+- **Risks**: media-player feel; not specifically a coding tool.
 
 ---
 

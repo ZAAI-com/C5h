@@ -705,6 +705,492 @@ func renderContactSheet() throws {
     print("✓ 00-contact-sheet.png")
 }
 
+// MARK: - Round 2 helpers
+
+func drawTrafficLights(_ ctx: CGContext, at origin: CGPoint, radius: CGFloat = 18, spacing: CGFloat = 60) {
+    let colors: [CGColor] = [rgb(255, 95, 86), rgb(255, 189, 46), rgb(40, 200, 64)]
+    for (i, color) in colors.enumerated() {
+        ctx.setFillColor(color)
+        let center = CGPoint(x: origin.x + CGFloat(i) * spacing, y: origin.y)
+        ctx.addArc(center: center, radius: radius, startAngle: 0, endAngle: τ, clockwise: false)
+        ctx.fillPath()
+    }
+}
+
+// MARK: - 8. Terminal Prompt
+
+func renderTerminalPrompt() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Editor background gradient
+    paint(ctx,
+          linear: gradient(colors: [rgb(28, 35, 56), rgb(12, 16, 32)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    // Window chrome — three small dots top-left
+    drawTrafficLights(ctx, at: CGPoint(x: 88, y: canvas - 88), radius: 22, spacing: 70)
+
+    // Faint scan-line stripes for retro terminal feel
+    ctx.saveGState()
+    ctx.setFillColor(rgb(255, 255, 255, 0.025))
+    var y: CGFloat = 0
+    while y < canvas {
+        ctx.fill(CGRect(x: 0, y: y, width: canvas, height: 2))
+        y += 6
+    }
+    ctx.restoreGState()
+
+    // Prompt text: "> 5h" in monospace with bright orange cursor block
+    let centerY = canvas * 0.46
+    drawText(ctx, ">", at: CGPoint(x: canvas * 0.30, y: centerY), size: 280, weight: .bold,
+             color: rgb(120, 200, 140), design: .monospaced)
+    drawText(ctx, "5h", at: CGPoint(x: canvas * 0.55, y: centerY), size: 320, weight: .bold,
+             color: white, design: .monospaced)
+
+    // Cursor block (Claude orange)
+    let cursorRect = CGRect(x: canvas * 0.74, y: centerY - 130, width: 130, height: 280)
+    let cursorPath = CGPath(roundedRect: cursorRect, cornerWidth: 12, cornerHeight: 12, transform: nil)
+    ctx.addPath(cursorPath)
+    ctx.setFillColor(claudeBright)
+    ctx.fillPath()
+
+    // Below: faint shell prompt label
+    drawText(ctx, "c5h",
+             at: CGPoint(x: canvas / 2, y: canvas * 0.20),
+             size: 110, weight: .semibold,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("08-terminal-prompt.png"))
+    print("✓ 08-terminal-prompt.png")
+}
+
+// MARK: - 9. Brace Clock
+
+func renderBraceClock() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Cream background
+    ctx.setFillColor(creamLight)
+    ctx.fill(CGRect(x: 0, y: 0, width: canvas, height: canvas))
+    paint(ctx,
+          radial: gradient(colors: [rgb(255, 230, 200, 0.5), rgb(255, 230, 200, 0)]),
+          center: CGPoint(x: canvas / 2, y: canvas * 0.55),
+          radius: canvas * 0.55)
+
+    let center = CGPoint(x: canvas / 2, y: canvas / 2)
+
+    // Two huge curly braces — left "{" and right "}"
+    drawText(ctx, "{",
+             at: CGPoint(x: canvas * 0.18, y: center.y),
+             size: 760, weight: .heavy,
+             color: navy,
+             design: .rounded)
+    drawText(ctx, "}",
+             at: CGPoint(x: canvas * 0.82, y: center.y),
+             size: 760, weight: .heavy,
+             color: navy,
+             design: .rounded)
+
+    // Clock face between them
+    let faceR: CGFloat = 200
+    ctx.setFillColor(white)
+    ctx.addArc(center: center, radius: faceR, startAngle: 0, endAngle: τ, clockwise: false)
+    ctx.fillPath()
+    ctx.setStrokeColor(navy)
+    ctx.setLineWidth(10)
+    ctx.addArc(center: center, radius: faceR, startAngle: 0, endAngle: τ, clockwise: false)
+    ctx.strokePath()
+
+    // 5-hour wedge (12 → 5 of 12)
+    ctx.setFillColor(claudeBright)
+    ctx.move(to: center)
+    ctx.addArc(
+        center: center,
+        radius: faceR - 14,
+        startAngle: -π / 2,
+        endAngle: -π / 2 + τ * 5 / 12,
+        clockwise: false
+    )
+    ctx.closePath()
+    ctx.fillPath()
+
+    // Hour ticks at 12, 3, 6, 9
+    for hour in [0, 3, 6, 9] {
+        let angle = -π / 2 + τ * CGFloat(hour) / 12
+        let outer = CGPoint(x: center.x + cos(angle) * (faceR - 18), y: center.y + sin(angle) * (faceR - 18))
+        let inner = CGPoint(x: center.x + cos(angle) * (faceR - 38), y: center.y + sin(angle) * (faceR - 38))
+        ctx.setStrokeColor(navy)
+        ctx.setLineWidth(8)
+        ctx.setLineCap(.round)
+        ctx.move(to: inner)
+        ctx.addLine(to: outer)
+        ctx.strokePath()
+    }
+
+    // Center hub
+    ctx.setFillColor(navy)
+    ctx.addArc(center: center, radius: 14, startAngle: 0, endAngle: τ, clockwise: false)
+    ctx.fillPath()
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("09-brace-clock.png"))
+    print("✓ 09-brace-clock.png")
+}
+
+// MARK: - 10. JSX Tag
+
+func renderJSXTag() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Vibrant Claude → Codex gradient
+    paint(ctx,
+          linear: gradient(colors: [
+            rgb(232, 122, 70),
+            rgb(174, 102, 152),
+            rgb(58, 116, 220)
+          ]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: canvas, y: 0))
+
+    // Soft top highlight
+    paint(ctx,
+          radial: gradient(colors: [
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.20),
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)
+          ]),
+          center: CGPoint(x: canvas * 0.32, y: canvas * 0.85),
+          radius: canvas * 0.55)
+
+    // <5h/> in bold monospace
+    drawText(ctx, "<5h/>",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 350, weight: .black,
+             color: white,
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("10-jsx-tag.png"))
+    print("✓ 10-jsx-tag.png")
+}
+
+// MARK: - 11. Code Editor + Timer
+
+func renderCodeEditor() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Editor body gradient
+    paint(ctx,
+          linear: gradient(colors: [rgb(34, 42, 64), rgb(18, 22, 38)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    // Title bar
+    let titleBarH: CGFloat = 110
+    ctx.setFillColor(rgb(50, 58, 80))
+    ctx.fill(CGRect(x: 0, y: canvas - titleBarH, width: canvas, height: titleBarH))
+    drawTrafficLights(ctx, at: CGPoint(x: 88, y: canvas - titleBarH / 2 - 4), radius: 22, spacing: 70)
+    drawText(ctx, "5h.swift",
+             at: CGPoint(x: canvas / 2, y: canvas - titleBarH / 2 - 4),
+             size: 64, weight: .medium,
+             color: rgb(200, 212, 240),
+             design: .monospaced)
+
+    // Code lines (rectangles approximating syntax-highlighted text)
+    struct Line { let x: CGFloat; let width: CGFloat; let color: CGColor; let height: CGFloat = 56 }
+    let purple = rgb(186, 122, 232)   // keywords
+    let teal = rgb(102, 204, 200)     // type names
+    let orangeLit = rgb(232, 168, 110) // string literals
+    let dim = rgb(160, 178, 220)
+    let lineX: CGFloat = 100
+    let lineSpacing: CGFloat = 110
+
+    let baseY = canvas - titleBarH - 100
+    let lines: [[Line]] = [
+        // line 1: keyword + identifier
+        [Line(x: lineX, width: 130, color: purple),
+         Line(x: lineX + 160, width: 220, color: teal)],
+        // line 2: indented + string
+        [Line(x: lineX + 80, width: 100, color: dim),
+         Line(x: lineX + 200, width: 360, color: orangeLit)],
+        // line 3: indented method
+        [Line(x: lineX + 80, width: 90, color: purple),
+         Line(x: lineX + 200, width: 280, color: white),
+         Line(x: lineX + 500, width: 160, color: dim)],
+        // line 4: empty
+        [],
+        // line 5: closing
+        [Line(x: lineX, width: 60, color: dim)]
+    ]
+
+    for (rowIndex, lineSegs) in lines.enumerated() {
+        let y = baseY - CGFloat(rowIndex) * lineSpacing
+        // Line number (very faint)
+        drawText(ctx, "\(rowIndex + 1)",
+                 at: CGPoint(x: 50, y: y),
+                 size: 36, weight: .regular,
+                 color: rgb(120, 132, 168, 0.7),
+                 design: .monospaced)
+        for seg in lineSegs {
+            let r = CGRect(x: seg.x, y: y - seg.height / 2, width: seg.width, height: seg.height)
+            let p = CGPath(roundedRect: r, cornerWidth: 12, cornerHeight: 12, transform: nil)
+            ctx.addPath(p)
+            ctx.setFillColor(seg.color)
+            ctx.fillPath()
+        }
+    }
+
+    // 5h timer dial bottom-right
+    let dialCenter = CGPoint(x: canvas - 200, y: 200)
+    let dialR: CGFloat = 130
+    ctx.setFillColor(rgb(28, 34, 54))
+    ctx.addArc(center: dialCenter, radius: dialR + 10, startAngle: 0, endAngle: τ, clockwise: false)
+    ctx.fillPath()
+    // track
+    ctx.setStrokeColor(rgb(80, 92, 130, 0.6))
+    ctx.setLineWidth(20)
+    ctx.addArc(center: dialCenter, radius: dialR, startAngle: 0, endAngle: τ, clockwise: false)
+    ctx.strokePath()
+    // 5h fill (Claude orange)
+    ctx.setStrokeColor(claudeBright)
+    ctx.setLineWidth(20)
+    ctx.setLineCap(.round)
+    ctx.addArc(
+        center: dialCenter,
+        radius: dialR,
+        startAngle: -π / 2,
+        endAngle: -π / 2 + τ * 5 / 24,
+        clockwise: false
+    )
+    ctx.strokePath()
+    drawText(ctx, "5h",
+             at: dialCenter,
+             size: 78, weight: .heavy,
+             color: white,
+             design: .rounded)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("11-code-editor.png"))
+    print("✓ 11-code-editor.png")
+}
+
+// MARK: - 12. Filename 5h.swift
+
+func renderFilename() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Light gradient background
+    paint(ctx,
+          linear: gradient(colors: [rgb(255, 245, 232), rgb(244, 226, 200)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: canvas, y: 0))
+
+    // Document silhouette
+    let docRect = CGRect(x: 220, y: 200, width: 580, height: 700)
+    let docPath = CGMutablePath()
+    let r: CGFloat = 36
+    docPath.move(to: CGPoint(x: docRect.minX + r, y: docRect.minY))
+    docPath.addLine(to: CGPoint(x: docRect.maxX - r, y: docRect.minY))
+    docPath.addArc(tangent1End: CGPoint(x: docRect.maxX, y: docRect.minY),
+                   tangent2End: CGPoint(x: docRect.maxX, y: docRect.minY + r),
+                   radius: r)
+    docPath.addLine(to: CGPoint(x: docRect.maxX, y: docRect.maxY - 180))
+    // Folded corner
+    docPath.addLine(to: CGPoint(x: docRect.maxX - 180, y: docRect.maxY))
+    docPath.addLine(to: CGPoint(x: docRect.minX + r, y: docRect.maxY))
+    docPath.addArc(tangent1End: CGPoint(x: docRect.minX, y: docRect.maxY),
+                   tangent2End: CGPoint(x: docRect.minX, y: docRect.maxY - r),
+                   radius: r)
+    docPath.addLine(to: CGPoint(x: docRect.minX, y: docRect.minY + r))
+    docPath.addArc(tangent1End: CGPoint(x: docRect.minX, y: docRect.minY),
+                   tangent2End: CGPoint(x: docRect.minX + r, y: docRect.minY),
+                   radius: r)
+    docPath.closeSubpath()
+    ctx.addPath(docPath)
+    ctx.setFillColor(white)
+    ctx.fillPath()
+    ctx.addPath(docPath)
+    ctx.setStrokeColor(navy)
+    ctx.setLineWidth(14)
+    ctx.setLineJoin(.round)
+    ctx.strokePath()
+
+    // Folded corner triangle
+    let foldPath = CGMutablePath()
+    foldPath.move(to: CGPoint(x: docRect.maxX, y: docRect.maxY - 180))
+    foldPath.addLine(to: CGPoint(x: docRect.maxX - 180, y: docRect.maxY))
+    foldPath.addLine(to: CGPoint(x: docRect.maxX - 180, y: docRect.maxY - 180))
+    foldPath.closeSubpath()
+    ctx.addPath(foldPath)
+    ctx.setFillColor(rgb(245, 235, 218))
+    ctx.fillPath()
+    ctx.addPath(foldPath)
+    ctx.setStrokeColor(navy)
+    ctx.setLineWidth(8)
+    ctx.strokePath()
+
+    // Filename text on the document
+    drawText(ctx, "5h",
+             at: CGPoint(x: canvas / 2, y: docRect.midY + 80),
+             size: 280, weight: .black,
+             color: claude,
+             design: .rounded)
+    drawText(ctx, ".swift",
+             at: CGPoint(x: canvas / 2, y: docRect.midY - 100),
+             size: 110, weight: .semibold,
+             color: navy,
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("12-filename.png"))
+    print("✓ 12-filename.png")
+}
+
+// MARK: - 13. Block Comment /* 5h */
+
+func renderBlockComment() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Editor-dark background
+    paint(ctx,
+          linear: gradient(colors: [rgb(34, 42, 64), rgb(14, 18, 32)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    // Comment with bright accent on "5h"
+    let opener = "/*"
+    let core = "5h"
+    let closer = "*/"
+
+    drawText(ctx, opener,
+             at: CGPoint(x: canvas * 0.22, y: canvas / 2),
+             size: 240, weight: .bold,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+    drawText(ctx, core,
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 360, weight: .black,
+             color: claudeBright,
+             design: .rounded)
+    drawText(ctx, closer,
+             at: CGPoint(x: canvas * 0.78, y: canvas / 2),
+             size: 240, weight: .bold,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("13-block-comment.png"))
+    print("✓ 13-block-comment.png")
+}
+
+// MARK: - 14. Caret Play
+
+func renderCaretPlay() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Brand gradient
+    paint(ctx,
+          linear: gradient(colors: [
+            rgb(232, 122, 70),
+            rgb(58, 116, 220)
+          ]),
+          from: CGPoint(x: canvas * 0.2, y: canvas),
+          to: CGPoint(x: canvas * 0.8, y: 0))
+
+    // Soft highlight
+    paint(ctx,
+          radial: gradient(colors: [
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.18),
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)
+          ]),
+          center: CGPoint(x: canvas * 0.32, y: canvas * 0.80),
+          radius: canvas * 0.55)
+
+    // Big play caret triangle (▸)
+    let caret = CGMutablePath()
+    let cx = canvas * 0.30
+    let cy = canvas * 0.50
+    let h: CGFloat = 380
+    caret.move(to: CGPoint(x: cx, y: cy + h / 2))
+    caret.addLine(to: CGPoint(x: cx, y: cy - h / 2))
+    caret.addLine(to: CGPoint(x: cx + h * 0.86, y: cy))
+    caret.closeSubpath()
+    ctx.addPath(caret)
+    ctx.setFillColor(white)
+    ctx.fillPath()
+
+    // 5h text right of caret
+    drawText(ctx, "5h",
+             at: CGPoint(x: canvas * 0.72, y: cy),
+             size: 360, weight: .heavy,
+             color: white,
+             design: .rounded)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("14-caret-play.png"))
+    print("✓ 14-caret-play.png")
+}
+
+// MARK: - Round 2 contact sheet
+
+func renderContactSheetRound2() throws {
+    let cellSize: CGFloat = 360
+    let labelHeight: CGFloat = 70
+    let columns = 3
+    let rows = 3
+    let padding: CGFloat = 40
+    let sheetW = CGFloat(columns) * cellSize + CGFloat(columns + 1) * padding
+    let sheetH = CGFloat(rows) * (cellSize + labelHeight) + CGFloat(rows + 1) * padding + 80
+    let actualSize = max(sheetW, sheetH)
+    let ctx = makeContext(size: actualSize)
+
+    ctx.setFillColor(rgb(240, 242, 248))
+    ctx.fill(CGRect(x: 0, y: 0, width: actualSize, height: actualSize))
+
+    drawText(ctx, "C5h candidates · Coding for 5 hours",
+             at: CGPoint(x: actualSize / 2, y: actualSize - 50),
+             size: 38, weight: .bold,
+             color: rgb(28, 36, 60),
+             design: .default)
+
+    let entries: [(String, String)] = [
+        ("08-terminal-prompt.png", "8. Terminal > 5h"),
+        ("09-brace-clock.png", "9. Brace Clock"),
+        ("10-jsx-tag.png", "10. JSX <5h/>"),
+        ("11-code-editor.png", "11. Code Editor"),
+        ("12-filename.png", "12. 5h.swift"),
+        ("13-block-comment.png", "13. /* 5h */"),
+        ("14-caret-play.png", "14. ▸ 5h")
+    ]
+
+    for (i, (filename, label)) in entries.enumerated() {
+        let row = i / columns
+        let col = i % columns
+        let x = padding + CGFloat(col) * (cellSize + padding)
+        let yTop = actualSize - 100 - padding - CGFloat(row + 1) * (cellSize + labelHeight) - CGFloat(row) * padding
+        let cellRect = CGRect(x: x, y: yTop + labelHeight, width: cellSize, height: cellSize)
+
+        let iconURL = outRoot.appendingPathComponent(filename)
+        if let provider = CGDataProvider(url: iconURL as CFURL),
+           let cg = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25))
+            ctx.draw(cg, in: cellRect)
+            ctx.restoreGState()
+        }
+        drawText(ctx, label,
+                 at: CGPoint(x: x + cellSize / 2, y: yTop + labelHeight / 2),
+                 size: 26, weight: .semibold,
+                 color: rgb(28, 36, 60),
+                 design: .default)
+    }
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("00-contact-sheet-round2.png"))
+    print("✓ 00-contact-sheet-round2.png")
+}
+
 // MARK: - Run
 
 do {
@@ -716,6 +1202,15 @@ do {
     try renderCompassDial()
     try renderSunriseArc()
     try renderContactSheet()
+    // Round 2 — Coding for 5 hours
+    try renderTerminalPrompt()
+    try renderBraceClock()
+    try renderJSXTag()
+    try renderCodeEditor()
+    try renderFilename()
+    try renderBlockComment()
+    try renderCaretPlay()
+    try renderContactSheetRound2()
     print("\nAll icons rendered to \(outRoot.path)")
 } catch {
     print("Error: \(error)")
