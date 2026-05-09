@@ -1,12 +1,15 @@
 # C5h app icon candidates
 
-C5h = **Coding for 5 hours.** Two rounds of seven candidates each, all rendered
-at 1024×1024 PNG.
+C5h = **Coding for 5 hours.** Three rounds of seven candidates each, all
+rendered at 1024×1024 PNG.
 
 - **Round 1** (`00-contact-sheet.png`) — Time-and-window concepts (clocks,
   rings, hourglasses, dials, arcs).
 - **Round 2** (`00-contact-sheet-round2.png`) — Coding-and-window concepts
   (terminal prompts, code braces, JSX tags, mini editors, file metaphors).
+- **Round 3** (`00-contact-sheet-round3.png`) — **C5h** name in coding
+  syntax (terminal, JSX, JSON braces, comment, file tab, Swift attribute,
+  function declaration).
 
 To regenerate:
 
@@ -151,6 +154,77 @@ oriented: *start the session.*
 - **Strengths**: highest call-to-action energy; reads instantly as "begin";
   gradient ties to the brand.
 - **Risks**: media-player feel; not specifically a coding tool.
+
+---
+
+## Round 3 — C5h name + coding syntax
+
+The product name itself becomes the focal point, wrapped in a recognisable
+piece of programming syntax. The orange `5` in the middle of "C5h" doubles
+as the brand accent.
+
+### 15. Terminal `> C5h` — `15-terminal-c5h.png`
+Dark editor with macOS traffic lights, monospace `> C5h` and a bright
+Claude-orange cursor block. Subtitle: `5h focus session`.
+
+- **Strengths**: most direct CLI signal in the entire set; orange cursor +
+  green prompt feels alive; the only icon that explicitly subtitles the
+  product purpose.
+- **Risks**: lots of text means small dock previews will lose detail.
+
+### 16. JSX `<C5h />` — `16-jsx-component.png`
+Self-closing component tag in bold white monospace on the Claude→Codex
+gradient.
+
+- **Strengths**: highly distinctive; gradient ties to the in-app brand;
+  the component-tag metaphor positions C5h as a self-contained "thing."
+- **Risks**: JSX is web-flavoured; doesn't hint at the time aspect.
+
+### 17. JSON Braces `{ C5h }` — `17-json-braces.png`
+Big rounded `{` `}` braces flanking the monospace `C5h` glyph (orange
+"5"), on warm cream.
+
+- **Strengths**: clean and confident; the braces are universal across most
+  programming languages; warm against a dark dock.
+- **Risks**: minimal — but also a lot of negative space; needs the braces
+  to be the focal point.
+
+### 18. Block Comment `/* C5h */` — `18-block-comment-c5h.png`
+Universal-language block comment. `/*` and `*/` in dim slate, `C5h` in
+bright Claude orange in the centre.
+
+- **Strengths**: language-agnostic; orange centre is a clean focal point;
+  the negative space is deliberate.
+- **Risks**: comment markers shrink at small sizes — might read as just
+  "C5h" with smudges.
+
+### 19. File Tab `C5h.swift` — `19-file-tab.png`
+Mini macOS editor chrome with traffic lights and a "C5h.swift" tab. Big
+`C5h` glyph in the body with a `// 5h focus` comment below.
+
+- **Strengths**: the most literal "this is a coding tool"; the tab is a
+  recognisable chrome element; the `// 5h focus` ties the name to its
+  meaning.
+- **Risks**: highest detail in the set; risks visual clutter at small
+  sizes.
+
+### 20. Swift Attribute `@C5h` — `20-swift-attribute.png`
+Bold white `@C5h` on a Swift-orange gradient. Property-wrapper / decorator
+notation.
+
+- **Strengths**: extremely confident silhouette; reads at any size; Swift
+  orange aligns with the Claude brand.
+- **Risks**: locks the brand to Swift specifically (where decorators use
+  `@`); other languages wouldn't immediately recognise it.
+
+### 21. Function Decl `func C5h()` — `21-function-decl.png`
+Real Swift code: `func C5h() {` / `  claude.run(5h)` / `}` rendered with
+proper syntax highlighting (purple keyword, teal type, orange brand).
+
+- **Strengths**: the only icon that's *actual code that does the
+  product's job*; richest storytelling; rewards a closer look.
+- **Risks**: three-line body becomes a blur at 16×16; aimed at the
+  power-user crowd.
 
 ---
 

@@ -114,6 +114,38 @@ func drawText(
     ctx.restoreGState()
 }
 
+/// Renders mixed-color "code" as a single CTLine so glyph spacing stays
+/// consistent (no manual per-token positioning).
+func drawCodeLine(
+    _ ctx: CGContext,
+    _ segments: [(String, CGColor)],
+    at point: CGPoint,
+    size: CGFloat,
+    weight: NSFont.Weight = .heavy,
+    design: NSFontDescriptor.SystemDesign = .monospaced
+) {
+    let baseFont = NSFont.systemFont(ofSize: size, weight: weight)
+    let descriptor = baseFont.fontDescriptor.withDesign(design) ?? baseFont.fontDescriptor
+    let font = NSFont(descriptor: descriptor, size: size) ?? baseFont
+    let attributed = NSMutableAttributedString()
+    for (text, color) in segments {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor(cgColor: color) ?? .white
+        ]
+        attributed.append(NSAttributedString(string: text, attributes: attrs))
+    }
+    let line = CTLineCreateWithAttributedString(attributed)
+    let bounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+    ctx.saveGState()
+    ctx.textPosition = CGPoint(
+        x: point.x - bounds.width / 2 - bounds.origin.x,
+        y: point.y - bounds.height / 2 - bounds.origin.y
+    )
+    CTLineDraw(line, ctx)
+    ctx.restoreGState()
+}
+
 // MARK: - Brand colors
 
 let claude = rgb(217, 110, 64)
@@ -1191,6 +1223,366 @@ func renderContactSheetRound2() throws {
     print("✓ 00-contact-sheet-round2.png")
 }
 
+// MARK: - 15. Terminal Prompt with C5h
+
+func renderTerminalC5h() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    paint(ctx,
+          linear: gradient(colors: [rgb(28, 35, 56), rgb(12, 16, 32)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    drawTrafficLights(ctx, at: CGPoint(x: 88, y: canvas - 88), radius: 22, spacing: 70)
+
+    // Faint scanlines
+    ctx.saveGState()
+    ctx.setFillColor(rgb(255, 255, 255, 0.025))
+    var y: CGFloat = 0
+    while y < canvas {
+        ctx.fill(CGRect(x: 0, y: y, width: canvas, height: 2))
+        y += 6
+    }
+    ctx.restoreGState()
+
+    // ">" green prompt char + "C5h" white + cursor block
+    let centerY = canvas * 0.46
+    drawText(ctx, ">", at: CGPoint(x: canvas * 0.20, y: centerY), size: 240, weight: .bold,
+             color: rgb(120, 200, 140), design: .monospaced)
+    drawText(ctx, "C5h", at: CGPoint(x: canvas * 0.55, y: centerY), size: 280, weight: .bold,
+             color: white, design: .monospaced)
+
+    // Orange cursor block
+    let cursorRect = CGRect(x: canvas * 0.81, y: centerY - 110, width: 110, height: 240)
+    let cursorPath = CGPath(roundedRect: cursorRect, cornerWidth: 10, cornerHeight: 10, transform: nil)
+    ctx.addPath(cursorPath)
+    ctx.setFillColor(claudeBright)
+    ctx.fillPath()
+
+    // Subtitle
+    drawText(ctx, "5h focus session",
+             at: CGPoint(x: canvas / 2, y: canvas * 0.20),
+             size: 78, weight: .regular,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("15-terminal-c5h.png"))
+    print("✓ 15-terminal-c5h.png")
+}
+
+// MARK: - 16. JSX Component
+
+func renderJSXComponent() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    paint(ctx,
+          linear: gradient(colors: [
+            rgb(232, 122, 70),
+            rgb(174, 102, 152),
+            rgb(58, 116, 220)
+          ]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: canvas, y: 0))
+
+    paint(ctx,
+          radial: gradient(colors: [
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.20),
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)
+          ]),
+          center: CGPoint(x: canvas * 0.32, y: canvas * 0.85),
+          radius: canvas * 0.55)
+
+    drawText(ctx, "<C5h />",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 270, weight: .black,
+             color: white,
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("16-jsx-component.png"))
+    print("✓ 16-jsx-component.png")
+}
+
+// MARK: - 17. JSON Braces { C5h }
+
+func renderJSONBraces() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    ctx.setFillColor(creamLight)
+    ctx.fill(CGRect(x: 0, y: 0, width: canvas, height: canvas))
+    paint(ctx,
+          radial: gradient(colors: [rgb(255, 230, 200, 0.5), rgb(255, 230, 200, 0)]),
+          center: CGPoint(x: canvas / 2, y: canvas * 0.55),
+          radius: canvas * 0.55)
+
+    // Big rounded braces flanking the C5h glyph
+    drawText(ctx, "{",
+             at: CGPoint(x: canvas * 0.18, y: canvas / 2),
+             size: 700, weight: .heavy,
+             color: navy,
+             design: .rounded)
+    drawText(ctx, "}",
+             at: CGPoint(x: canvas * 0.82, y: canvas / 2),
+             size: 700, weight: .heavy,
+             color: navy,
+             design: .rounded)
+
+    // Centred C5h with the orange "5" — rendered as one mono string so
+    // the glyphs sit on their natural advance grid.
+    drawCodeLine(
+        ctx,
+        [
+            ("C", navy),
+            ("5", claude),
+            ("h", navy)
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas / 2),
+        size: 280,
+        weight: .heavy,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("17-json-braces.png"))
+    print("✓ 17-json-braces.png")
+}
+
+// MARK: - 18. Block Comment /* C5h */
+
+func renderBlockCommentC5h() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    paint(ctx,
+          linear: gradient(colors: [rgb(34, 42, 64), rgb(14, 18, 32)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    drawText(ctx, "/*",
+             at: CGPoint(x: canvas * 0.20, y: canvas / 2),
+             size: 220, weight: .bold,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+    drawText(ctx, "C5h",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 300, weight: .black,
+             color: claudeBright,
+             design: .rounded)
+    drawText(ctx, "*/",
+             at: CGPoint(x: canvas * 0.80, y: canvas / 2),
+             size: 220, weight: .bold,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("18-block-comment-c5h.png"))
+    print("✓ 18-block-comment-c5h.png")
+}
+
+// MARK: - 19. File Tab C5h.swift
+
+func renderFileTab() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    paint(ctx,
+          linear: gradient(colors: [rgb(34, 42, 64), rgb(18, 22, 38)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    let titleBarH: CGFloat = 110
+    ctx.setFillColor(rgb(50, 58, 80))
+    ctx.fill(CGRect(x: 0, y: canvas - titleBarH, width: canvas, height: titleBarH))
+    drawTrafficLights(ctx, at: CGPoint(x: 88, y: canvas - titleBarH / 2 - 4), radius: 22, spacing: 70)
+
+    // Tab band
+    let tabBandY = canvas - titleBarH - 110
+    ctx.setFillColor(rgb(28, 34, 54))
+    ctx.fill(CGRect(x: 0, y: tabBandY, width: canvas, height: 110))
+
+    // Active tab
+    let tabRect = CGRect(x: 80, y: tabBandY, width: 720, height: 110)
+    ctx.setFillColor(rgb(58, 68, 96))
+    ctx.fill(tabRect)
+    // Active indicator (Claude orange line)
+    ctx.setFillColor(claudeBright)
+    ctx.fill(CGRect(x: tabRect.minX, y: tabBandY, width: tabRect.width, height: 6))
+
+    drawText(ctx, "C5h.swift",
+             at: CGPoint(x: tabRect.midX, y: tabBandY + 55),
+             size: 64, weight: .semibold,
+             color: white,
+             design: .monospaced)
+
+    // Big centered C5h on the editor body
+    drawText(ctx, "C5h",
+             at: CGPoint(x: canvas / 2, y: canvas * 0.45),
+             size: 380, weight: .black,
+             color: claudeBright,
+             design: .rounded)
+    drawText(ctx, "// 5h focus",
+             at: CGPoint(x: canvas / 2, y: canvas * 0.22),
+             size: 70, weight: .regular,
+             color: rgb(140, 165, 200),
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("19-file-tab.png"))
+    print("✓ 19-file-tab.png")
+}
+
+// MARK: - 20. Swift Attribute @C5h
+
+func renderSwiftAttribute() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    // Swift orange-ish gradient
+    paint(ctx,
+          linear: gradient(colors: [
+            rgb(245, 130, 60),
+            rgb(214, 78, 32)
+          ]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: canvas, y: 0))
+
+    // Soft highlight
+    paint(ctx,
+          radial: gradient(colors: [
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.22),
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)
+          ]),
+          center: CGPoint(x: canvas * 0.32, y: canvas * 0.82),
+          radius: canvas * 0.55)
+
+    // @C5h
+    drawText(ctx, "@C5h",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 340, weight: .black,
+             color: white,
+             design: .monospaced)
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("20-swift-attribute.png"))
+    print("✓ 20-swift-attribute.png")
+}
+
+// MARK: - 21. Function Declaration
+
+func renderFunctionDecl() throws {
+    let ctx = makeContext()
+    clip(ctx)
+
+    paint(ctx,
+          linear: gradient(colors: [rgb(34, 42, 64), rgb(14, 18, 32)]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: 0, y: 0))
+
+    let purple = rgb(186, 122, 232)
+    let teal = rgb(102, 220, 200)
+    let slate = rgb(140, 165, 200)
+
+    // Line 1: func C5h() {
+    drawCodeLine(
+        ctx,
+        [
+            ("func ", purple),
+            ("C5h", teal),
+            ("() ", white),
+            ("{", slate)
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas * 0.62),
+        size: 150,
+        weight: .heavy,
+        design: .monospaced
+    )
+
+    // Line 2: indented — claude.run(5h)
+    drawCodeLine(
+        ctx,
+        [
+            ("  claude", claudeBright),
+            (".run", teal),
+            ("(", white),
+            ("5h", claude),
+            (")", white)
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas * 0.42),
+        size: 120,
+        weight: .semibold,
+        design: .monospaced
+    )
+
+    // Line 3: closing brace
+    drawCodeLine(
+        ctx,
+        [("}", slate)],
+        at: CGPoint(x: canvas * 0.30, y: canvas * 0.22),
+        size: 150,
+        weight: .heavy,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("21-function-decl.png"))
+    print("✓ 21-function-decl.png")
+}
+
+// MARK: - Round 3 contact sheet
+
+func renderContactSheetRound3() throws {
+    let cellSize: CGFloat = 360
+    let labelHeight: CGFloat = 70
+    let columns = 3
+    let rows = 3
+    let padding: CGFloat = 40
+    let sheetW = CGFloat(columns) * cellSize + CGFloat(columns + 1) * padding
+    let sheetH = CGFloat(rows) * (cellSize + labelHeight) + CGFloat(rows + 1) * padding + 80
+    let actualSize = max(sheetW, sheetH)
+    let ctx = makeContext(size: actualSize)
+
+    ctx.setFillColor(rgb(240, 242, 248))
+    ctx.fill(CGRect(x: 0, y: 0, width: actualSize, height: actualSize))
+
+    drawText(ctx, "C5h candidates · name + coding theme",
+             at: CGPoint(x: actualSize / 2, y: actualSize - 50),
+             size: 38, weight: .bold,
+             color: rgb(28, 36, 60),
+             design: .default)
+
+    let entries: [(String, String)] = [
+        ("15-terminal-c5h.png", "15. Terminal > C5h"),
+        ("16-jsx-component.png", "16. JSX <C5h />"),
+        ("17-json-braces.png", "17. { C5h }"),
+        ("18-block-comment-c5h.png", "18. /* C5h */"),
+        ("19-file-tab.png", "19. C5h.swift tab"),
+        ("20-swift-attribute.png", "20. @C5h"),
+        ("21-function-decl.png", "21. func C5h()")
+    ]
+
+    for (i, (filename, label)) in entries.enumerated() {
+        let row = i / columns
+        let col = i % columns
+        let x = padding + CGFloat(col) * (cellSize + padding)
+        let yTop = actualSize - 100 - padding - CGFloat(row + 1) * (cellSize + labelHeight) - CGFloat(row) * padding
+        let cellRect = CGRect(x: x, y: yTop + labelHeight, width: cellSize, height: cellSize)
+
+        let iconURL = outRoot.appendingPathComponent(filename)
+        if let provider = CGDataProvider(url: iconURL as CFURL),
+           let cg = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25))
+            ctx.draw(cg, in: cellRect)
+            ctx.restoreGState()
+        }
+        drawText(ctx, label,
+                 at: CGPoint(x: x + cellSize / 2, y: yTop + labelHeight / 2),
+                 size: 26, weight: .semibold,
+                 color: rgb(28, 36, 60),
+                 design: .default)
+    }
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("00-contact-sheet-round3.png"))
+    print("✓ 00-contact-sheet-round3.png")
+}
+
 // MARK: - Run
 
 do {
@@ -1211,6 +1603,15 @@ do {
     try renderBlockComment()
     try renderCaretPlay()
     try renderContactSheetRound2()
+    // Round 3 — C5h name + coding theme
+    try renderTerminalC5h()
+    try renderJSXComponent()
+    try renderJSONBraces()
+    try renderBlockCommentC5h()
+    try renderFileTab()
+    try renderSwiftAttribute()
+    try renderFunctionDecl()
+    try renderContactSheetRound3()
     print("\nAll icons rendered to \(outRoot.path)")
 } catch {
     print("Error: \(error)")
