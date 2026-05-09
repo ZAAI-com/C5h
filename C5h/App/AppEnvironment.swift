@@ -57,6 +57,11 @@ final class AppEnvironment {
             self.helperHeartbeatRepository = GRDBHelperHeartbeatRepository(database: db)
 
             self.providers = try await providerRepo.fetchAll()
+
+            #if DEBUG
+            await LogsFixtureLoader.loadIfNeeded(repository: cmdRepo, appPaths: paths)
+            #endif
+
             self.loadState = .ready
         } catch {
             self.loadState = .failed(String(describing: error))

@@ -10,6 +10,12 @@
 		0A0012010000000000000005 /* AppPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011030000000000000001 /* AppPaths.swift */; };
 		0A0080010000000000000002 /* C5hCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080010000000000000001 /* C5hCore */; };
 		0A0080020000000000000002 /* C5hStore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080020000000000000001 /* C5hStore */; };
+		0A0012020401000000000001 /* LogsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000001 /* LogsViewModel.swift */; };
+		0A0012020401000000000002 /* LogFiltersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000002 /* LogFiltersView.swift */; };
+		0A0012020401000000000003 /* CommandRunTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000003 /* CommandRunTable.swift */; };
+		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
+		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
+		0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000001 /* LogsFixtureLoader.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
 		0A0012010000000000000003 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000003 /* AppEnvironment.swift */; };
@@ -41,6 +47,12 @@
 		0A0011020200000000000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		0A0011020300000000000001 /* DayCalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarScreen.swift; sourceTree = "<group>"; };
 		0A0011020400000000000001 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		0A0011020401000000000001 /* LogsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsViewModel.swift; sourceTree = "<group>"; };
+		0A0011020401000000000002 /* LogFiltersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogFiltersView.swift; sourceTree = "<group>"; };
+		0A0011020401000000000003 /* CommandRunTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunTable.swift; sourceTree = "<group>"; };
+		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
+		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
+		0A0011040000000000000001 /* LogsFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsFixtureLoader.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0A0011020700000000000001 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
@@ -107,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				0A0010040100000000000001 /* Paths */,
+				0A0010040200000000000001 /* DevSeed */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -174,8 +187,21 @@
 			isa = PBXGroup;
 			children = (
 				0A0011020400000000000001 /* LogsView.swift */,
+				0A0011020401000000000001 /* LogsViewModel.swift */,
+				0A0011020401000000000002 /* LogFiltersView.swift */,
+				0A0011020401000000000003 /* CommandRunTable.swift */,
+				0A0011020401000000000004 /* CommandRunDetailView.swift */,
+				0A0011020401000000000005 /* OutputLogView.swift */,
 			);
 			path = Logs;
+			sourceTree = "<group>";
+		};
+		0A0010040200000000000001 /* DevSeed */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011040000000000000001 /* LogsFixtureLoader.swift */,
+			);
+			path = DevSeed;
 			sourceTree = "<group>";
 		};
 		0A0010020500000000000001 /* Providers */ = {
@@ -308,6 +334,12 @@
 				0A0012020700000000000003 /* C5hSpacing.swift in Sources */,
 				0A0012020700000000000004 /* C5hTypography.swift in Sources */,
 				0A0012010000000000000005 /* AppPaths.swift in Sources */,
+				0A0012020401000000000001 /* LogsViewModel.swift in Sources */,
+				0A0012020401000000000002 /* LogFiltersView.swift in Sources */,
+				0A0012020401000000000003 /* CommandRunTable.swift in Sources */,
+				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
+				0A0012020401000000000005 /* OutputLogView.swift in Sources */,
+				0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
