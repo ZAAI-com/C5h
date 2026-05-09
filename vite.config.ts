@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const devPort = Number.parseInt(process.env.VITE_DEV_PORT ?? "1420", 10);
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
@@ -55,7 +57,7 @@ export default defineConfig(async () => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    port: Number.isNaN(devPort) ? 1420 : devPort,
     strictPort: true,
     host: host || false,
     hmr: host

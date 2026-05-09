@@ -6,12 +6,37 @@
 use crate::services::output_parser::{
     parse_claude_output, parse_codex_output, parse_gemini_output, UsageInfo,
 };
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
 use tokio::time::{timeout, Duration};
 
 /// Maximum time to wait for a CLI command to complete
 const CLI_TIMEOUT_SECS: u64 = 30;
+
+/// Per-subprocess overrides applied only for this poll invocation.
+///
+/// Used to scope Gemini's `GEMINI_CLI_TRUST_WORKSPACE=true` and an app-owned
+/// working directory to the polling subprocess without persisting trust to disk
+/// or affecting other providers.
+#[derive(Debug, Default, Clone)]
+pub struct PollOverrides {
+    /// Working directory for the subprocess. None = inherit parent cwd.
+    pub workdir: Option<PathBuf>,
+    /// Extra env vars to set on the subprocess only.
+    pub extra_env: Vec<(String, String)>,
+}
+
+/// Build overrides for Gemini polling: session-only trust + app-owned workdir.
+pub fn gemini_overrides(workdir: PathBuf) -> PollOverrides {
+    PollOverrides {
+        workdir: Some(workdir),
+        extra_env: vec![(
+            "GEMINI_CLI_TRUST_WORKSPACE".to_string(),
+            "true".to_string(),
+        )],
+    }
+}
 
 /// Poll a single account's CLI tool for usage information.
 ///
@@ -20,11 +45,21 @@ pub async fn poll_account(
     cli_command: &str,
     tool_type: &str,
 ) -> Result<UsageInfo, String> {
+    poll_account_with_overrides(cli_command, tool_type, PollOverrides::default()).await
+}
+
+/// Like `poll_account`, but allows the caller to inject per-subprocess
+/// environment variables and a working directory (e.g. for Gemini trust).
+pub async fn poll_account_with_overrides(
+    cli_command: &str,
+    tool_type: &str,
+    overrides: PollOverrides,
+) -> Result<UsageInfo, String> {
     let args = get_poll_args(tool_type)?;
 
     let cmd_result = timeout(
         Duration::from_secs(CLI_TIMEOUT_SECS),
-        run_cli_command(cli_command, &args),
+        run_cli_command(cli_command, &args, &overrides),
     )
     .await
     .map_err(|_| format!("CLI command timed out after {}s", CLI_TIMEOUT_SECS))?;
@@ -54,11 +89,22 @@ fn get_poll_args(tool_type: &str) -> Result<Vec<String>, String> {
 }
 
 /// Run a CLI command and capture its stdout + stderr.
-async fn run_cli_command(command: &str, args: &[String]) -> Result<String, String> {
-    let output: std::process::Output = Command::new(command)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+async fn run_cli_command(
+    command: &str,
+    args: &[String],
+    overrides: &PollOverrides,
+) -> Result<String, String> {
+    let mut cmd = Command::new(command);
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    if let Some(dir) = overrides.workdir.as_ref() {
+        cmd.current_dir(dir);
+    }
+    for (k, v) in &overrides.extra_env {
+        cmd.env(k, v);
+    }
+
+    let output: std::process::Output = cmd
         .output()
         .await
         .map_err(|e| format!("Failed to run '{}': {}", command, e))?;
@@ -189,4 +235,55 @@ mod tests {
         assert!(err.to_lowercase().contains("failed to run") || err.to_lowercase().contains("no such"));
     }
 
+    #[test]
+    fn gemini_overrides_sets_trust_env_and_workdir() {
+        let dir = PathBuf::from("/tmp/gemini-poll-x");
+        let o = gemini_overrides(dir.clone());
+        assert_eq!(o.workdir.as_deref(), Some(dir.as_path()));
+        assert!(o
+            .extra_env
+            .iter()
+            .any(|(k, v)| k == "GEMINI_CLI_TRUST_WORKSPACE" && v == "true"));
+    }
+
+    #[test]
+    fn poll_overrides_default_is_empty() {
+        let o = PollOverrides::default();
+        assert!(o.workdir.is_none());
+        assert!(o.extra_env.is_empty());
+    }
+
+    #[tokio::test]
+    async fn run_cli_command_applies_workdir() {
+        let tmp = std::env::temp_dir();
+        let overrides = PollOverrides {
+            workdir: Some(tmp.clone()),
+            extra_env: vec![],
+        };
+        let out = run_cli_command("/bin/pwd", &[], &overrides).await.unwrap();
+        // Resolve symlinks (e.g. /tmp -> /private/tmp on macOS) so we compare canonical paths.
+        let expected = std::fs::canonicalize(&tmp).unwrap();
+        let actual_line = out.lines().next().unwrap_or("").trim();
+        let actual = std::fs::canonicalize(actual_line).unwrap();
+        assert_eq!(actual, expected, "pwd output: {out}");
+    }
+
+    #[tokio::test]
+    async fn run_cli_command_applies_env() {
+        let overrides = PollOverrides {
+            workdir: None,
+            extra_env: vec![(
+                "GEMINI_CLI_TRUST_WORKSPACE".to_string(),
+                "true".to_string(),
+            )],
+        };
+        let out = run_cli_command(
+            "/bin/sh",
+            &["-c".to_string(), "echo $GEMINI_CLI_TRUST_WORKSPACE".to_string()],
+            &overrides,
+        )
+        .await
+        .unwrap();
+        assert!(out.contains("true"), "env output: {out}");
+    }
 }

@@ -134,6 +134,18 @@ pub struct ScheduledTrigger {
     pub status: String,
     pub plist_path: Option<String>,
     pub created_at: Option<String>,
+    /// Exit code from the wrapper-script run (None until launchd has fired).
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    /// UTC timestamp the wrapper started executing the CLI.
+    #[serde(default)]
+    pub started_at: Option<String>,
+    /// UTC timestamp the wrapper finished.
+    #[serde(default)]
+    pub finished_at: Option<String>,
+    /// Last 4KB of stderr from the CLI invocation, truncated for display.
+    #[serde(default)]
+    pub stderr_tail: Option<String>,
 }
 
 /// Input for creating a new scheduled trigger

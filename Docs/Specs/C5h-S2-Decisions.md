@@ -109,13 +109,20 @@ This document contains all architecture decisions for the C5h app.
    - More development effort
    - Best when you need something very specific
 
-**Decision: ilamy Calendar**
-- Native shadcn/ui + Tailwind integration matches our UI stack perfectly
-- Zero dependencies - ideal for lightweight menu bar app
-- Headless architecture gives full control over 5h window styling
-- Excellent TypeScript support
-- Built-in dark mode and responsive design
-- Modern architecture aligned with current React patterns
+**Decision: Custom build (date-fns + CSS Grid)**
+
+The shipped implementation lives in `src-react/components/CalendarView.tsx` as a hand-rolled
+24×7 grid driven by `date-fns`. We chose this over ilamy Calendar (the original pick) for
+three reasons that only became clear during integration:
+
+- The view is read-mostly: window blocks render from DB, the only interactive surface is
+  click-to-schedule. A full event-management calendar library is overhead we don't use.
+- The tray-driven popover and the calendar share styling primitives (account colors,
+  active-window highlighting) — owning the grid keeps these in one place.
+- Bundle weight stays minimal in a menu-bar app that runs 24/7.
+
+ilamy remains a reasonable choice if we later add drag-to-resize, recurring events, or a
+month/year view; revisit then.
 
 ---
 
@@ -216,7 +223,7 @@ Build → Sign → Notarize → .dmg → GitHub Release → Homebrew PR
 ├─────────────────────────────────────────┤
 │  Frontend: React + TypeScript           │
 │  UI Kit: shadcn/ui + Tailwind           │
-│  Calendar: ilamy Calendar               │
+│  Calendar: custom grid (date-fns)       │
 │  Charts: Recharts                       │
 ├─────────────────────────────────────────┤
 │  Framework: Tauri 2.0                   │

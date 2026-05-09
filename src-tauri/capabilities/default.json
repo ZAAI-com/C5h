@@ -5,11 +5,20 @@
   "windows": ["main", "popover"],
   "permissions": [
     "core:default",
+    "core:window:allow-hide",
     "opener:default",
     "notification:default",
     "notification:allow-notify",
     "notification:allow-request-permission",
     "positioner:default",
-    "positioner:allow-move-window"
+    "positioner:allow-move-window",
+    "autostart:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered"
   ]
 }

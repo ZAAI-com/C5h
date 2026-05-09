@@ -107,7 +107,7 @@ jobs:
 
             ### Homebrew
             ```bash
-            brew install --cask zaai/tap/c5h
+            brew install --cask zaai-com/tap/c5h
             ```
           releaseDraft: true
           prerelease: false

@@ -75,10 +75,56 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), String> {
 }
 
 async fn run_post_migrations(pool: &SqlitePool) -> Result<(), String> {
+    add_missing_columns(pool).await?;
     repair_duplicate_active_windows(pool).await?;
     ensure_active_window_unique_index(pool).await?;
     normalize_future_schedules(pool).await?;
     reset_installed_future_schedules(pool).await?;
+    Ok(())
+}
+
+/// Idempotently add columns that were introduced after the initial schema.
+/// SQLite has no `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, so we read
+/// `pragma_table_info` and only add columns that are missing.
+async fn add_missing_columns(pool: &SqlitePool) -> Result<(), String> {
+    let needed = [
+        ("scheduled_triggers", "exit_code", "INTEGER"),
+        ("scheduled_triggers", "started_at", "TEXT"),
+        ("scheduled_triggers", "finished_at", "TEXT"),
+        ("scheduled_triggers", "stderr_tail", "TEXT"),
+    ];
+
+    // Onboarding completion timestamp lives in the settings k/v table, not as
+    // a column. Seed an empty marker so reads return None until the user
+    // finishes the flow. Idempotent via INSERT OR IGNORE.
+    sqlx::query(
+        "INSERT OR IGNORE INTO settings (key, value)
+         VALUES ('onboarding_completed_at', '')",
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("seed onboarding_completed_at: {}", e))?;
+
+    for (table, column, ty) in needed {
+        let existing: Vec<String> =
+            sqlx::query_scalar(&format!("SELECT name FROM pragma_table_info('{}')", table))
+                .fetch_all(pool)
+                .await
+                .map_err(|e| format!("PRAGMA table_info({}) failed: {}", table, e))?;
+
+        if existing.iter().any(|name| name == column) {
+            continue;
+        }
+
+        sqlx::query(&format!(
+            "ALTER TABLE {} ADD COLUMN {} {}",
+            table, column, ty
+        ))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to add column {}.{}: {}", table, column, e))?;
+    }
+
     Ok(())
 }
 
@@ -236,6 +282,9 @@ pub async fn init_test_pool() -> SqlitePool {
     run_migrations(&pool)
         .await
         .expect("Failed to run migrations on test pool");
+    run_post_migrations(&pool)
+        .await
+        .expect("Failed to run post-migrations on test pool");
 
     pool
 }
@@ -305,6 +354,14 @@ fn get_migration_sql() -> String {
                     ('notify_trigger_status', 'true'),
                     ('notify_weekly_summary', 'true'),
                     ('poll_interval_minutes', '15');
+
+                -- Insights the user has dismissed. Key encodes
+                -- (kind, account_id, weekday, hour, minute) so the same habit
+                -- recomputed later still matches and stays hidden.
+                CREATE TABLE IF NOT EXISTS dismissed_insights (
+                    insight_key TEXT PRIMARY KEY,
+                    dismissed_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
 
                 -- Create indexes for performance
                 CREATE INDEX IF NOT EXISTS idx_windows_account_id ON windows(account_id);

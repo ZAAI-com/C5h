@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "setup": "./Toolkit/Conductor/setup.sh",
+    "run": "./Toolkit/Conductor/run.sh"
+  },
+  "runScriptMode": "nonconcurrent",
+  "enterpriseDataPrivacy": false
+}

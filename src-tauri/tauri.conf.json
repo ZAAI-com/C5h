@@ -54,6 +54,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": ["resources/c5h-trigger.sh"],
     "macOS": {
       "minimumSystemVersion": "12.0"
     }
