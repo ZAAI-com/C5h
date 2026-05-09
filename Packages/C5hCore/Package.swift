@@ -15,7 +15,8 @@ let package = Package(
         .testTarget(
             name: "C5hCoreTests",
             dependencies: ["C5hCore"],
-            path: "Tests/C5hCoreTests"
+            path: "Tests/C5hCoreTests",
+            resources: [.copy("Resources/fake-cli.sh")]
         )
     ]
 )
