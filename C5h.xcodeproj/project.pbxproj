@@ -46,6 +46,7 @@
 		0A0012020100000000000002 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000002 /* MainWindowView.swift */; };
 		0A0012020100000000000003 /* NavbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000003 /* NavbarView.swift */; };
 		0A0012020200000000000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000001 /* DashboardView.swift */; };
+		0A0012020200000000000002 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000002 /* DashboardViewModel.swift */; };
 		0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020300000000000001 /* DayCalendarScreen.swift */; };
 		0A0012020400000000000001 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020400000000000001 /* LogsView.swift */; };
 		0A0012020500000000000001 /* ProvidersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020500000000000001 /* ProvidersView.swift */; };
@@ -67,6 +68,7 @@
 		0A0011020100000000000002 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		0A0011020100000000000003 /* NavbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavbarView.swift; sourceTree = "<group>"; };
 		0A0011020200000000000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		0A0011020200000000000002 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
 		0A0011020300000000000001 /* DayCalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarScreen.swift; sourceTree = "<group>"; };
 		0A0011020400000000000001 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000001 /* LogsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsViewModel.swift; sourceTree = "<group>"; };
@@ -238,6 +240,7 @@
 			isa = PBXGroup;
 			children = (
 				0A0011020200000000000001 /* DashboardView.swift */,
+				0A0011020200000000000002 /* DashboardViewModel.swift */,
 			);
 			path = Dashboard;
 			sourceTree = "<group>";
@@ -407,6 +410,7 @@
 				0A0012020100000000000002 /* MainWindowView.swift in Sources */,
 				0A0012020100000000000003 /* NavbarView.swift in Sources */,
 				0A0012020200000000000001 /* DashboardView.swift in Sources */,
+				0A0012020200000000000002 /* DashboardViewModel.swift in Sources */,
 				0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */,
 				0A0012020400000000000001 /* LogsView.swift in Sources */,
 				0A0012020500000000000001 /* ProvidersView.swift in Sources */,
