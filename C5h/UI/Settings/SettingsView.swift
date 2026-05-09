@@ -84,8 +84,60 @@ struct SettingsView: View {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
             }
+            Section("Logs maintenance") {
+                Button("Sweep logs older than 30 days") {
+                    Task { await sweepLogs(policy: .thirtyDays) }
+                }
+                Button("Sweep logs older than 7 days") {
+                    Task { await sweepLogs(policy: .sevenDays) }
+                }
+                if let result = lastSweepResult {
+                    Text("Removed \(result.removedFileCount) files (\(result.freedBytes) bytes)")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(C5hColors.fgSecondary)
+                }
+            }
+            Section("Diagnostics") {
+                Button("Export debug bundle…") {
+                    Task { await exportDebugBundle() }
+                }
+                if let path = lastExportedBundlePath {
+                    Text("Saved to \(path)")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(C5hColors.fgSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
         }
         .padding(C5hSpacing.md)
+    }
+
+    @State private var lastSweepResult: LogRetentionResult?
+    @State private var lastExportedBundlePath: String?
+
+    private func sweepLogs(policy: LogRetentionPolicy) async {
+        guard let dir = appEnv.paths?.commandRunsDirectory else { return }
+        do {
+            let result = try LogRetentionSweeper.sweep(directory: dir, policy: policy)
+            lastSweepResult = result
+        } catch {
+            lastSweepResult = nil
+        }
+    }
+
+    private func exportDebugBundle() async {
+        guard let paths = appEnv.paths else { return }
+        let exporter = DebugBundleExporter(appPaths: paths)
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("c5h-debug-\(Int(Date().timeIntervalSince1970)).zip")
+        do {
+            try await exporter.export(to: dest)
+            lastExportedBundlePath = dest.path
+            NSWorkspace.shared.activateFileViewerSelecting([dest])
+        } catch {
+            lastExportedBundlePath = "Export failed: \(error.localizedDescription)"
+        }
     }
 
     private func reloadHeartbeat() async {
