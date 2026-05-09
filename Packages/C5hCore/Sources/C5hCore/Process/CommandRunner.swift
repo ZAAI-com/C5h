@@ -1,7 +1,13 @@
 import Foundation
 
 public protocol CommandRunning: Sendable {
-    func run(_ spec: CommandSpec) async throws -> CommandRun
+    func run(_ spec: CommandSpec, runID: UUID) async throws -> CommandRun
+}
+
+public extension CommandRunning {
+    func run(_ spec: CommandSpec) async throws -> CommandRun {
+        try await run(spec, runID: UUID())
+    }
 }
 
 public actor CommandRunner: CommandRunning {
@@ -31,8 +37,8 @@ public actor CommandRunner: CommandRunning {
         self.onComplete = onComplete
     }
 
-    public func run(_ spec: CommandSpec) async throws -> CommandRun {
-        let id = UUID()
+    public func run(_ spec: CommandSpec, runID: UUID = UUID()) async throws -> CommandRun {
+        let id = runID
         let startedAt = Date()
         let logPaths = try logWriter.makeLogPaths(for: id, at: startedAt)
 

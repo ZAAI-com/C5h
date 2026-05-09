@@ -6,6 +6,7 @@ struct DayCalendarScreen: View {
     let date: Date
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DayCalendarViewModel?
+    @State private var coordinator: ManualTriggerCoordinator?
     @State private var now: Date = .now
     private let layout = CalendarLayoutConfig()
 
@@ -31,6 +32,14 @@ struct DayCalendarScreen: View {
                 )
                 viewModel = vm
                 await vm.reload()
+            }
+            if coordinator == nil,
+               let registry = appEnv.providerRegistry,
+               let actualRepo = appEnv.actualWindowRepository {
+                coordinator = ManualTriggerCoordinator(
+                    registry: registry,
+                    actualWindowRepository: actualRepo
+                )
             }
         }
         .task {
@@ -76,6 +85,21 @@ struct DayCalendarScreen: View {
                 onDelete: { id in try await viewModel.delete(id: id) }
             )
         }
+        .sheet(isPresented: $bound.startNowPresented) {
+            StartProviderNowSheet(
+                defaultProviderID: viewModel.startNowDefaultProvider
+            ) { providerID, prompt, projectPath in
+                guard let coordinator else {
+                    throw C5hError.providerNotConfigured("trigger coordinator")
+                }
+                _ = try await coordinator.startNow(
+                    providerID: providerID,
+                    prompt: prompt,
+                    projectPath: projectPath
+                )
+                await viewModel.reload()
+            }
+        }
     }
 
     private func toolbar(viewModel: DayCalendarViewModel) -> some View {
@@ -99,6 +123,15 @@ struct DayCalendarScreen: View {
                 viewModel.presentNewDraft()
             } label: {
                 Label("Create planned window", systemImage: "plus.circle")
+            }
+            Menu {
+                ForEach(ProviderID.allCases) { id in
+                    Button("Start \(id.displayName) now") {
+                        viewModel.presentStartNow(provider: id)
+                    }
+                }
+            } label: {
+                Label("Start now", systemImage: "play.circle.fill")
             }
             if let err = viewModel.lastError {
                 Text(err).foregroundStyle(.red).font(C5hTypography.captionFont)

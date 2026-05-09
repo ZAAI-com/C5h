@@ -12,6 +12,8 @@ final class DayCalendarViewModel {
     var selection: CalendarSelection?
     var editingDraftPresented: Bool = false
     var editingExisting: PlannedWindow?
+    var startNowPresented: Bool = false
+    var startNowDefaultProvider: ProviderID = .claude
     var lastError: String?
 
     private let plannedRepository: any PlannedWindowRepository
@@ -59,6 +61,11 @@ final class DayCalendarViewModel {
     func presentNewDraft() {
         editingExisting = nil
         editingDraftPresented = true
+    }
+
+    func presentStartNow(provider: ProviderID) {
+        startNowDefaultProvider = provider
+        startNowPresented = true
     }
 
     func presentEdit(for window: PlannedWindow) {
