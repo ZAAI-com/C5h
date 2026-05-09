@@ -51,6 +51,6 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
-# Generic logs
-logs
+# Generic log files (use *.log; do NOT add a bare "logs" pattern — on
+# macOS APFS git's core.ignorecase=true makes it match C5h/UI/Logs/ too).
 *.log
