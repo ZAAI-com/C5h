@@ -21,11 +21,13 @@ struct DayCalendarScreen: View {
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actualRepo = appEnv.actualWindowRepository {
+               let actualRepo = appEnv.actualWindowRepository,
+               let scheduledRepo = appEnv.scheduledPromptRepository {
                 let vm = DayCalendarViewModel(
                     date: date,
                     plannedRepository: plannedRepo,
-                    actualRepository: actualRepo
+                    actualRepository: actualRepo,
+                    scheduledRepository: scheduledRepo
                 )
                 viewModel = vm
                 await vm.reload()
@@ -44,10 +46,35 @@ struct DayCalendarScreen: View {
         VStack(spacing: 0) {
             toolbar(viewModel: viewModel)
             Divider()
-            DayCalendarView(viewModel: viewModel, layout: layout, now: now)
+            DayCalendarView(
+                viewModel: viewModel,
+                layout: layout,
+                now: now,
+                onSelectPlanned: { viewModel.selection = .planned($0) },
+                onSelectActual: { viewModel.selection = .actual($0) }
+            )
         }
         .sheet(item: $bound.selection) { selection in
-            WindowInspectorView(selection: selection)
+            WindowInspectorView(
+                selection: selection,
+                onEdit: { window in
+                    viewModel.selection = nil
+                    viewModel.presentEdit(for: window)
+                },
+                onDelete: { id in
+                    viewModel.selection = nil
+                    Task { try? await viewModel.delete(id: id) }
+                }
+            )
+        }
+        .sheet(isPresented: $bound.editingDraftPresented) {
+            PlannedWindowEditorSheet(
+                editing: viewModel.editingExisting,
+                defaultStart: viewModel.date.atHour(9),
+                allWindows: viewModel.planned,
+                onSave: { draft in try await viewModel.save(draft: draft) },
+                onDelete: { id in try await viewModel.delete(id: id) }
+            )
         }
     }
 
@@ -68,6 +95,11 @@ struct DayCalendarScreen: View {
                 Image(systemName: "chevron.right")
             }
             Spacer()
+            Button {
+                viewModel.presentNewDraft()
+            } label: {
+                Label("Create planned window", systemImage: "plus.circle")
+            }
             if let err = viewModel.lastError {
                 Text(err).foregroundStyle(.red).font(C5hTypography.captionFont)
             }
@@ -90,5 +122,11 @@ struct WeekCalendarScreen: View {
             systemImage: AppTab.calendar.systemImage,
             subtitle: "7-day overview by provider — coming in M10."
         )
+    }
+}
+
+private extension Date {
+    func atHour(_ hour: Int) -> Date {
+        Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: self) ?? self
     }
 }

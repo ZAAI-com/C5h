@@ -15,18 +15,53 @@ enum CalendarSelection: Hashable, Identifiable {
 
 struct WindowInspectorView: View {
     let selection: CalendarSelection
+    let onEdit: ((PlannedWindow) -> Void)?
+    let onDelete: ((UUID) -> Void)?
+    @Environment(\.dismiss) private var dismiss
+
+    init(
+        selection: CalendarSelection,
+        onEdit: ((PlannedWindow) -> Void)? = nil,
+        onDelete: ((UUID) -> Void)? = nil
+    ) {
+        self.selection = selection
+        self.onEdit = onEdit
+        self.onDelete = onDelete
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: C5hSpacing.md) {
             switch selection {
             case .planned(let window):
                 plannedContent(window)
+                actions(for: window)
             case .actual(let window):
                 actualContent(window)
+                HStack {
+                    Spacer()
+                    Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+                }
             }
         }
         .frame(width: 360)
         .padding(C5hSpacing.lg)
+    }
+
+    @ViewBuilder
+    private func actions(for window: PlannedWindow) -> some View {
+        HStack {
+            if let onDelete {
+                Button(role: .destructive) { onDelete(window.id) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            Spacer()
+            Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+            if let onEdit {
+                Button("Edit…") { onEdit(window) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
     }
 
     @ViewBuilder

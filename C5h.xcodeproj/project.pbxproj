@@ -33,6 +33,7 @@
 		0A0012020301000000000008 /* WindowInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000008 /* WindowInspectorView.swift */; };
 		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
 		0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000002 /* CalendarFixtureLoader.swift */; };
+		0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
 		0A0012010000000000000003 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000003 /* AppEnvironment.swift */; };
@@ -87,6 +88,7 @@
 		0A0011020301000000000008 /* WindowInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInspectorView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
 		0A0011040000000000000002 /* CalendarFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFixtureLoader.swift; sourceTree = "<group>"; };
+		0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowEditorSheet.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0A0011020700000000000001 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
@@ -234,6 +236,7 @@
 				0A0011020301000000000007 /* ActualWindowBlockView.swift */,
 				0A0011020301000000000008 /* WindowInspectorView.swift */,
 				0A0011020301000000000009 /* CalendarLayoutConfig.swift */,
+				0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */,
 			);
 			path = Calendar;
 			sourceTree = "<group>";
@@ -416,6 +419,7 @@
 				0A0012020301000000000008 /* WindowInspectorView.swift in Sources */,
 				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
 				0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */,
+				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

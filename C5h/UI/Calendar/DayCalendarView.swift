@@ -5,6 +5,8 @@ struct DayCalendarView: View {
     let viewModel: DayCalendarViewModel
     let layout: CalendarLayoutConfig
     let now: Date
+    let onSelectPlanned: (PlannedWindow) -> Void
+    let onSelectActual: (ActualWindow) -> Void
 
     var body: some View {
         GeometryReader { proxy in
@@ -28,8 +30,8 @@ struct DayCalendarView: View {
                                 now: now,
                                 layout: layout,
                                 columnWidth: columnWidth,
-                                onSelectPlanned: { viewModel.selection = .planned($0) },
-                                onSelectActual: { viewModel.selection = .actual($0) }
+                                onSelectPlanned: onSelectPlanned,
+                                onSelectActual: onSelectActual
                             )
                             .overlay(alignment: .top) {
                                 providerHeader(providerID: providerID)
