@@ -1,16 +1,80 @@
 import SwiftUI
+import UniformTypeIdentifiers
+import C5hCore
+import C5hStore
 
 struct ProvidersView: View {
-    var body: some View {
-        PlaceholderScreen(
-            title: "Providers",
-            systemImage: AppTab.providers.systemImage,
-            subtitle: "Detect Claude Code and OpenAI Codex CLIs and configure paths."
-        )
-    }
-}
+    @Environment(AppEnvironment.self) private var appEnv
+    @State private var viewModel: ProvidersViewModel?
+    @State private var pickingPathFor: ProviderID?
 
-#Preview {
-    ProvidersView()
-        .frame(width: 1100, height: 700)
+    var body: some View {
+        Group {
+            if let viewModel {
+                content(viewModel)
+            } else {
+                ProgressView("Initializing providers…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: ObjectIdentifier(appEnv)) {
+            if viewModel == nil,
+               let registry = appEnv.providerRegistry,
+               let settings = appEnv.appSettingsRepository {
+                let vm = ProvidersViewModel(registry: registry, appSettings: settings)
+                viewModel = vm
+                await vm.bootstrap()
+            }
+        }
+        .fileImporter(
+            isPresented: Binding(
+                get: { pickingPathFor != nil },
+                set: { if !$0 { pickingPathFor = nil } }
+            ),
+            allowedContentTypes: [.unixExecutable, .item],
+            allowsMultipleSelection: false
+        ) { result in
+            guard let id = pickingPathFor else { return }
+            pickingPathFor = nil
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    Task { await viewModel?.setCLIPath(id: id, url.path) }
+                }
+            case .failure:
+                break
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ viewModel: ProvidersViewModel) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: C5hSpacing.lg) {
+                if let err = viewModel.lastError {
+                    Text(err)
+                        .foregroundStyle(.red)
+                        .font(C5hTypography.captionFont)
+                }
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
+                    spacing: C5hSpacing.lg
+                ) {
+                    ForEach(ProviderID.allCases) { id in
+                        ProviderCardView(
+                            id: id,
+                            status: viewModel.statuses[id],
+                            configuredPath: viewModel.configuredPaths[id] ?? "",
+                            isLoading: viewModel.loadingProviders.contains(id),
+                            onDetect: { Task { await viewModel.detect(id: id) } },
+                            onTest: { Task { await viewModel.runTestCommand(id: id) } },
+                            onChoosePath: { pickingPathFor = id },
+                            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } }
+                        )
+                    }
+                }
+            }
+            .padding(C5hSpacing.xl)
+        }
+    }
 }

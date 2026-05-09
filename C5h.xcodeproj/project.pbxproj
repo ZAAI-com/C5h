@@ -16,6 +16,13 @@
 		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
 		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
 		0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000001 /* LogsFixtureLoader.swift */; };
+		0A0012050000000000000001 /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000001 /* ProviderRegistry.swift */; };
+		0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */; };
+		0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000003 /* ClaudeProviderAdapter.swift */; };
+		0A0012050000000000000004 /* CodexProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000004 /* CodexProviderAdapter.swift */; };
+		0A0012020501000000000001 /* ProvidersViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000001 /* ProvidersViewModel.swift */; };
+		0A0012020501000000000002 /* ProviderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000002 /* ProviderCardView.swift */; };
+		0A0012020501000000000003 /* ProviderStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000003 /* ProviderStatusBadge.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
 		0A0012010000000000000003 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000003 /* AppEnvironment.swift */; };
@@ -53,6 +60,13 @@
 		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
 		0A0011040000000000000001 /* LogsFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsFixtureLoader.swift; sourceTree = "<group>"; };
+		0A0011050000000000000001 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
+		0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIBackedProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011050000000000000003 /* ClaudeProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011050000000000000004 /* CodexProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011020501000000000001 /* ProvidersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersViewModel.swift; sourceTree = "<group>"; };
+		0A0011020501000000000002 /* ProviderCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderCardView.swift; sourceTree = "<group>"; };
+		0A0011020501000000000003 /* ProviderStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderStatusBadge.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0A0011020700000000000001 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
@@ -120,8 +134,20 @@
 			children = (
 				0A0010040100000000000001 /* Paths */,
 				0A0010040200000000000001 /* DevSeed */,
+				0A0010040300000000000001 /* Providers */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		0A0010040300000000000001 /* Providers */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011050000000000000001 /* ProviderRegistry.swift */,
+				0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */,
+				0A0011050000000000000003 /* ClaudeProviderAdapter.swift */,
+				0A0011050000000000000004 /* CodexProviderAdapter.swift */,
+			);
+			path = Providers;
 			sourceTree = "<group>";
 		};
 		0A0010040100000000000001 /* Paths */ = {
@@ -208,6 +234,9 @@
 			isa = PBXGroup;
 			children = (
 				0A0011020500000000000001 /* ProvidersView.swift */,
+				0A0011020501000000000001 /* ProvidersViewModel.swift */,
+				0A0011020501000000000002 /* ProviderCardView.swift */,
+				0A0011020501000000000003 /* ProviderStatusBadge.swift */,
 			);
 			path = Providers;
 			sourceTree = "<group>";
@@ -340,6 +369,13 @@
 				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
 				0A0012020401000000000005 /* OutputLogView.swift in Sources */,
 				0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */,
+				0A0012050000000000000001 /* ProviderRegistry.swift in Sources */,
+				0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */,
+				0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */,
+				0A0012050000000000000004 /* CodexProviderAdapter.swift in Sources */,
+				0A0012020501000000000001 /* ProvidersViewModel.swift in Sources */,
+				0A0012020501000000000002 /* ProviderCardView.swift in Sources */,
+				0A0012020501000000000003 /* ProviderStatusBadge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

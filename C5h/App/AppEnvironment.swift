@@ -29,6 +29,7 @@ final class AppEnvironment {
 
     private(set) var cliPathResolver: (any CLIPathResolving)?
     private(set) var commandRunner: (any CommandRunning)?
+    private(set) var providerRegistry: ProviderRegistry?
 
     init() {
         Task { await self.bootstrap() }
@@ -61,13 +62,21 @@ final class AppEnvironment {
 
             self.providers = try await providerRepo.fetchAll()
 
-            self.cliPathResolver = DefaultCLIPathResolver()
+            let resolver = DefaultCLIPathResolver()
+            self.cliPathResolver = resolver
             let logWriter = DiskLogWriter(baseDirectory: paths.commandRunsDirectory)
-            self.commandRunner = CommandRunner(
+            let runner = CommandRunner(
                 logWriter: logWriter,
                 onStart: { [cmdRepo] run in try await cmdRepo.create(run) },
                 onComplete: { [cmdRepo] run in try await cmdRepo.update(run) }
             )
+            self.commandRunner = runner
+            let settingsRepo = GRDBAppSettingsRepository(database: db)
+            self.appSettingsRepository = settingsRepo
+            self.providerRegistry = ProviderRegistry(adapters: [
+                ClaudeProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo),
+                CodexProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo)
+            ])
 
             #if DEBUG
             await LogsFixtureLoader.loadIfNeeded(repository: cmdRepo, appPaths: paths)
