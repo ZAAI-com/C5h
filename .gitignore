@@ -3,6 +3,8 @@
 .AppleDouble
 .LSOverride
 Icon?
+!Docs/Icons/
+!Docs/Icons/**
 ._*
 
 # Editor directories and files
