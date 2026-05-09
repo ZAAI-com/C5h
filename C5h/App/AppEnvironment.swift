@@ -80,6 +80,10 @@ final class AppEnvironment {
 
             #if DEBUG
             await LogsFixtureLoader.loadIfNeeded(repository: cmdRepo, appPaths: paths)
+            await CalendarFixtureLoader.loadIfNeeded(
+                plannedRepository: GRDBPlannedWindowRepository(database: db),
+                actualRepository: GRDBActualWindowRepository(database: db)
+            )
             #endif
 
             self.loadState = .ready

@@ -1,0 +1,44 @@
+import SwiftUI
+import C5hCore
+
+struct ActualWindowBlockView: View {
+    let window: ActualWindow
+    let columnWidth: CGFloat
+    let layout: CalendarLayoutConfig
+
+    var body: some View {
+        let height = CalendarPositioning.blockHeight(
+            durationSeconds: window.durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute
+        )
+        VStack(alignment: .leading, spacing: 2) {
+            Text(timeRange)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("Actual · \(window.source.rawValue)")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+            Text(window.confidence.rawValue)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.75))
+            Spacer(minLength: 0)
+        }
+        .padding(6)
+        .frame(width: columnWidth * layout.actualBlockWidthRatio, height: height, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
+                .fill(brandColor)
+        )
+    }
+
+    private var brandColor: Color {
+        window.providerID == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+    }
+
+    private var timeRange: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return "\(f.string(from: window.startAt))–\(f.string(from: window.endAt))"
+    }
+}
