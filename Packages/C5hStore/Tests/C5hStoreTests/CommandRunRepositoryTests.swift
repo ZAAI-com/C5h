@@ -1,0 +1,61 @@
+import Foundation
+import Testing
+@testable import C5hStore
+@testable import C5hCore
+
+@Suite("CommandRunRepository")
+struct CommandRunRepositoryTests {
+    @Test("Persist and fetch CommandRun including tool_version")
+    func persistRun() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        let run = CommandRun(
+            providerID: .claude,
+            runType: .triggerPrompt,
+            command: "/opt/homebrew/bin/claude",
+            argumentsJSON: "[\"-p\",\"hi\"]",
+            workingDirectory: "/tmp",
+            startedAt: Date(timeIntervalSince1970: 1_730_000_000),
+            status: .running,
+            toolVersion: "claude 1.2.3"
+        )
+        try await repo.create(run)
+
+        let fetched = try await repo.fetch(id: run.id)
+        #expect(fetched?.toolVersion == "claude 1.2.3")
+        #expect(fetched?.status == .running)
+        #expect(fetched?.workingDirectory == "/tmp")
+    }
+
+    @Test("Sweep stale running marks them cancelled")
+    func sweepStale() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        try await repo.create(CommandRun(
+            providerID: .claude,
+            runType: .triggerPrompt,
+            command: "claude",
+            argumentsJSON: "[]",
+            status: .running
+        ))
+        try await repo.create(CommandRun(
+            providerID: .codex,
+            runType: .testCommand,
+            command: "codex",
+            argumentsJSON: "[]",
+            status: .succeeded
+        ))
+
+        let swept = try await repo.sweepStaleRunning(message: "orphaned by app restart")
+        #expect(swept == 1)
+
+        let recent = try await repo.fetchRecent(limit: 10, filter: CommandRunFilter())
+        #expect(recent.count == 2)
+        #expect(recent.first { $0.status == .cancelled }?.errorMessage == "orphaned by app restart")
+        #expect(recent.contains { $0.status == .succeeded })
+    }
+}

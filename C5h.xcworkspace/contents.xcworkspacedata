@@ -4,4 +4,10 @@
    <FileRef
       location = "group:C5h.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:Packages/C5hCore">
+   </FileRef>
+   <FileRef
+      location = "group:Packages/C5hStore">
+   </FileRef>
 </Workspace>
