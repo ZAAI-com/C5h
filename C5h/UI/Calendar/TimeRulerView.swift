@@ -15,7 +15,7 @@ struct TimeRulerView: View {
             }
         }
         .frame(width: layout.timeRulerWidth, height: layout.dayHeight, alignment: .topLeading)
-        .background(C5hColors.background)
+        .background(.background)
     }
 
     private func label(for hour: Int) -> String {

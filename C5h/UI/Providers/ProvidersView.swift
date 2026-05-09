@@ -56,25 +56,46 @@ struct ProvidersView: View {
                         .foregroundStyle(.red)
                         .font(C5hTypography.captionFont)
                 }
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
-                    spacing: C5hSpacing.lg
-                ) {
-                    ForEach(ProviderID.allCases) { id in
-                        ProviderCardView(
-                            id: id,
-                            status: viewModel.statuses[id],
-                            configuredPath: viewModel.configuredPaths[id] ?? "",
-                            isLoading: viewModel.loadingProviders.contains(id),
-                            onDetect: { Task { await viewModel.detect(id: id) } },
-                            onTest: { Task { await viewModel.runTestCommand(id: id) } },
-                            onChoosePath: { pickingPathFor = id },
-                            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } }
-                        )
+                // LEVEL 3 — Provider cards are glass; group them so glass shares a sampling region.
+                GlassEffectContainer(spacing: C5hSpacing.lg) {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
+                        spacing: C5hSpacing.lg
+                    ) {
+                        ForEach(ProviderID.allCases) { id in
+                            ProviderCardView(
+                                id: id,
+                                status: viewModel.statuses[id],
+                                configuredPath: viewModel.configuredPaths[id] ?? "",
+                                isLoading: viewModel.loadingProviders.contains(id),
+                                onDetect: { Task { await viewModel.detect(id: id) } },
+                                onTest: { Task { await viewModel.runTestCommand(id: id) } },
+                                onChoosePath: { pickingPathFor = id },
+                                onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } }
+                            )
+                        }
                     }
                 }
             }
             .padding(C5hSpacing.xl)
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Text("Providers").font(.headline)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task {
+                        for id in ProviderID.allCases {
+                            await viewModel.detect(id: id)
+                        }
+                    }
+                } label: {
+                    Label("Refresh all", systemImage: "arrow.clockwise")
+                }
+                .help("Re-detect all providers")
+            }
         }
     }
 }

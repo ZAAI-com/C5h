@@ -29,7 +29,7 @@ struct PlannedWindowBlockView: View {
         .frame(width: columnWidth * layout.plannedBlockWidthRatio, height: height, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .fill(brandColor.opacity(0.18))
+                .fill(brandColor.opacity(0.22))
         )
         .overlay {
             RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
@@ -38,7 +38,7 @@ struct PlannedWindowBlockView: View {
     }
 
     private var brandColor: Color {
-        window.providerID == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+        C5hColors.tintForProvider(window.providerID)
     }
 
     private var timeRange: String {

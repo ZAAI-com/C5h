@@ -34,4 +34,8 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .settings: "gearshape"
         }
     }
+
+    /// Tabs shown in the in-window segmented navbar.
+    /// `.settings` is intentionally excluded — Settings opens via the macOS Settings scene (Cmd-,).
+    static let navTabs: [AppTab] = [.dashboard, .today, .tomorrow, .calendar, .logs, .providers]
 }

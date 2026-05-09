@@ -2,16 +2,41 @@ import SwiftUI
 
 struct MainWindowView: View {
     @State private var selectedTab: AppTab = .today
+    @State private var showOnboarding: Bool = false
+    @Environment(AppEnvironment.self) private var appEnv
 
     var body: some View {
-        VStack(spacing: 0) {
-            NavbarView(selectedTab: $selectedTab)
-            Divider()
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(C5hColors.background)
+        Group {
+            if showOnboarding {
+                OnboardingView(appSettings: appEnv.appSettingsRepository) {
+                    withAnimation(C5hAnimation.morph) {
+                        showOnboarding = false
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 1.02)))
+            } else {
+                content
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            Picker("Tab", selection: $selectedTab) {
+                                ForEach(AppTab.navTabs) { tab in
+                                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                        }
+                    }
+            }
         }
-        .frame(minWidth: 1100, minHeight: 720)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 980, minHeight: 640)
+        .task(id: ObjectIdentifier(appEnv)) {
+            guard let settings = appEnv.appSettingsRepository else { return }
+            if await OnboardingView.shouldShow(appSettings: settings) {
+                showOnboarding = true
+            }
+        }
     }
 
     @ViewBuilder

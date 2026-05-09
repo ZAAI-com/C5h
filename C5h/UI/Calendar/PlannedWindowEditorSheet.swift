@@ -45,83 +45,95 @@ struct PlannedWindowEditorSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: C5hSpacing.lg) {
-            Text(draft.existingID == nil ? "New planned window" : "Edit planned window")
-                .font(C5hTypography.titleFont)
+        NavigationStack {
             Form {
-                Picker("Provider", selection: $draft.providerID) {
-                    ForEach(ProviderID.allCases) { id in
-                        Text(id.displayName).tag(id)
-                    }
-                }
-                DatePicker("Start", selection: $draft.startAt)
-                Stepper(
-                    "Duration: \(durationLabel)",
-                    value: Binding(
-                        get: { draft.durationSeconds / 1800 },
-                        set: { draft.durationSeconds = $0 * 1800 }
-                    ),
-                    in: 1...24
-                )
-                Picker("Status", selection: $draft.status) {
-                    ForEach(PlannedWindowStatus.allCases, id: \.self) { st in
-                        Text(st.rawValue).tag(st)
-                    }
-                }
-                TextField(
-                    "Project path (optional)",
-                    text: Binding(
-                        get: { draft.projectPath ?? "" },
-                        set: { draft.projectPath = $0.isEmpty ? nil : $0 }
-                    )
-                )
-                Toggle("Schedule a prompt for this window", isOn: $draft.schedulePrompt)
-                if draft.schedulePrompt {
-                    TextEditor(text: $draft.promptBody)
-                        .frame(minHeight: 80)
-                        .overlay(alignment: .topLeading) {
-                            if draft.promptBody.isEmpty {
-                                Text("Prompt body…")
-                                    .foregroundStyle(C5hColors.fgTertiary)
-                                    .padding(.top, 8)
-                                    .padding(.leading, 4)
-                                    .allowsHitTesting(false)
-                            }
+                Section {
+                    Picker("Provider", selection: $draft.providerID) {
+                        ForEach(ProviderID.allCases) { id in
+                            Text(id.displayName).tag(id)
                         }
-                }
-            }
-            if conflictCount > 0 {
-                Label(
-                    "\(conflictCount) overlap\(conflictCount == 1 ? "" : "s") with existing \(draft.providerID.displayName) window\(conflictCount == 1 ? "" : "s")",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .foregroundStyle(.orange)
-                .font(C5hTypography.captionFont)
-            }
-            if let lastError {
-                Text(lastError).foregroundStyle(.red).font(C5hTypography.captionFont)
-            }
-            HStack {
-                if let id = draft.existingID, onDelete != nil {
-                    Button(role: .destructive) {
-                        Task { await delete(id: id) }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
                     }
-                    .keyboardShortcut(.delete)
+                    DatePicker("Start", selection: $draft.startAt)
+                    Stepper(
+                        "Duration: \(durationLabel)",
+                        value: Binding(
+                            get: { draft.durationSeconds / 1800 },
+                            set: { draft.durationSeconds = $0 * 1800 }
+                        ),
+                        in: 1...24
+                    )
+                    Picker("Status", selection: $draft.status) {
+                        ForEach(PlannedWindowStatus.allCases, id: \.self) { st in
+                            Text(st.rawValue).tag(st)
+                        }
+                    }
+                    TextField(
+                        "Project path (optional)",
+                        text: Binding(
+                            get: { draft.projectPath ?? "" },
+                            set: { draft.projectPath = $0.isEmpty ? nil : $0 }
+                        )
+                    )
                 }
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(draft.existingID == nil ? "Create" : "Save") {
-                    Task { await save() }
+
+                Section {
+                    Toggle("Schedule a prompt for this window", isOn: $draft.schedulePrompt)
+                    if draft.schedulePrompt {
+                        TextEditor(text: $draft.promptBody)
+                            .frame(minHeight: 100)
+                            .overlay(alignment: .topLeading) {
+                                if draft.promptBody.isEmpty {
+                                    Text("Prompt body…")
+                                        .foregroundStyle(C5hColors.fgTertiary)
+                                        .padding(.top, 8)
+                                        .padding(.leading, 4)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                    }
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(isSaving)
+
+                if conflictCount > 0 {
+                    Section {
+                        Label(
+                            "\(conflictCount) overlap\(conflictCount == 1 ? "" : "s") with existing \(draft.providerID.displayName) window\(conflictCount == 1 ? "" : "s")",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(.orange)
+                        .font(C5hTypography.captionFont)
+                    }
+                }
+
+                if let lastError {
+                    Section {
+                        Label(lastError, systemImage: "exclamationmark.octagon")
+                            .foregroundStyle(.red)
+                            .font(C5hTypography.captionFont)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(draft.existingID == nil ? "New planned window" : "Edit planned window")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", role: .cancel) { dismiss() }
+                }
+                if let id = draft.existingID, onDelete != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Delete", role: .destructive) {
+                            Task { await delete(id: id) }
+                        }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(draft.existingID == nil ? "Create" : "Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving)
+                }
             }
         }
-        .padding(C5hSpacing.xl)
-        .frame(width: 480)
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 480, idealHeight: 560)
         .onChange(of: draft.providerID) { recomputeConflicts() }
         .onChange(of: draft.startAt) { recomputeConflicts() }
         .onChange(of: draft.durationSeconds) { recomputeConflicts() }

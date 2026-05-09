@@ -56,7 +56,7 @@ struct ProviderColumnView: View {
 
     private var background: some View {
         ZStack(alignment: .topLeading) {
-            Rectangle().fill(C5hColors.background)
+            Rectangle().fill(.background)
             ForEach(0..<24) { hour in
                 Rectangle()
                     .fill(C5hColors.fgTertiary.opacity(layout.hourLineOpacity))

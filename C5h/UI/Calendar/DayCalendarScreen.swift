@@ -52,29 +52,59 @@ struct DayCalendarScreen: View {
     @ViewBuilder
     private func content(_ viewModel: DayCalendarViewModel) -> some View {
         @Bindable var bound = viewModel
-        VStack(spacing: 0) {
-            toolbar(viewModel: viewModel)
-            Divider()
-            DayCalendarView(
-                viewModel: viewModel,
-                layout: layout,
-                now: now,
-                onSelectPlanned: { viewModel.selection = .planned($0) },
-                onSelectActual: { viewModel.selection = .actual($0) }
-            )
-        }
-        .sheet(item: $bound.selection) { selection in
-            WindowInspectorView(
-                selection: selection,
-                onEdit: { window in
-                    viewModel.selection = nil
-                    viewModel.presentEdit(for: window)
-                },
-                onDelete: { id in
-                    viewModel.selection = nil
-                    Task { try? await viewModel.delete(id: id) }
+        DayCalendarView(
+            viewModel: viewModel,
+            layout: layout,
+            now: now,
+            onSelectPlanned: { window in
+                withAnimation(C5hAnimation.morph) {
+                    viewModel.selection = .planned(window)
                 }
-            )
+            },
+            onSelectActual: { window in
+                withAnimation(C5hAnimation.morph) {
+                    viewModel.selection = .actual(window)
+                }
+            }
+        )
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let err = viewModel.lastError {
+                Label(err, systemImage: "exclamationmark.triangle")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, C5hSpacing.lg)
+                    .padding(.vertical, C5hSpacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .toolbar { toolbar(viewModel: viewModel) }
+        // Non-blocking right-side glass pane (replaces the old .sheet inspector).
+        .inspector(isPresented: Binding(
+            get: { viewModel.selection != nil },
+            set: { newValue in
+                if !newValue {
+                    withAnimation(C5hAnimation.morph) {
+                        viewModel.selection = nil
+                    }
+                }
+            }
+        )) {
+            if let sel = viewModel.selection {
+                WindowInspectorView(
+                    selection: sel,
+                    onEdit: { window in
+                        viewModel.selection = nil
+                        viewModel.presentEdit(for: window)
+                    },
+                    onDelete: { id in
+                        viewModel.selection = nil
+                        Task { try? await viewModel.delete(id: id) }
+                    }
+                )
+                .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
+            } else {
+                EmptyView()
+            }
         }
         .sheet(isPresented: $bound.editingDraftPresented) {
             PlannedWindowEditorSheet(
@@ -102,28 +132,40 @@ struct DayCalendarScreen: View {
         }
     }
 
-    private func toolbar(viewModel: DayCalendarViewModel) -> some View {
-        HStack(spacing: C5hSpacing.md) {
+    @ToolbarContentBuilder
+    private func toolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
             Button {
                 viewModel.goToPreviousDay()
                 Task { await viewModel.reload() }
             } label: {
                 Image(systemName: "chevron.left")
             }
-            Text(viewModel.date.formatted(date: .complete, time: .omitted))
-                .font(C5hTypography.titleFont)
+            .help("Previous day")
+
+            Text(viewModel.date.formatted(date: .abbreviated, time: .omitted))
+                .font(.headline)
+                .monospacedDigit()
+
             Button {
                 viewModel.goToNextDay()
                 Task { await viewModel.reload() }
             } label: {
                 Image(systemName: "chevron.right")
             }
-            Spacer()
+            .help("Next day")
+        }
+
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 viewModel.presentNewDraft()
             } label: {
-                Label("Create planned window", systemImage: "plus.circle")
+                Label("Add planned", systemImage: "plus.circle")
             }
+            .help("Create planned window")
+        }
+
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 ForEach(ProviderID.allCases) { id in
                     Button("Start \(id.displayName) now") {
@@ -133,18 +175,35 @@ struct DayCalendarScreen: View {
             } label: {
                 Label("Start now", systemImage: "play.circle.fill")
             }
-            if let err = viewModel.lastError {
-                Text(err).foregroundStyle(.red).font(C5hTypography.captionFont)
-            }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 Task { await viewModel.reload() }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
+            .help("Reload")
         }
-        .padding(.horizontal, C5hSpacing.lg)
-        .padding(.vertical, C5hSpacing.sm)
-        .background(C5hColors.chrome)
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                withAnimation(C5hAnimation.morph) {
+                    if viewModel.selection == nil,
+                       let firstActual = viewModel.actual.first {
+                        viewModel.selection = .actual(firstActual)
+                    } else if viewModel.selection == nil,
+                              let firstPlanned = viewModel.planned.first {
+                        viewModel.selection = .planned(firstPlanned)
+                    } else {
+                        viewModel.selection = nil
+                    }
+                }
+            } label: {
+                Image(systemName: "sidebar.right")
+            }
+            .help("Toggle inspector")
+        }
     }
 }
 

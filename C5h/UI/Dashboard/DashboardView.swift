@@ -62,19 +62,48 @@ struct DashboardView: View {
     @ViewBuilder
     private func content(_ viewModel: DashboardViewModel) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: C5hSpacing.lg) {
-                Text("Dashboard").font(C5hTypography.titleFont)
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
-                    spacing: C5hSpacing.lg
-                ) {
-                    activeWindowsCard(viewModel: viewModel)
-                    quickActionsCard(viewModel: viewModel)
-                    providerHealthCard(viewModel: viewModel)
-                    recentRunsCard(viewModel: viewModel)
+            // LEVEL 3 — full glass cards, container shares sampling region.
+            GlassEffectContainer(spacing: C5hSpacing.lg) {
+                VStack(alignment: .leading, spacing: C5hSpacing.lg) {
+                    UsageTrendCard(history: viewModel.dailyUsageHistory)
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
+                        spacing: C5hSpacing.lg
+                    ) {
+                        activeWindowsCard(viewModel: viewModel)
+                        quickActionsCard(viewModel: viewModel)
+                        providerHealthCard(viewModel: viewModel)
+                        recentRunsCard(viewModel: viewModel)
+                    }
+                }
+                .padding(C5hSpacing.xl)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Text("Dashboard").font(.headline)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(ProviderID.allCases) { id in
+                        Button("Start \(id.displayName) now") {
+                            startNowProvider = id
+                        }
+                    }
+                } label: {
+                    Label("Start now", systemImage: "play.circle.fill")
                 }
             }
-            .padding(C5hSpacing.xl)
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await viewModel.reload() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Reload dashboard")
+            }
         }
     }
 
@@ -109,6 +138,8 @@ struct DashboardView: View {
                         Label("Start \(id.displayName) now", systemImage: "play.circle.fill")
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(C5hColors.tintForProvider(id))
                 }
                 Button {
                     Task { await viewModel.reload() }
@@ -116,24 +147,31 @@ struct DashboardView: View {
                     Label("Refresh", systemImage: "arrow.clockwise")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(.glass)
             }
         }
     }
 
     private func providerHealthCard(viewModel: DashboardViewModel) -> some View {
         DashboardCard(title: "Provider health") {
-            VStack(alignment: .leading, spacing: C5hSpacing.sm) {
+            VStack(alignment: .leading, spacing: C5hSpacing.md) {
                 ForEach(ProviderID.allCases) { id in
-                    HStack(spacing: C5hSpacing.sm) {
-                        Circle().fill(brandColor(for: id)).frame(width: 10, height: 10)
-                        Text(id.displayName)
-                        Spacer()
-                        if let status = viewModel.providerStatuses[id] {
-                            ProviderStatusBadge(state: ProviderHealthState(from: status))
-                        } else {
-                            Text("unknown")
-                                .font(C5hTypography.captionFont)
-                                .foregroundStyle(C5hColors.fgTertiary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: C5hSpacing.sm) {
+                            Circle().fill(brandColor(for: id)).frame(width: 10, height: 10)
+                            Text(id.displayName)
+                            Spacer()
+                            if let status = viewModel.providerStatuses[id] {
+                                ProviderStatusBadge(state: ProviderHealthState(from: status))
+                            } else {
+                                Text("unknown")
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgTertiary)
+                            }
+                        }
+                        if let counts = viewModel.sparklineCounts[id], counts.contains(where: { $0 > 0 }) {
+                            UsageSparklineView(counts: counts, color: brandColor(for: id))
+                                .frame(height: 22)
                         }
                     }
                 }
@@ -167,7 +205,7 @@ struct DashboardView: View {
     }
 
     private func brandColor(for id: ProviderID) -> Color {
-        id == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+        C5hColors.tintForProvider(id)
     }
 }
 
@@ -186,7 +224,8 @@ struct DashboardCard<Content: View>: View {
         }
         .padding(C5hSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(C5hColors.chrome)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        // LEVEL 3 — full glass card. Wrapping LazyVGrid in GlassEffectContainer
+        // prevents glass-on-glass sampling artifacts.
+        .glassEffect(C5hGlass.card(), in: C5hShape.rect(C5hRadius.l))
     }
 }

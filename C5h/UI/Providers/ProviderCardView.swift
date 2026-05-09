@@ -20,12 +20,11 @@ struct ProviderCardView: View {
             actions
         }
         .padding(C5hSpacing.lg)
-        .background(C5hColors.chrome)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(brandColor.opacity(0.25), lineWidth: 1)
-        }
+        // LEVEL 3 — full glass card with subtle brand-colored tint for identity.
+        .glassEffect(
+            C5hGlass.card(tint: brandColor),
+            in: C5hShape.rect(C5hRadius.l)
+        )
     }
 
     private var header: some View {
@@ -79,8 +78,12 @@ struct ProviderCardView: View {
 
     private var actions: some View {
         HStack(spacing: C5hSpacing.sm) {
-            Button("Detect CLI", action: onDetect).disabled(isLoading)
-            Button("Run test command", action: onTest).disabled(isLoading)
+            Button("Detect CLI", action: onDetect)
+                .buttonStyle(.glass)
+                .disabled(isLoading)
+            Button("Run test command", action: onTest)
+                .buttonStyle(.glass)
+                .disabled(isLoading)
             Spacer()
             Menu("CLI path…") {
                 Button("Choose…", action: onChoosePath)
@@ -88,12 +91,13 @@ struct ProviderCardView: View {
                     Button("Clear override", action: onClearPath)
                 }
             }
+            .menuStyle(.borderlessButton)
             .frame(maxWidth: 160)
         }
     }
 
     private var brandColor: Color {
-        id == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+        C5hColors.tintForProvider(id)
     }
 
     private var healthState: ProviderHealthState {

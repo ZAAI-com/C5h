@@ -32,42 +32,49 @@ struct WeekCalendarScreen: View {
 
     @ViewBuilder
     private func content(_ viewModel: WeekCalendarViewModel) -> some View {
-        VStack(spacing: 0) {
-            toolbar(viewModel: viewModel)
-            Divider()
-            WeekCalendarView(viewModel: viewModel)
-        }
-    }
+        WeekCalendarView(viewModel: viewModel)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let err = viewModel.lastError {
+                    Label(err, systemImage: "exclamationmark.triangle")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, C5hSpacing.lg)
+                        .padding(.vertical, C5hSpacing.xs)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button {
+                        viewModel.goToPreviousWeek()
+                        Task { await viewModel.reload() }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .help("Previous week")
 
-    private func toolbar(viewModel: WeekCalendarViewModel) -> some View {
-        HStack(spacing: C5hSpacing.md) {
-            Button {
-                viewModel.goToPreviousWeek()
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "chevron.left")
+                    Text("Week of \(viewModel.weekStart.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.headline)
+                        .monospacedDigit()
+
+                    Button {
+                        viewModel.goToNextWeek()
+                        Task { await viewModel.reload() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .help("Next week")
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await viewModel.reload() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("Reload")
+                }
             }
-            Text("Week of \(viewModel.weekStart.formatted(date: .abbreviated, time: .omitted))")
-                .font(C5hTypography.titleFont)
-            Button {
-                viewModel.goToNextWeek()
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-            Spacer()
-            if let err = viewModel.lastError {
-                Text(err).foregroundStyle(.red).font(C5hTypography.captionFont)
-            }
-            Button {
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-        }
-        .padding(.horizontal, C5hSpacing.lg)
-        .padding(.vertical, C5hSpacing.sm)
-        .background(C5hColors.chrome)
     }
 }
 
@@ -102,23 +109,25 @@ struct WeekCalendarView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, C5hSpacing.sm)
                 .padding(.vertical, 6)
-                .background(
-                    Calendar.current.isDateInToday(day)
-                    ? C5hColors.accentMuted
-                    : Color.clear
-                )
+                // LEVEL 2 — "you are here" cue uses tinted glass for today's column.
+                .modifier(TodayHeaderBackground(isToday: Calendar.current.isDateInToday(day)))
             }
         }
     }
 
     private func row(for provider: ProviderID) -> some View {
         HStack(spacing: 0) {
+            // LEVEL 2 — provider chip is a floating identity affordance; glass capsule.
             HStack(spacing: 6) {
                 Circle().fill(brandColor(for: provider)).frame(width: 8, height: 8)
                 Text(provider.displayName).font(C5hTypography.captionFont)
             }
+            .padding(.horizontal, C5hSpacing.sm)
+            .padding(.vertical, 4)
+            .glassEffect(C5hGlass.toolbar, in: .capsule)
             .frame(width: 110, alignment: .leading)
             .padding(.horizontal, C5hSpacing.md)
+
             ForEach(viewModel.days, id: \.self) { day in
                 cellFor(day: day, provider: provider)
             }
@@ -132,7 +141,7 @@ struct WeekCalendarView: View {
             ForEach(cw.planned) { window in
                 compactBlock(
                     label: timeLabel(window.startAt),
-                    color: brandColor(for: provider).opacity(0.18),
+                    color: brandColor(for: provider).opacity(0.22),
                     border: brandColor(for: provider)
                 )
             }
@@ -179,6 +188,21 @@ struct WeekCalendarView: View {
     }
 
     private func brandColor(for id: ProviderID) -> Color {
-        id == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+        C5hColors.tintForProvider(id)
+    }
+}
+
+private struct TodayHeaderBackground: ViewModifier {
+    let isToday: Bool
+
+    func body(content: Content) -> some View {
+        if isToday {
+            content.glassEffect(
+                .regular.tint(C5hColors.accentOnGlass.opacity(0.20)),
+                in: C5hShape.rect(C5hRadius.s)
+            )
+        } else {
+            content
+        }
     }
 }

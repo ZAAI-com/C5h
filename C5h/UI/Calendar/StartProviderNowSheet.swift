@@ -22,37 +22,46 @@ struct StartProviderNowSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: C5hSpacing.lg) {
-            Text("Start \(providerID.displayName) window now")
-                .font(C5hTypography.titleFont)
+        NavigationStack {
             Form {
-                Picker("Provider", selection: $providerID) {
-                    ForEach(ProviderID.allCases) { id in
-                        Text(id.displayName).tag(id)
+                Section {
+                    Picker("Provider", selection: $providerID) {
+                        ForEach(ProviderID.allCases) { id in
+                            Text(id.displayName).tag(id)
+                        }
+                    }
+                    HStack {
+                        TextField("Project path (optional)", text: $projectPath)
+                        Button("Choose…") { pickingFolder = true }
+                            .buttonStyle(.glass)
                     }
                 }
-                HStack {
-                    TextField("Project path (optional)", text: $projectPath)
-                    Button("Choose…") { pickingFolder = true }
+
+                Section("Prompt") {
+                    TextEditor(text: $prompt).frame(minHeight: 140)
                 }
-                VStack(alignment: .leading) {
-                    Text("Prompt")
-                    TextEditor(text: $prompt).frame(minHeight: 120)
+
+                if let lastError {
+                    Section {
+                        Label(lastError, systemImage: "exclamationmark.octagon")
+                            .foregroundStyle(.red)
+                            .font(C5hTypography.captionFont)
+                    }
                 }
             }
-            if let lastError {
-                Text(lastError).foregroundStyle(.red).font(C5hTypography.captionFont)
-            }
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Start") { Task { await start() } }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isStarting || prompt.isEmpty)
+            .formStyle(.grouped)
+            .navigationTitle("Start \(providerID.displayName) now")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", role: .cancel) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Start") { Task { await start() } }
+                        .disabled(isStarting || prompt.isEmpty)
+                }
             }
         }
-        .padding(C5hSpacing.xl)
-        .frame(width: 540)
+        .frame(minWidth: 540, idealWidth: 580, minHeight: 480, idealHeight: 540)
         .fileImporter(
             isPresented: $pickingFolder,
             allowedContentTypes: [.folder],

@@ -24,6 +24,10 @@ struct PlaceholderScreen: View {
                 .foregroundStyle(C5hColors.fgTertiary)
         }
         .padding(C5hSpacing.xxl)
+        .frame(maxWidth: 520)
+        // LEVEL 2 — first-impression hero panel; transient overlay-like
+        // surface, glass treatment is appropriate per HIG.
+        .glassEffect(C5hGlass.heroPanel, in: C5hShape.rect(C5hRadius.xl))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

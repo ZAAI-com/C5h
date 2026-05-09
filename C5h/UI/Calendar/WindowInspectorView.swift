@@ -30,21 +30,19 @@ struct WindowInspectorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: C5hSpacing.md) {
-            switch selection {
-            case .planned(let window):
-                plannedContent(window)
-                actions(for: window)
-            case .actual(let window):
-                actualContent(window)
-                HStack {
-                    Spacer()
-                    Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+        ScrollView {
+            VStack(alignment: .leading, spacing: C5hSpacing.md) {
+                switch selection {
+                case .planned(let window):
+                    plannedContent(window)
+                    actions(for: window)
+                case .actual(let window):
+                    actualContent(window)
                 }
             }
+            .padding(C5hSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(width: 360)
-        .padding(C5hSpacing.lg)
     }
 
     @ViewBuilder
@@ -54,11 +52,12 @@ struct WindowInspectorView: View {
                 Button(role: .destructive) { onDelete(window.id) } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .buttonStyle(.glass)
             }
             Spacer()
-            Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             if let onEdit {
                 Button("Edit…") { onEdit(window) }
+                    .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
             }
         }

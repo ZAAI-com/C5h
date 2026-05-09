@@ -11,7 +11,6 @@
 		0A0080010000000000000002 /* C5hCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080010000000000000001 /* C5hCore */; };
 		0A0080020000000000000002 /* C5hStore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080020000000000000001 /* C5hStore */; };
 		0A0012020401000000000001 /* LogsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000001 /* LogsViewModel.swift */; };
-		0A0012020401000000000002 /* LogFiltersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000002 /* LogFiltersView.swift */; };
 		0A0012020401000000000003 /* CommandRunTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000003 /* CommandRunTable.swift */; };
 		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
 		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
@@ -49,7 +48,6 @@
 		0A0012010000000000000004 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000004 /* AppCommands.swift */; };
 		0A0012020100000000000001 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000001 /* AppTab.swift */; };
 		0A0012020100000000000002 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000002 /* MainWindowView.swift */; };
-		0A0012020100000000000003 /* NavbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000003 /* NavbarView.swift */; };
 		0A0012020200000000000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000001 /* DashboardView.swift */; };
 		0A0012020200000000000002 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000002 /* DashboardViewModel.swift */; };
 		0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020300000000000001 /* DayCalendarScreen.swift */; };
@@ -60,6 +58,13 @@
 		0A0012020700000000000002 /* C5hColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000002 /* C5hColors.swift */; };
 		0A0012020700000000000003 /* C5hSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000003 /* C5hSpacing.swift */; };
 		0A0012020700000000000004 /* C5hTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000004 /* C5hTypography.swift */; };
+		0A0012020700000000000005 /* C5hMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000005 /* C5hMaterials.swift */; };
+		0A0012020700000000000006 /* C5hShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000006 /* C5hShape.swift */; };
+		0A0012020700000000000007 /* C5hAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000007 /* C5hAnimations.swift */; };
+		0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000001 /* UsageAreaChartView.swift */; };
+		0A0012020800000000000002 /* UsageSparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000002 /* UsageSparklineView.swift */; };
+		0A0012020900000000000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020900000000000001 /* OnboardingView.swift */; };
+		0A0012020200000000000003 /* UsageTrendCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000003 /* UsageTrendCard.swift */; };
 		0A0014010000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A0013010000000000000001 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -71,13 +76,11 @@
 		0A0011010000000000000004 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
 		0A0011020100000000000001 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		0A0011020100000000000002 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
-		0A0011020100000000000003 /* NavbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavbarView.swift; sourceTree = "<group>"; };
 		0A0011020200000000000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		0A0011020200000000000002 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
 		0A0011020300000000000001 /* DayCalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarScreen.swift; sourceTree = "<group>"; };
 		0A0011020400000000000001 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000001 /* LogsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsViewModel.swift; sourceTree = "<group>"; };
-		0A0011020401000000000002 /* LogFiltersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogFiltersView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000003 /* CommandRunTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunTable.swift; sourceTree = "<group>"; };
 		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
@@ -115,6 +118,13 @@
 		0A0011020700000000000002 /* C5hColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hColors.swift; sourceTree = "<group>"; };
 		0A0011020700000000000003 /* C5hSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hSpacing.swift; sourceTree = "<group>"; };
 		0A0011020700000000000004 /* C5hTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hTypography.swift; sourceTree = "<group>"; };
+		0A0011020700000000000005 /* C5hMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hMaterials.swift; sourceTree = "<group>"; };
+		0A0011020700000000000006 /* C5hShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hShape.swift; sourceTree = "<group>"; };
+		0A0011020700000000000007 /* C5hAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hAnimations.swift; sourceTree = "<group>"; };
+		0A0011020800000000000001 /* UsageAreaChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAreaChartView.swift; sourceTree = "<group>"; };
+		0A0011020800000000000002 /* UsageSparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSparklineView.swift; sourceTree = "<group>"; };
+		0A0011020900000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		0A0011020200000000000003 /* UsageTrendCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTrendCard.swift; sourceTree = "<group>"; };
 		0A0013010000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0A0013020000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0A0013030000000000000001 /* C5h.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = C5h.entitlements; sourceTree = "<group>"; };
@@ -251,6 +261,8 @@
 				0A0010020500000000000001 /* Providers */,
 				0A0010020600000000000001 /* Settings */,
 				0A0010020700000000000001 /* DesignSystem */,
+				0A0010020800000000000001 /* Charts */,
+				0A0010020900000000000001 /* Onboarding */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -260,7 +272,6 @@
 			children = (
 				0A0011020100000000000001 /* AppTab.swift */,
 				0A0011020100000000000002 /* MainWindowView.swift */,
-				0A0011020100000000000003 /* NavbarView.swift */,
 			);
 			path = Root;
 			sourceTree = "<group>";
@@ -270,6 +281,7 @@
 			children = (
 				0A0011020200000000000001 /* DashboardView.swift */,
 				0A0011020200000000000002 /* DashboardViewModel.swift */,
+				0A0011020200000000000003 /* UsageTrendCard.swift */,
 			);
 			path = Dashboard;
 			sourceTree = "<group>";
@@ -300,7 +312,6 @@
 			children = (
 				0A0011020400000000000001 /* LogsView.swift */,
 				0A0011020401000000000001 /* LogsViewModel.swift */,
-				0A0011020401000000000002 /* LogFiltersView.swift */,
 				0A0011020401000000000003 /* CommandRunTable.swift */,
 				0A0011020401000000000004 /* CommandRunDetailView.swift */,
 				0A0011020401000000000005 /* OutputLogView.swift */,
@@ -336,6 +347,23 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
+		0A0010020800000000000001 /* Charts */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020800000000000001 /* UsageAreaChartView.swift */,
+				0A0011020800000000000002 /* UsageSparklineView.swift */,
+			);
+			path = Charts;
+			sourceTree = "<group>";
+		};
+		0A0010020900000000000001 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020900000000000001 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		0A0010020700000000000001 /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
@@ -343,6 +371,9 @@
 				0A0011020700000000000002 /* C5hColors.swift */,
 				0A0011020700000000000003 /* C5hSpacing.swift */,
 				0A0011020700000000000004 /* C5hTypography.swift */,
+				0A0011020700000000000005 /* C5hMaterials.swift */,
+				0A0011020700000000000006 /* C5hShape.swift */,
+				0A0011020700000000000007 /* C5hAnimations.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -439,7 +470,6 @@
 				0A0012010000000000000004 /* AppCommands.swift in Sources */,
 				0A0012020100000000000001 /* AppTab.swift in Sources */,
 				0A0012020100000000000002 /* MainWindowView.swift in Sources */,
-				0A0012020100000000000003 /* NavbarView.swift in Sources */,
 				0A0012020200000000000001 /* DashboardView.swift in Sources */,
 				0A0012020200000000000002 /* DashboardViewModel.swift in Sources */,
 				0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */,
@@ -450,9 +480,15 @@
 				0A0012020700000000000002 /* C5hColors.swift in Sources */,
 				0A0012020700000000000003 /* C5hSpacing.swift in Sources */,
 				0A0012020700000000000004 /* C5hTypography.swift in Sources */,
+				0A0012020700000000000005 /* C5hMaterials.swift in Sources */,
+				0A0012020700000000000006 /* C5hShape.swift in Sources */,
+				0A0012020700000000000007 /* C5hAnimations.swift in Sources */,
+				0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */,
+				0A0012020800000000000002 /* UsageSparklineView.swift in Sources */,
+				0A0012020900000000000001 /* OnboardingView.swift in Sources */,
+				0A0012020200000000000003 /* UsageTrendCard.swift in Sources */,
 				0A0012010000000000000005 /* AppPaths.swift in Sources */,
 				0A0012020401000000000001 /* LogsViewModel.swift in Sources */,
-				0A0012020401000000000002 /* LogFiltersView.swift in Sources */,
 				0A0012020401000000000003 /* CommandRunTable.swift in Sources */,
 				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
 				0A0012020401000000000005 /* OutputLogView.swift in Sources */,

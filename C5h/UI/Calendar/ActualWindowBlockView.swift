@@ -33,7 +33,7 @@ struct ActualWindowBlockView: View {
     }
 
     private var brandColor: Color {
-        window.providerID == .claude ? ProviderBrandColor.claude : ProviderBrandColor.codex
+        C5hColors.tintForProvider(window.providerID)
     }
 
     private var timeRange: String {
