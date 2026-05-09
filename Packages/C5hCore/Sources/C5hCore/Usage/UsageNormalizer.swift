@@ -6,6 +6,7 @@ public struct NormalizedUsage: Codable, Sendable, Hashable {
     public var messageCount: Int?
     public var windowStartedAt: Date?
     public var windowEndsAt: Date?
+    public var usedPercentage: Double?
     public var rawNotes: String?
 
     public init(
@@ -14,6 +15,7 @@ public struct NormalizedUsage: Codable, Sendable, Hashable {
         messageCount: Int? = nil,
         windowStartedAt: Date? = nil,
         windowEndsAt: Date? = nil,
+        usedPercentage: Double? = nil,
         rawNotes: String? = nil
     ) {
         self.providerID = providerID
@@ -21,6 +23,7 @@ public struct NormalizedUsage: Codable, Sendable, Hashable {
         self.messageCount = messageCount
         self.windowStartedAt = windowStartedAt
         self.windowEndsAt = windowEndsAt
+        self.usedPercentage = usedPercentage
         self.rawNotes = rawNotes
     }
 }
@@ -33,6 +36,11 @@ public enum UsageNormalizer {
         providerID: ProviderID,
         capturedAt: Date = .now
     ) -> NormalizedUsage {
+        if providerID == .claude,
+           let status = try? ClaudeUsageStatus.parsePayload(rawJSON) {
+            return status.normalizedUsage(providerID: providerID, capturedAt: capturedAt)
+        }
+
         guard
             let data = rawJSON.data(using: .utf8),
             let object = try? JSONSerialization.jsonObject(with: data),

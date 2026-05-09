@@ -22,11 +22,13 @@ struct DashboardView: View {
                let actualRepo = appEnv.actualWindowRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository,
                let cmdRepo = appEnv.commandRunRepository,
+               let usageRepo = appEnv.usageSnapshotRepository,
                let registry = appEnv.providerRegistry {
                 let vm = DashboardViewModel(
                     actualRepository: actualRepo,
                     scheduledRepository: scheduledRepo,
                     commandRunRepository: cmdRepo,
+                    usageSnapshotRepository: usageRepo,
                     registry: registry
                 )
                 viewModel = vm
