@@ -148,16 +148,6 @@ struct DayCalendarScreen: View {
     }
 }
 
-struct WeekCalendarScreen: View {
-    var body: some View {
-        PlaceholderScreen(
-            title: "Week Calendar",
-            systemImage: AppTab.calendar.systemImage,
-            subtitle: "7-day overview by provider — coming in M10."
-        )
-    }
-}
-
 private extension Date {
     func atHour(_ hour: Int) -> Date {
         Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: self) ?? self
