@@ -54,26 +54,4 @@ struct CodexUsageStatusTests {
         #expect(normalized.windowEndsAt?.timeIntervalSince1970 == 1_778_364_750)
         #expect(normalized.usedPercentage == 82)
     }
-
-    @Test("Finds newest valid token_count event across JSONL files")
-    func latestStatusFromSessionFiles() throws {
-        let dir = try TempDirectory.make()
-        defer { try? TempDirectory.cleanup(dir) }
-        let first = dir.appendingPathComponent("first.jsonl")
-        let second = dir.appendingPathComponent("second.jsonl")
-        try """
-        not json
-        {"timestamp":"2026-05-09T19:00:00.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":10,"window_minutes":300,"resets_at":1778360000}}}}
-        """.write(to: first, atomically: true, encoding: .utf8)
-        try """
-        {"timestamp":"2026-05-09T22:00:00.000Z","type":"event_msg","payload":{"type":"other"}}
-        {"timestamp":"2026-05-09T21:00:00.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750}}}}
-        """.write(to: second, atomically: true, encoding: .utf8)
-
-        let status = try CodexUsageStatus.latestStatus(inSessionFiles: [first, second])
-
-        #expect(status.eventTimestamp.timeIntervalSince1970 == 1_778_360_400)
-        #expect(status.primary.usedPercentage == 82)
-        #expect(status.primary.resetsAt.timeIntervalSince1970 == 1_778_364_750)
-    }
 }

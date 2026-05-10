@@ -26,7 +26,11 @@ struct CodexProviderAdapter: ProviderAdapter {
     func runTestCommand() async throws -> CommandRun { try await backing.runTestCommand() }
 
     func collectUsage() async throws -> UsageSnapshot {
-        try await CodexUsageCollector().collect()
+        // Codex usage reset detection is intentionally disabled: reading
+        // ~/.codex/sessions/*.jsonl triggers macOS's "access data from other
+        // apps" TCC dialog, and the Codex CLI does not expose a programmatic
+        // /usage equivalent we could shell out to instead.
+        throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
     }
 
     func triggerPrompt(_ input: TriggerPromptInput) async throws -> CommandRun {
@@ -50,65 +54,3 @@ struct CodexProviderAdapter: ProviderAdapter {
     }
 }
 
-private struct CodexUsageCollector: Sendable {
-    var sessionsDirectory: URL
-
-    init(sessionsDirectory: URL = Self.defaultSessionsDirectory()) {
-        self.sessionsDirectory = sessionsDirectory
-    }
-
-    func collect() async throws -> UsageSnapshot {
-        try await Task.detached(priority: .utility) {
-            try collectBlocking()
-        }.value
-    }
-
-    private func collectBlocking() throws -> UsageSnapshot {
-        let files = try Self.sessionFiles(in: sessionsDirectory)
-        let status = try CodexUsageStatus.latestStatus(inSessionFiles: files)
-        let capturedAt = Date()
-        return UsageSnapshot(
-            providerID: .codex,
-            capturedAt: capturedAt,
-            rawJSON: status.encodedPayload(),
-            normalizedJSON: UsageNormalizer.encode(
-                status.normalizedUsage(providerID: .codex, capturedAt: capturedAt)
-            )
-        )
-    }
-
-    private static func defaultSessionsDirectory() -> URL {
-        if let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"],
-           !codexHome.isEmpty {
-            return URL(fileURLWithPath: codexHome).appendingPathComponent("sessions", isDirectory: true)
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".codex", isDirectory: true)
-            .appendingPathComponent("sessions", isDirectory: true)
-    }
-
-    private static func sessionFiles(in root: URL) throws -> [URL] {
-        let fileManager = FileManager.default
-        var isDirectory = ObjCBool(false)
-        guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            throw C5hError.providerNotConfigured("Codex sessions directory at \(root.path)")
-        }
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            throw C5hError.providerNotConfigured("Codex sessions directory at \(root.path)")
-        }
-
-        var files: [URL] = []
-        for case let url as URL in enumerator where url.pathExtension == "jsonl" {
-            let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
-            if values?.isRegularFile == true {
-                files.append(url)
-            }
-        }
-        return files
-    }
-}

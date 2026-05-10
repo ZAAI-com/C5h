@@ -109,29 +109,6 @@ public struct CodexUsageStatus: Sendable, Hashable {
         return try makeStatus(timestamp: envelope.timestamp, rateLimits: rateLimits)
     }
 
-    public static func latestStatus(inSessionFiles files: [URL]) throws -> CodexUsageStatus {
-        var latest: CodexUsageStatus?
-
-        for file in files {
-            guard let contents = try? String(contentsOf: file, encoding: .utf8) else {
-                continue
-            }
-            for line in contents.split(whereSeparator: \.isNewline) {
-                guard let status = try? parseJSONLLine(String(line)) else {
-                    continue
-                }
-                if latest.map({ status.eventTimestamp > $0.eventTimestamp }) ?? true {
-                    latest = status
-                }
-            }
-        }
-
-        guard let latest else {
-            throw CodexUsageStatusParseError.noStatusEvents
-        }
-        return latest
-    }
-
     private static func decodeEnvelope(_ rawJSON: String) throws -> CodexUsageEnvelope {
         guard let data = rawJSON.data(using: .utf8) else {
             throw CodexUsageStatusParseError.invalidUTF8

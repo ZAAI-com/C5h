@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import C5hCore
 
 struct StartProviderNowSheet: View {
@@ -9,7 +8,6 @@ struct StartProviderNowSheet: View {
     @State private var projectPath: String = ""
     @State private var lastError: String?
     @State private var isStarting: Bool = false
-    @State private var pickingFolder: Bool = false
 
     let onStart: (ProviderID, String, String?) async throws -> Void
 
@@ -30,11 +28,7 @@ struct StartProviderNowSheet: View {
                             Text(id.displayName).tag(id)
                         }
                     }
-                    HStack {
-                        TextField("Project path (optional)", text: $projectPath)
-                        Button("Choose…") { pickingFolder = true }
-                            .buttonStyle(.glass)
-                    }
+                    TextField("Project path (optional)", text: $projectPath)
                 }
 
                 Section("Prompt") {
@@ -62,19 +56,6 @@ struct StartProviderNowSheet: View {
             }
         }
         .frame(minWidth: 540, idealWidth: 580, minHeight: 480, idealHeight: 540)
-        .fileImporter(
-            isPresented: $pickingFolder,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    projectPath = url.path
-                }
-            case .failure: break
-            }
-        }
     }
 
     private func start() async {
