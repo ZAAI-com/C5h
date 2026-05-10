@@ -152,6 +152,12 @@ public actor CommandRunner: CommandRunning {
             process.terminate()
             process.waitUntilExit()
         }
+        // Drain any bytes that landed in the pipe buffer after the
+        // readabilityHandler was cleared. Without this, fast-exiting
+        // processes can leave a few bytes unread under parallel test
+        // execution where GCD's readability queue is contended.
+        Self.drain(pipe: stdoutPipe, into: stdoutHandle)
+        Self.drain(pipe: stderrPipe, into: stderrHandle)
         try? stdoutHandle?.close()
         try? stderrHandle?.close()
 
@@ -159,6 +165,15 @@ public actor CommandRunner: CommandRunning {
             return ProcessOutcome(kind: .cancelled)
         }
         return ProcessOutcome(kind: outcome)
+    }
+
+    private static func drain(pipe: Pipe, into handle: FileHandle?) {
+        let read = pipe.fileHandleForReading
+        while true {
+            let data = read.availableData
+            if data.isEmpty { break }
+            try? handle?.write(contentsOf: data)
+        }
     }
 }
 
