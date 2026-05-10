@@ -114,6 +114,12 @@ let candidates: [Candidate] = [
         final: "12-developer-run-session.png",
         label: "12 run(5h) session",
         overlay: .code([("run", teal), ("(", white), ("5h", warm), (")", white)], y: 218, size: 84)
+    ),
+    Candidate(
+        raw: "13-orange-liquid-glass-calendar-base.png",
+        final: "13-orange-liquid-glass-calendar.png",
+        label: "13 Orange Liquid Glass",
+        overlay: .none
     )
 ]
 
@@ -230,7 +236,7 @@ func composeCandidate(_ candidate: Candidate) throws -> CGImage {
 
 func renderContactSheet() throws {
     let columns = 4
-    let rows = 3
+    let rows = Int(ceil(Double(candidates.count) / Double(columns)))
     let cell: CGFloat = 250
     let labelHeight: CGFloat = 56
     let padding: CGFloat = 28
@@ -316,6 +322,6 @@ for candidate in candidates {
 try renderContactSheet()
 try renderSmallSizeSheet()
 
-let winner = try loadImage(finalRoot.appendingPathComponent("02-premium-bracket-prism-c5h.png"))
+let winner = try loadImage(finalRoot.appendingPathComponent("13-orange-liquid-glass-calendar.png"))
 try exportAppIcon(from: winner)
-print("Installed AppIcon from 02-premium-bracket-prism-c5h.png")
+print("Installed AppIcon from 13-orange-liquid-glass-calendar.png")

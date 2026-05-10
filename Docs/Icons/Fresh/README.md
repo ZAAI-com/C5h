@@ -1,13 +1,13 @@
 # Fresh C5h app icons
 
-Generated May 9, 2026 with the built-in `image_gen` tool, then composed
+Generated May 9-10, 2026 with the built-in `image_gen` tool, then composed
 deterministically with `compose.swift`.
 
 This folder intentionally ignores the earlier `Docs/Icons` candidates.
 
 ## Output
 
-- `raw/` contains the 12 untouched generated base images copied from
+- `raw/` contains the untouched generated base images copied from
   `/Users/m/.codex/generated_images/019e0dfb-2049-7771-9f62-5a010a996f99/`.
 - `final/` contains the 1024x1024 composed candidates.
 - `review/01-final-contact-sheet.png` shows the full candidate set.
@@ -16,11 +16,11 @@ This folder intentionally ignores the earlier `Docs/Icons` candidates.
 The installed app icon uses:
 
 ```txt
-final/02-premium-bracket-prism-c5h.png
+final/13-orange-liquid-glass-calendar.png
 ```
 
-It was selected as the default because it best matches the requested
-premium-abstract direction with a minimal deterministic `C5h` mark.
+It was selected after the follow-up direction to use an orange Liquid Glass
+background, black `<C5h>` mark, and matching orange calendar lanes.
 
 ## Candidates
 
@@ -36,6 +36,7 @@ premium-abstract direction with a minimal deterministic `C5h` mark.
 10. Developer terminal horizon with deterministic `C5h`.
 11. Developer focused workspace, no text.
 12. Developer run-session scene with deterministic `run(5h)`.
+13. Orange Liquid Glass icon with black `<C5h>` and orange calendar lanes.
 
 ## Prompt themes
 
@@ -57,6 +58,8 @@ The 12 prompt directions were:
 - Terminal horizon scene with orange five-hour arc.
 - Focused top-down code workspace scene.
 - Run-session editor/terminal scene with a glowing command capsule.
+- Orange Liquid Glass calendar icon with black `<C5h>` and matching orange
+  provider lines.
 
 ## Regenerate composed assets
 
