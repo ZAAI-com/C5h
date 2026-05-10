@@ -65,6 +65,14 @@ struct DashboardView: View {
             // LEVEL 3 — full glass cards, container shares sampling region.
             GlassEffectContainer(spacing: C5hSpacing.lg) {
                 VStack(alignment: .leading, spacing: C5hSpacing.lg) {
+                    if let err = viewModel.lastError {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .font(C5hTypography.captionFont)
+                            .foregroundStyle(.red)
+                            .padding(C5hSpacing.sm)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.regularMaterial, in: C5hShape.rect(C5hRadius.s))
+                    }
                     UsageTrendCard(history: viewModel.dailyUsageHistory)
                     LazyVGrid(
                         columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],

@@ -36,6 +36,11 @@ struct SettingsView: View {
         Form {
             Section("LaunchAgent") {
                 LabeledContent("Status", value: registration.status.label)
+                if case .error(let message) = registration.status {
+                    Label(message, systemImage: "exclamationmark.octagon.fill")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(.red)
+                }
                 HStack {
                     Button("Refresh status") { registration.refresh() }
                         .buttonStyle(.glass)
