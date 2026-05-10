@@ -40,6 +40,10 @@ public enum UsageNormalizer {
            let status = try? ClaudeUsageStatus.parsePayload(rawJSON) {
             return status.normalizedUsage(providerID: providerID, capturedAt: capturedAt)
         }
+        if providerID == .codex,
+           let status = try? CodexUsageStatus.parsePayload(rawJSON) {
+            return status.normalizedUsage(providerID: providerID, capturedAt: capturedAt)
+        }
 
         guard
             let data = rawJSON.data(using: .utf8),
