@@ -47,6 +47,11 @@ struct DayCalendarScreen: View {
                 now = tick
             }
         }
+        .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder

@@ -22,16 +22,25 @@ struct LogsView: View {
                 await vm.reload()
             }
         }
+        .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder
     private func content(viewModel: LogsViewModel) -> some View {
         @Bindable var bound = viewModel
+        // Combined HSplitView minimum is 480 + 280 = 760pt. With the
+        // NavigationSplitView sidebar at its 220pt ideal width that totals
+        // 980pt, matching the window's minimum frame, so the sidebar no
+        // longer auto-collapses on the Logs route.
         HSplitView {
             tableSide(viewModel: viewModel)
-                .frame(minWidth: 560)
+                .frame(minWidth: 480, idealWidth: 600)
             CommandRunDetailView(run: viewModel.selectedRun)
-                .frame(minWidth: 360)
+                .frame(minWidth: 280, idealWidth: 360)
         }
         .searchable(
             text: $bound.searchText,

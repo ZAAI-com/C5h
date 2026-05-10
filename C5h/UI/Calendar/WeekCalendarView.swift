@@ -28,6 +28,11 @@ struct WeekCalendarScreen: View {
                 await vm.reload()
             }
         }
+        .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder
