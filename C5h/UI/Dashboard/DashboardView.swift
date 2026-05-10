@@ -57,6 +57,13 @@ struct DashboardView: View {
                 await viewModel?.reload()
             }
         }
+        .onAppear {
+            // Reload on every visit so Active Windows / Recent Runs / Provider Health
+            // pick up changes that happened while the user was on another tab.
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder
@@ -117,15 +124,28 @@ struct DashboardView: View {
     private func activeWindowsCard(viewModel: DashboardViewModel) -> some View {
         DashboardCard(title: "Active windows") {
             if viewModel.activeWindows.isEmpty {
-                Text("No active 5h window right now.").foregroundStyle(C5hColors.fgSecondary)
+                Text("No active windows right now.").foregroundStyle(C5hColors.fgSecondary)
             } else {
                 VStack(alignment: .leading, spacing: C5hSpacing.sm) {
                     ForEach(viewModel.activeWindows) { window in
                         HStack(spacing: C5hSpacing.sm) {
                             Circle().fill(brandColor(for: window.providerID)).frame(width: 10, height: 10)
                             Text(window.providerID.displayName).font(C5hTypography.bodyFont)
+                            Text(windowKindLabel(durationSeconds: window.durationSeconds))
+                                .font(C5hTypography.captionFont)
+                                .foregroundStyle(C5hColors.fgTertiary)
+                            if let pct = viewModel.activeWindowUsagePercentages[window.id] {
+                                let clamped = min(max(pct, 0), 100)
+                                ProgressView(value: clamped, total: 100)
+                                    .progressViewStyle(.linear)
+                                    .tint(brandColor(for: window.providerID))
+                                    .frame(width: 60)
+                                Text("\(Int(clamped.rounded()))%")
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgSecondary)
+                            }
                             Spacer()
-                            Text("ends \(window.endAt.formatted(date: .omitted, time: .shortened))")
+                            Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
                                 .font(C5hTypography.captionFont)
                                 .foregroundStyle(C5hColors.fgSecondary)
                         }
@@ -133,6 +153,23 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    private func windowKindLabel(durationSeconds: Int) -> String {
+        switch durationSeconds {
+        case 5 * 3600: return "5h"
+        case 7 * 24 * 3600: return "7d"
+        default:
+            let hours = durationSeconds / 3600
+            return "\(hours)h"
+        }
+    }
+
+    private func formatEndAt(_ date: Date, durationSeconds: Int) -> String {
+        if durationSeconds > 24 * 3600 {
+            return date.formatted(date: .abbreviated, time: .shortened)
+        }
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     private func quickActionsCard(viewModel: DashboardViewModel) -> some View {

@@ -7,6 +7,7 @@ import C5hStore
 @MainActor
 final class DashboardViewModel {
     var activeWindows: [ActualWindow] = []
+    var activeWindowUsagePercentages: [UUID: Double] = [:]
     var upcomingPrompts: [ScheduledPrompt] = []
     var recentRuns: [CommandRun] = []
     var providerStatuses: [ProviderID: ProviderStatus] = [:]
@@ -43,9 +44,10 @@ final class DashboardViewModel {
             for providerID in ProviderID.allCases {
                 await refreshUsageWindow(providerID: providerID, now: now)
             }
-            let interval = DateInterval(start: now.addingTimeInterval(-86_400), end: now.addingTimeInterval(86_400))
+            let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actualRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            await refreshUsagePercentages()
             self.recentRuns = try await commandRepo.fetchRecent(
                 limit: 5,
                 filter: CommandRunFilter()
@@ -103,45 +105,85 @@ final class DashboardViewModel {
         do {
             let adapter = try registry.adapter(for: providerID)
             let snapshot = try await adapter.collectUsage()
+            guard !isSnapshotStale(snapshot, now: now) else {
+                NSLog("\(providerID.displayName) usage snapshot is stale; skipping")
+                return
+            }
             try await usageRepo.create(snapshot)
-            let window = try actualWindow(from: snapshot)
+            let windows = try actualWindows(from: snapshot)
 
-            guard window.startAt <= now, window.endAt >= now else {
-                return
+            for window in windows where window.startAt <= now && window.endAt >= now {
+                let duplicateSearch = DateInterval(
+                    start: window.startAt.addingTimeInterval(-TimeInterval(window.durationSeconds)),
+                    end: window.endAt.addingTimeInterval(1)
+                )
+                let existing = try await actualRepo.fetchWindows(for: duplicateSearch)
+                guard !existing.contains(where: { overlaps($0, window) }) else { continue }
+                try await actualRepo.create(window)
             }
-
-            let duplicateSearch = DateInterval(
-                start: window.startAt.addingTimeInterval(-TimeInterval(window.durationSeconds)),
-                end: window.endAt.addingTimeInterval(1)
-            )
-            let existing = try await actualRepo.fetchWindows(for: duplicateSearch)
-            guard !existing.contains(where: { overlaps($0, window) }) else {
-                return
-            }
-
-            try await actualRepo.create(window)
         } catch {
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
     }
 
-    private func actualWindow(from snapshot: UsageSnapshot) throws -> ActualWindow {
+    private func actualWindows(from snapshot: UsageSnapshot) throws -> [ActualWindow] {
         switch snapshot.providerID {
         case .claude:
-            return try ClaudeUsageStatus.parsePayload(snapshot.rawJSON).actualWindow(
-                providerID: .claude,
-                createdAt: snapshot.capturedAt
-            )
+            let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
+            var result = [status.actualWindow(providerID: .claude, createdAt: snapshot.capturedAt)]
+            if let weekly = status.sevenDayActualWindow(providerID: .claude, createdAt: snapshot.capturedAt) {
+                result.append(weekly)
+            }
+            return result
         case .codex:
-            return try CodexUsageStatus.parsePayload(snapshot.rawJSON).actualWindow(
-                providerID: .codex,
-                createdAt: snapshot.capturedAt
-            )
+            let status = try CodexUsageStatus.parsePayload(snapshot.rawJSON)
+            var result = [status.actualWindow(providerID: .codex, createdAt: snapshot.capturedAt)]
+            if let weekly = status.secondaryActualWindow(providerID: .codex, createdAt: snapshot.capturedAt) {
+                result.append(weekly)
+            }
+            return result
         }
+    }
+
+    private func isSnapshotStale(_ snapshot: UsageSnapshot, now: Date) -> Bool {
+        guard snapshot.providerID == .codex,
+              let status = try? CodexUsageStatus.parsePayload(snapshot.rawJSON) else {
+            return false
+        }
+        return status.isStale(now: now)
+    }
+
+    private func refreshUsagePercentages() async {
+        var next: [UUID: Double] = [:]
+        var cache: [ProviderID: NormalizedUsage?] = [:]
+        for window in activeWindows {
+            let normalized: NormalizedUsage?
+            if let cached = cache[window.providerID] {
+                normalized = cached
+            } else {
+                normalized = try? await loadLatestNormalized(providerID: window.providerID)
+                cache[window.providerID] = normalized
+            }
+            if let pct = normalized?.usedPercentage {
+                next[window.id] = pct
+            }
+        }
+        self.activeWindowUsagePercentages = next
+    }
+
+    private func loadLatestNormalized(providerID: ProviderID) async throws -> NormalizedUsage? {
+        guard let snapshot = try await usageRepo.fetchLatest(providerID: providerID) else {
+            return nil
+        }
+        guard let data = snapshot.normalizedJSON.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(NormalizedUsage.self, from: data)
     }
 
     private func overlaps(_ existing: ActualWindow, _ detected: ActualWindow) -> Bool {
         existing.providerID == detected.providerID
+            && existing.durationSeconds == detected.durationSeconds
             && existing.startAt < detected.endAt
             && existing.endAt > detected.startAt
     }

@@ -3,6 +3,7 @@ import Foundation
 public struct ClaudeUsageStatus: Sendable, Hashable {
     public static let sentinel = "C5H_RATE_LIMITS:"
     public static let fiveHourDurationSeconds = 5 * 60 * 60
+    public static let sevenDayDurationSeconds = 7 * 24 * 60 * 60
 
     public var fiveHour: RateLimitWindow
     public var sevenDay: RateLimitWindow?
@@ -14,6 +15,10 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
 
     public var fiveHourStartAt: Date {
         fiveHour.resetsAt.addingTimeInterval(-TimeInterval(Self.fiveHourDurationSeconds))
+    }
+
+    public var sevenDayStartAt: Date? {
+        sevenDay?.resetsAt.addingTimeInterval(-TimeInterval(Self.sevenDayDurationSeconds))
     }
 
     public func normalizedUsage(
@@ -38,6 +43,22 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
             providerID: providerID,
             startAt: fiveHourStartAt,
             durationSeconds: Self.fiveHourDurationSeconds,
+            source: .detectedFromUsage,
+            confidence: .estimated,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+    }
+
+    public func sevenDayActualWindow(
+        providerID: ProviderID = .claude,
+        createdAt: Date = .now
+    ) -> ActualWindow? {
+        guard let start = sevenDayStartAt else { return nil }
+        return ActualWindow(
+            providerID: providerID,
+            startAt: start,
+            durationSeconds: Self.sevenDayDurationSeconds,
             source: .detectedFromUsage,
             confidence: .estimated,
             createdAt: createdAt,

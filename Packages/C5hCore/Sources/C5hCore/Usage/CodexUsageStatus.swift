@@ -2,6 +2,8 @@ import Foundation
 
 public struct CodexUsageStatus: Sendable, Hashable {
     public static let fiveHourDurationSeconds = 5 * 60 * 60
+    public static let defaultSecondaryDurationSeconds = 7 * 24 * 60 * 60
+    public static let maxEventAgeSeconds: TimeInterval = 5 * 60 * 60
 
     public var eventTimestamp: Date
     public var primary: RateLimitWindow
@@ -57,6 +59,28 @@ public struct CodexUsageStatus: Sendable, Hashable {
             createdAt: createdAt,
             updatedAt: createdAt
         )
+    }
+
+    public func secondaryActualWindow(
+        providerID: ProviderID = .codex,
+        createdAt: Date = .now
+    ) -> ActualWindow? {
+        guard let secondary else { return nil }
+        let duration = secondaryWindowMinutes.map { $0 * 60 } ?? Self.defaultSecondaryDurationSeconds
+        let start = secondary.resetsAt.addingTimeInterval(-TimeInterval(duration))
+        return ActualWindow(
+            providerID: providerID,
+            startAt: start,
+            durationSeconds: duration,
+            source: .detectedFromUsage,
+            confidence: .estimated,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+    }
+
+    public func isStale(now: Date = .now) -> Bool {
+        now.timeIntervalSince(eventTimestamp) > Self.maxEventAgeSeconds
     }
 
     public func encodedPayload() -> String {

@@ -54,4 +54,50 @@ struct CodexUsageStatusTests {
         #expect(normalized.windowEndsAt?.timeIntervalSince1970 == 1_778_364_750)
         #expect(normalized.usedPercentage == 82)
     }
+
+    @Test("Builds secondary ActualWindow honoring window_minutes")
+    func buildsSecondaryActualWindow() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750},"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+        """)
+        let window = try #require(status.secondaryActualWindow(createdAt: Date(timeIntervalSince1970: 100)))
+
+        #expect(window.providerID == .codex)
+        #expect(window.source == .detectedFromUsage)
+        #expect(window.confidence == .estimated)
+        #expect(window.durationSeconds == 10080 * 60)
+        #expect(window.endAt.timeIntervalSince1970 == 1_778_968_800)
+        #expect(window.startAt.timeIntervalSince1970 == 1_778_968_800 - Double(10080 * 60))
+    }
+
+    @Test("Secondary ActualWindow defaults to seven days when window_minutes missing")
+    func secondaryActualWindowDefaultsToSevenDays() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750},"secondary":{"used_percent":45,"resets_at":1778968800}}}
+        """)
+        let window = try #require(status.secondaryActualWindow())
+
+        #expect(window.durationSeconds == 7 * 24 * 3600)
+        #expect(window.endAt.timeIntervalSince1970 == 1_778_968_800)
+    }
+
+    @Test("isStale returns true for events older than 5h")
+    func isStaleReturnsTrueWhenEventIsOld() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750}}}
+        """)
+        let sixHoursLater = status.eventTimestamp.addingTimeInterval(6 * 60 * 60)
+
+        #expect(status.isStale(now: sixHoursLater) == true)
+    }
+
+    @Test("isStale returns false for recent events")
+    func isStaleReturnsFalseWhenEventIsRecent() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750}}}
+        """)
+        let oneHourLater = status.eventTimestamp.addingTimeInterval(60 * 60)
+
+        #expect(status.isStale(now: oneHourLater) == false)
+    }
 }
