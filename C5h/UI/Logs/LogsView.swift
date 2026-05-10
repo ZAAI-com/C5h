@@ -32,15 +32,17 @@ struct LogsView: View {
     @ViewBuilder
     private func content(viewModel: LogsViewModel) -> some View {
         @Bindable var bound = viewModel
-        // Combined HSplitView minimum is 480 + 280 = 760pt. With the
-        // NavigationSplitView sidebar at its 220pt ideal width that totals
-        // 980pt, matching the window's minimum frame, so the sidebar no
-        // longer auto-collapses on the Logs route.
-        HSplitView {
+        // Plain HStack with a fixed-width detail panel. HSplitView (an
+        // NSSplitView bridge) was claiming its idealWidths via SwiftUI
+        // layout and pushing back on the NavigationSplitView sidebar,
+        // squeezing it below the 220pt fixed width. With a fixed detail
+        // and a flexible table, the sidebar holds.
+        HStack(spacing: 0) {
             tableSide(viewModel: viewModel)
-                .frame(minWidth: 480, idealWidth: 600)
+                .frame(minWidth: 380, maxWidth: .infinity)
+            Divider()
             CommandRunDetailView(run: viewModel.selectedRun)
-                .frame(minWidth: 280, idealWidth: 360)
+                .frame(width: 360)
         }
         .searchable(
             text: $bound.searchText,

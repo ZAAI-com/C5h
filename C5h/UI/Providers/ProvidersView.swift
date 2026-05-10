@@ -60,10 +60,6 @@ struct ProvidersView: View {
             .padding(C5hSpacing.xl)
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Text("Providers").font(.headline)
-            }
-
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task {

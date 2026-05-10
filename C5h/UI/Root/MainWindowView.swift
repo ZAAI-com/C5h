@@ -3,6 +3,7 @@ import SwiftUI
 struct MainWindowView: View {
     @State private var selectedTab: AppTab = .today
     @State private var showOnboarding: Bool = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @Environment(AppEnvironment.self) private var appEnv
 
     var body: some View {
@@ -15,16 +16,35 @@ struct MainWindowView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
-                NavigationSplitView {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
                     SidebarView(selection: $selectedTab)
+                        .toolbar(removing: .sidebarToggle)
                 } detail: {
                     detail
+                        .toolbar {
+                            // Always-present principal title so the title bar shows
+                            // the Liquid Glass capsule even before the route's
+                            // view-model finishes bootstrapping.
+                            ToolbarItem(placement: .principal) {
+                                Text(selectedTab.title).font(.headline)
+                            }
+                        }
                 }
                 .navigationSplitViewStyle(.balanced)
+                .onChange(of: columnVisibility) { _, newValue in
+                    // Sidebar must remain visible at all times; if SwiftUI auto-collapses
+                    // it (e.g. tight detail content) we restore .all immediately.
+                    if newValue != .all {
+                        columnVisibility = .all
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minWidth: 980, minHeight: 640)
+        // Glass-aware Material backdrop so the detail area never reads as flat
+        // white during route bootstrap.
+        .containerBackground(.thinMaterial, for: .window)
         .task(id: ObjectIdentifier(appEnv)) {
             guard let settings = appEnv.appSettingsRepository else { return }
             if await OnboardingView.shouldShow(appSettings: settings) {

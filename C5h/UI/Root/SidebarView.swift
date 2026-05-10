@@ -16,7 +16,7 @@ struct SidebarView: View {
             }
         }
         .navigationTitle("C5h")
-        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+        .navigationSplitViewColumnWidth(220)
     }
 }
 
