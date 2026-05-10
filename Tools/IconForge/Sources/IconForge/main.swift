@@ -1583,6 +1583,320 @@ func renderContactSheetRound3() throws {
     print("✓ 00-contact-sheet-round3.png")
 }
 
+// MARK: - Round 4 helpers (Swift-orange background)
+
+func renderWarmOrangeBackground(_ ctx: CGContext) {
+    paint(ctx,
+          linear: gradient(colors: [
+            rgb(245, 130, 60),
+            rgb(214, 78, 32)
+          ]),
+          from: CGPoint(x: 0, y: canvas),
+          to: CGPoint(x: canvas, y: 0))
+    paint(ctx,
+          radial: gradient(colors: [
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.22),
+            CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0)
+          ]),
+          center: CGPoint(x: canvas * 0.32, y: canvas * 0.82),
+          radius: canvas * 0.55)
+}
+
+// MARK: - 22. @C5h (reference baseline, refined)
+
+func renderAtC5hRefined() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawText(ctx, "@C5h",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 360, weight: .black,
+             color: white,
+             design: .monospaced)
+    try writePNG(ctx, to: outRoot.appendingPathComponent("22-at-c5h.png"))
+    print("✓ 22-at-c5h.png")
+}
+
+// MARK: - 23. <C5h/> tag
+
+func renderJSXOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawText(ctx, "<C5h/>",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 270, weight: .black,
+             color: white,
+             design: .monospaced)
+    try writePNG(ctx, to: outRoot.appendingPathComponent("23-jsx-on-orange.png"))
+    print("✓ 23-jsx-on-orange.png")
+}
+
+// MARK: - 24. {C5h} braces
+
+func renderBracesOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawText(ctx, "{C5h}",
+             at: CGPoint(x: canvas / 2, y: canvas / 2),
+             size: 290, weight: .black,
+             color: white,
+             design: .monospaced)
+    try writePNG(ctx, to: outRoot.appendingPathComponent("24-braces-on-orange.png"))
+    print("✓ 24-braces-on-orange.png")
+}
+
+// MARK: - 25. > C5h terminal prompt
+
+func renderTerminalOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    // Terminal-style chevron + name + cursor block (cream so it pops against orange)
+    drawCodeLine(
+        ctx,
+        [
+            ("> ", rgb(255, 220, 180, 0.85)),
+            ("C5h ", white)
+        ],
+        at: CGPoint(x: canvas * 0.42, y: canvas / 2),
+        size: 240, weight: .black,
+        design: .monospaced
+    )
+
+    // Cream cursor block to the right of "C5h"
+    let cursorRect = CGRect(x: canvas * 0.72, y: canvas / 2 - 100, width: 90, height: 200)
+    let cursorPath = CGPath(roundedRect: cursorRect, cornerWidth: 10, cornerHeight: 10, transform: nil)
+    ctx.addPath(cursorPath)
+    ctx.setFillColor(rgb(255, 240, 220))
+    ctx.fillPath()
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("25-terminal-on-orange.png"))
+    print("✓ 25-terminal-on-orange.png")
+}
+
+// MARK: - 26. /* C5h */ comment
+
+func renderCommentOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawCodeLine(
+        ctx,
+        [
+            ("/* ", rgb(255, 230, 200, 0.7)),
+            ("C5h", white),
+            (" */", rgb(255, 230, 200, 0.7))
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas / 2),
+        size: 180, weight: .black,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("26-comment-on-orange.png"))
+    print("✓ 26-comment-on-orange.png")
+}
+
+// MARK: - 27. func C5h() — single-line declaration
+
+func renderFuncOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawCodeLine(
+        ctx,
+        [
+            ("func ", rgb(255, 230, 200, 0.85)),
+            ("C5h", white),
+            ("()", rgb(255, 240, 220, 0.85))
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas / 2),
+        size: 150, weight: .black,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("27-func-on-orange.png"))
+    print("✓ 27-func-on-orange.png")
+}
+
+// MARK: - 28. C5h.swift filename with file-corner
+
+func renderFilenameOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    // A small subtle file-corner decoration top-right
+    let cornerSize: CGFloat = 100
+    let topRight = CGPoint(x: canvas - 130, y: canvas - 130)
+    let cornerPath = CGMutablePath()
+    cornerPath.move(to: CGPoint(x: topRight.x - cornerSize, y: topRight.y))
+    cornerPath.addLine(to: CGPoint(x: topRight.x, y: topRight.y))
+    cornerPath.addLine(to: CGPoint(x: topRight.x, y: topRight.y - cornerSize))
+    cornerPath.closeSubpath()
+    ctx.addPath(cornerPath)
+    ctx.setFillColor(rgb(255, 255, 255, 0.18))
+    ctx.fillPath()
+
+    drawCodeLine(
+        ctx,
+        [
+            ("C5h", white),
+            (".swift", rgb(255, 240, 220, 0.85))
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas / 2),
+        size: 180, weight: .black,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("28-filename-on-orange.png"))
+    print("✓ 28-filename-on-orange.png")
+}
+
+// MARK: - 29. C5h() function call (action-y)
+
+func renderCallOnOrange() throws {
+    let ctx = makeContext()
+    clip(ctx)
+    renderWarmOrangeBackground(ctx)
+
+    drawCodeLine(
+        ctx,
+        [
+            ("C5h", white),
+            ("()", rgb(255, 240, 220, 0.85))
+        ],
+        at: CGPoint(x: canvas / 2, y: canvas / 2),
+        size: 280, weight: .black,
+        design: .monospaced
+    )
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("29-call-on-orange.png"))
+    print("✓ 29-call-on-orange.png")
+}
+
+// MARK: - Round 4 contact sheet (8 cells: 4×2)
+
+func renderContactSheetRound4() throws {
+    let cellSize: CGFloat = 380
+    let labelHeight: CGFloat = 70
+    let columns = 4
+    let rows = 2
+    let padding: CGFloat = 40
+    let sheetW = CGFloat(columns) * cellSize + CGFloat(columns + 1) * padding
+    let sheetH = CGFloat(rows) * (cellSize + labelHeight) + CGFloat(rows + 1) * padding + 80
+    let actualSize = max(sheetW, sheetH)
+    let ctx = makeContext(size: actualSize)
+
+    ctx.setFillColor(rgb(240, 242, 248))
+    ctx.fill(CGRect(x: 0, y: 0, width: actualSize, height: actualSize))
+
+    drawText(ctx, "C5h candidates · warm-orange iterations on #20",
+             at: CGPoint(x: actualSize / 2, y: actualSize - 50),
+             size: 38, weight: .bold,
+             color: rgb(28, 36, 60),
+             design: .default)
+
+    let entries: [(String, String)] = [
+        ("22-at-c5h.png", "22. @C5h (refined)"),
+        ("23-jsx-on-orange.png", "23. <C5h/>"),
+        ("24-braces-on-orange.png", "24. {C5h}"),
+        ("25-terminal-on-orange.png", "25. > C5h▮"),
+        ("26-comment-on-orange.png", "26. /* C5h */"),
+        ("27-func-on-orange.png", "27. func C5h()"),
+        ("28-filename-on-orange.png", "28. C5h.swift"),
+        ("29-call-on-orange.png", "29. C5h()")
+    ]
+
+    for (i, (filename, label)) in entries.enumerated() {
+        let row = i / columns
+        let col = i % columns
+        let x = padding + CGFloat(col) * (cellSize + padding)
+        let yTop = actualSize - 100 - padding - CGFloat(row + 1) * (cellSize + labelHeight) - CGFloat(row) * padding
+        let cellRect = CGRect(x: x, y: yTop + labelHeight, width: cellSize, height: cellSize)
+
+        let iconURL = outRoot.appendingPathComponent(filename)
+        if let provider = CGDataProvider(url: iconURL as CFURL),
+           let cg = CGImage(pngDataProviderSource: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) {
+            ctx.saveGState()
+            ctx.setShadow(offset: CGSize(width: 0, height: -10), blur: 24, color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.25))
+            ctx.draw(cg, in: cellRect)
+            ctx.restoreGState()
+        }
+        drawText(ctx, label,
+                 at: CGPoint(x: x + cellSize / 2, y: yTop + labelHeight / 2),
+                 size: 26, weight: .semibold,
+                 color: rgb(28, 36, 60),
+                 design: .default)
+    }
+
+    try writePNG(ctx, to: outRoot.appendingPathComponent("00-contact-sheet-round4.png"))
+    print("✓ 00-contact-sheet-round4.png")
+}
+
+// MARK: - Icon Composer layer exports
+
+/// Renders a single foreground glyph with NO background and NO squircle, on
+/// a fully transparent canvas at high resolution. These are the inputs you
+/// drag into Icon Composer's foreground layer.
+func renderForegroundLayer(
+    name: String,
+    size: CGFloat = 2048,
+    draw: (CGContext) -> Void
+) throws {
+    let ctx = makeContext(size: size)
+    // Fully transparent background — no clipping, no fill.
+    draw(ctx)
+    let url = outRoot
+        .appendingPathComponent("IconComposer", isDirectory: true)
+        .appendingPathComponent(name)
+    try writePNG(ctx, to: url)
+    print("✓ IconComposer/\(name)")
+}
+
+func exportIconComposerAssets() throws {
+    let layerSize: CGFloat = 2048
+
+    // Common helper: render text centered on a transparent canvas. Black
+    // is the convention Icon Composer expects for foreground layers — it
+    // recolors the layer based on the chosen rendering style.
+    let blackInk = rgb(0, 0, 0)
+    func centeredText(_ ctx: CGContext, _ string: String, size: CGFloat,
+                      weight: NSFont.Weight = .black,
+                      design: NSFontDescriptor.SystemDesign = .monospaced,
+                      color: CGColor = blackInk) {
+        drawText(ctx, string,
+                 at: CGPoint(x: layerSize / 2, y: layerSize / 2),
+                 size: size, weight: weight, color: color, design: design)
+    }
+
+    // 22. @C5h — the user's chosen foreground concept
+    try renderForegroundLayer(name: "c5h-foreground-at.png", size: layerSize) { ctx in
+        centeredText(ctx, "@C5h", size: 720)
+    }
+
+    // Backup foreground options the user might want to switch to
+    try renderForegroundLayer(name: "c5h-foreground-jsx.png", size: layerSize) { ctx in
+        centeredText(ctx, "<C5h/>", size: 540)
+    }
+    try renderForegroundLayer(name: "c5h-foreground-braces.png", size: layerSize) { ctx in
+        centeredText(ctx, "{C5h}", size: 580)
+    }
+    try renderForegroundLayer(name: "c5h-foreground-call.png", size: layerSize) { ctx in
+        centeredText(ctx, "C5h()", size: 560)
+    }
+    try renderForegroundLayer(name: "c5h-foreground-c5h.png", size: layerSize) { ctx in
+        centeredText(ctx, "C5h", size: 820)
+    }
+}
+
 // MARK: - Run
 
 do {
@@ -1612,6 +1926,18 @@ do {
     try renderSwiftAttribute()
     try renderFunctionDecl()
     try renderContactSheetRound3()
+    // Round 4 — iterations on #20's warm-orange background
+    try renderAtC5hRefined()
+    try renderJSXOnOrange()
+    try renderBracesOnOrange()
+    try renderTerminalOnOrange()
+    try renderCommentOnOrange()
+    try renderFuncOnOrange()
+    try renderFilenameOnOrange()
+    try renderCallOnOrange()
+    try renderContactSheetRound4()
+    // Icon Composer layered exports
+    try exportIconComposerAssets()
     print("\nAll icons rendered to \(outRoot.path)")
 } catch {
     print("Error: \(error)")
