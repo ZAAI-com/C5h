@@ -8,8 +8,10 @@ struct ProviderCardView: View {
     let isLoading: Bool
     let onDetect: () -> Void
     let onTest: () -> Void
-    let onChoosePath: () -> Void
+    let onSetPath: (String) -> Void
     let onClearPath: () -> Void
+
+    @State private var pathDraft: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: C5hSpacing.md) {
@@ -20,11 +22,15 @@ struct ProviderCardView: View {
             actions
         }
         .padding(C5hSpacing.lg)
-        // LEVEL 3 — full glass card with subtle brand-colored tint for identity.
-        .glassEffect(
-            C5hGlass.card(tint: brandColor),
-            in: C5hShape.rect(C5hRadius.l)
-        )
+        // LEVEL 2 — Material content card with a thin brand-tinted stroke
+        // for identity. Action buttons inside stay glass.
+        .background(.regularMaterial, in: C5hShape.rect(C5hRadius.l))
+        .overlay {
+            C5hShape.rect(C5hRadius.l)
+                .strokeBorder(brandColor.opacity(0.15), lineWidth: 1)
+        }
+        .onAppear { pathDraft = configuredPath }
+        .onChange(of: configuredPath) { _, newValue in pathDraft = newValue }
     }
 
     private var header: some View {
@@ -85,14 +91,18 @@ struct ProviderCardView: View {
                 .buttonStyle(.glass)
                 .disabled(isLoading)
             Spacer()
-            Menu("CLI path…") {
-                Button("Choose…", action: onChoosePath)
+            HStack(spacing: C5hSpacing.xs) {
+                TextField("/usr/local/bin/\(id.executableName)", text: $pathDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 240)
+                Button("Save") { onSetPath(pathDraft) }
+                    .buttonStyle(.glass)
+                    .disabled(pathDraft == configuredPath)
                 if !configuredPath.isEmpty {
-                    Button("Clear override", action: onClearPath)
+                    Button("Clear", action: onClearPath)
+                        .buttonStyle(.glass)
                 }
             }
-            .menuStyle(.borderlessButton)
-            .frame(maxWidth: 160)
         }
     }
 

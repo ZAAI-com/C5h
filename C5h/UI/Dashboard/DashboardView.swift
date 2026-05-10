@@ -62,30 +62,29 @@ struct DashboardView: View {
     @ViewBuilder
     private func content(_ viewModel: DashboardViewModel) -> some View {
         ScrollView {
-            // LEVEL 3 — full glass cards, container shares sampling region.
-            GlassEffectContainer(spacing: C5hSpacing.lg) {
-                VStack(alignment: .leading, spacing: C5hSpacing.lg) {
-                    if let err = viewModel.lastError {
-                        Label(err, systemImage: "exclamationmark.triangle.fill")
-                            .font(C5hTypography.captionFont)
-                            .foregroundStyle(.red)
-                            .padding(C5hSpacing.sm)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.regularMaterial, in: C5hShape.rect(C5hRadius.s))
-                    }
-                    UsageTrendCard(history: viewModel.dailyUsageHistory)
-                    LazyVGrid(
-                        columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
-                        spacing: C5hSpacing.lg
-                    ) {
-                        activeWindowsCard(viewModel: viewModel)
-                        quickActionsCard(viewModel: viewModel)
-                        providerHealthCard(viewModel: viewModel)
-                        recentRunsCard(viewModel: viewModel)
-                    }
+            // LEVEL 2 — Material content cards; chips and quick-action buttons
+            // remain glass since they are navigation-layer affordances.
+            VStack(alignment: .leading, spacing: C5hSpacing.lg) {
+                if let err = viewModel.lastError {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(.red)
+                        .padding(C5hSpacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.regularMaterial, in: C5hShape.rect(C5hRadius.s))
                 }
-                .padding(C5hSpacing.xl)
+                UsageTrendCard(history: viewModel.dailyUsageHistory)
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
+                    spacing: C5hSpacing.lg
+                ) {
+                    activeWindowsCard(viewModel: viewModel)
+                    quickActionsCard(viewModel: viewModel)
+                    providerHealthCard(viewModel: viewModel)
+                    recentRunsCard(viewModel: viewModel)
+                }
             }
+            .padding(C5hSpacing.xl)
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -232,8 +231,9 @@ struct DashboardCard<Content: View>: View {
         }
         .padding(C5hSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // LEVEL 3 — full glass card. Wrapping LazyVGrid in GlassEffectContainer
-        // prevents glass-on-glass sampling artifacts.
-        .glassEffect(C5hGlass.card(), in: C5hShape.rect(C5hRadius.l))
+        // LEVEL 2 — content panel uses Material, not glass. Glass is reserved
+        // for the navigation layer (sidebar, toolbars, sheets, inspector,
+        // floating chips, hero panels).
+        .background(.regularMaterial, in: C5hShape.rect(C5hRadius.l))
     }
 }

@@ -15,18 +15,12 @@ struct MainWindowView: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
-                content
-                    .toolbar {
-                        ToolbarItem(placement: .principal) {
-                            Picker("Tab", selection: $selectedTab) {
-                                ForEach(AppTab.navTabs) { tab in
-                                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                        }
-                    }
+                NavigationSplitView {
+                    SidebarView(selection: $selectedTab)
+                } detail: {
+                    detail
+                }
+                .navigationSplitViewStyle(.balanced)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -40,7 +34,7 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private var content: some View {
+    private var detail: some View {
         switch selectedTab {
         case .dashboard:
             DashboardView()
