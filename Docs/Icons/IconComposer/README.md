@@ -1,20 +1,30 @@
 # C5h × Icon Composer
 
-Apple's **Icon Composer** (ships with Xcode 26, found at
-`/Applications/Xcode.app/Contents/Applications/Icon Composer.app`) is the
-right tool for the new layered Liquid Glass icons. It outputs a single
-`.icon` document that Xcode 26 reads natively, generating every platform
-size + light/dark/tinted variant from one source — and applies Apple's real
-gloss/specular/depth shaders that I can't fake in Core Graphics.
+Apple's **Icon Composer** ships with Xcode 26 at:
 
-`ictool` (the bundled CLI inside the app) only **exports** existing
-documents. Authoring still happens in the GUI for now, but my job is to
-hand you the cleanest possible inputs so the GUI step is trivial.
+```bash
+/Applications/Xcode.app/Contents/Applications/Icon Composer.app
+```
+
+The app icon is now built as an Icon Composer document at:
+
+```txt
+C5h/Resources/AppIcon.icon
+```
+
+Xcode compiles that `.icon` package directly during the asset catalog step and
+emits the final `AppIcon.icns` for the macOS app.
 
 ## What's in this folder
 
-Five 2048×2048 PNG **foreground layers**, all black-on-transparent (the
-convention Icon Composer expects — it recolors the layer per style):
+This folder keeps reusable Icon Composer input layers from earlier iterations.
+They are not the active app icon.
+
+The active app icon source lives in `C5h/Resources/AppIcon.icon` and uses the
+orange Liquid Glass `<C5h>` calendar image as a single Icon Composer layer.
+
+The legacy layer assets here are 2048×2048 PNG foreground layers, all
+black-on-transparent:
 
 | File | Foreground glyph |
 |---|---|
@@ -24,76 +34,46 @@ convention Icon Composer expects — it recolors the layer per style):
 | `c5h-foreground-call.png`    | `C5h()` |
 | `c5h-foreground-c5h.png`     | `C5h` (no syntax framing) |
 
-Pick one of these for the foreground layer in Icon Composer.
+You can still drag these into Icon Composer for alternate concepts.
 
-## Background recipe (matches round 4 / icon #20)
+## Active document
 
-Icon Composer's background controls let you specify a **linear gradient**.
-Use these colours for the warm Swift-orange you liked:
+The active `AppIcon.icon` package contains:
 
+```txt
+AppIcon.icon/
+├─ icon.json
+└─ Assets/
+   └─ C5h-LiquidGlass.png
 ```
-top-left      → bottom-right
-#F5823C       → #D64E20
+
+`icon.json` enables the Icon Composer renderer with:
+
+- `fill: automatic`
+- neutral shadow at `0.5`
+- `specular: true`
+- `translucency` enabled at `0.5`
+- `supported-platforms.squares: ["macOS"]`
+
+## Open in Icon Composer
+
+```bash
+open "/Applications/Xcode.app/Contents/Applications/Icon Composer.app" \
+  "C5h/Resources/AppIcon.icon"
 ```
-
-In RGB (0–255): `(245, 130, 60) → (214, 78, 32)`.
-
-Add a soft **white highlight** at roughly **30% from the left, 80% from the
-top** at 22% opacity. Icon Composer's "Light Angle" control will give you
-that effect; alternatively turn on the built-in **Specular Highlight**.
-
-## Step-by-step
-
-1. Open Icon Composer:
-
-   ```bash
-   open "/Applications/Xcode.app/Contents/Applications/Icon Composer.app"
-   ```
-
-2. **File → New** (or ⌘N). Pick the macOS / Multi-platform template.
-
-3. **Drag** `c5h-foreground-at.png` (or any of the five) onto the canvas.
-   Icon Composer adds it as a foreground layer.
-
-4. With the foreground layer selected, set:
-   - **Fill** → White
-   - **Material** → Liquid Glass (or "Solid" for a flatter modern look)
-   - **Shadow** → off (the warm background already has plenty of contrast)
-
-5. Click the canvas background. In the Inspector:
-   - **Style** → Linear Gradient
-   - Stops: `#F5823C` (top-left) → `#D64E20` (bottom-right)
-   - Optional: enable **Specular** for the soft top highlight
-
-6. **File → Save** as `C5h.icon` somewhere convenient (e.g. inside
-   `C5h/Resources/`).
-
-7. In Xcode, drag `C5h.icon` into the project navigator. Update the target's
-   **General → App Icon** dropdown to point at it. Xcode 26 handles every
-   platform size + variant automatically.
 
 ## Verify with `ictool`
 
-Once the document is saved, you can render preview PNGs from the CLI to
-sanity-check it without re-opening the GUI:
+Render a 1024×1024 preview from the committed `.icon` package:
 
 ```bash
 ICTOOL="/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
 
-# macOS Default
-"$ICTOOL" /path/to/C5h.icon \
+"$ICTOOL" C5h/Resources/AppIcon.icon \
   --export-image \
-  --output-file /tmp/C5h-default.png \
-  --platform iOS --rendition Default \
-  --width 1024 --height 1024 --scale 2
-
-# Tinted Dark variant
-"$ICTOOL" /path/to/C5h.icon \
-  --export-image \
-  --output-file /tmp/C5h-tinted.png \
-  --platform iOS --rendition TintedDark \
-  --width 1024 --height 1024 --scale 2 \
-  --tint-color 0.85 --tint-strength 0.75
+  --output-file /tmp/C5h-iconcomposer-preview.png \
+  --platform macOS --rendition Default \
+  --width 1024 --height 1024 --scale 1
 ```
 
 ## Regenerating the foreground layers
