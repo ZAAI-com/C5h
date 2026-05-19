@@ -70,7 +70,11 @@ LaunchAgent plist in the app bundle.
 
 ## Repository Layout
 
-- `C5h/` — main app sources (`App/`, `UI/`, resources)
+- `C5h/` — main app sources
+  - `App/` — entry point, `AppEnvironment`, `AppSettings`
+  - `UI/` — all SwiftUI views (one subdirectory per tab/feature)
+  - `Core/` — app-side services and adapters (providers, scheduler driver, helper, debug bundle)
+  - Resources — assets, plists
 - `Packages/` — three Swift packages: `C5hCore`, `C5hStore`, `C5hHelper`
 - `.conductor/` — build/run scripts (`main`, `run`)
 - `Toolkit/`, `Resources/` — build tooling and app assets
@@ -79,33 +83,44 @@ LaunchAgent plist in the app bundle.
 ## Architecture
 
 - **Entry point**: `C5h/App/C5hApp.swift` (SwiftUI `@main`, main `WindowGroup` + `Settings` scene).
-- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, and wires `ProviderRegistry`, `CommandRunner`, and `SchedulerTicker`.
-- **Navigation**: `C5h/UI/Root/MainWindowView.swift` uses `NavigationSplitView(.balanced)` with an `AppTab` enum (dashboard, today, tomorrow, calendar, logs, providers, settings); sidebar pinned to `.all` visibility.
+- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, `AppSchedulerDriver`, and `ManualTriggerCoordinator`, and seeds fixture data in Debug.
+- **Navigation**: `C5h/UI/Root/MainWindowView.swift` uses `NavigationSplitView(.balanced)` with an `AppTab` enum; sidebar pinned to `.all` visibility. Tabs are grouped into named sections: **Overview** (dashboard, today, tomorrow), **Calendar** (calendar), **Activity** (logs), **App** (providers, settings). Each screen owns its own `principal` toolbar item; `MainWindowView` is toolbar-agnostic.
+- **Onboarding**: `OnboardingView` is shown on first launch (keyed by `hasCompletedOnboarding` flag in `AppSettingsRepository`) before the main `NavigationSplitView`.
 - **State**: SwiftUI Observation (`@Observable`), `@MainActor` ViewModels, constructor-injected dependencies. No Combine, no global singletons.
 - **Persistence**: GRDB (SQLite) wrapped by `C5hStore.Database` over `DatabasePool`; foreign keys on; versioned migrations in `Packages/C5hStore/Sources/C5hStore/Migrations`.
 - **Concurrency**: `async/await` + `@MainActor`; models are `Sendable` value types.
+- **Process spawning**: All CLI invocations go through `DisclaimingSpawn` (in C5hCore), which uses `posix_spawn` + `responsibility_spawnattrs_setdisclaim` so macOS TCC attributes filesystem access to the child binary, not to C5h/C5hHelper.
 
 ## Packages
 
-- **C5hCore** (`Packages/C5hCore`) — domain models, services, provider adapters. Has tests.
-  - Models: `Provider`, `ScheduledPrompt`, `PlannedWindow`, `ActualWindow`, `CommandRun`, `PromptTemplate`, `UsageSnapshot`
-  - Services: `SchedulerService`, `DateTimeService`, `CommandRunner`, `CLIPathResolver`
-  - Providers: `ProviderAdapter` protocol with `ClaudeProviderAdapter`, `CodexProviderAdapter`
+- **C5hCore** (`Packages/C5hCore`) — domain models, services, process primitives. Has tests.
+  - Models: `Provider`, `ProviderID`, `ScheduledPrompt`, `PlannedWindow`, `ActualWindow`, `CommandRun`, `PromptTemplate`, `UsageSnapshot`
+  - Services: `SchedulerService`, `PlannedWindowService`, `MissedPromptPolicy`, `DateTimeService`, `CommandRunner`, `CLIPathResolver`, `EnvironmentResolver`, `CalendarPositioning`, `LogRetentionSweeper`
+  - Usage: `ClaudeUsageStatus`, `CodexUsageStatus`, `UsageDiffEngine`, `UsageNormalizer`
+  - Validation: `PlannedWindowValidator`
+  - Process: `DisclaimingSpawn` / `LaunchedProcess`, `CommandSpec`, `FileLogWriter`
   - Errors: `C5hError` (`LocalizedError`)
 - **C5hStore** (`Packages/C5hStore`) — GRDB persistence layer. Has tests.
   - `Database`, `Migrator`, `*Record` types, `*Repository` protocols + `GRDB*Repository` implementations
 - **C5hHelper** (`Packages/C5hHelper`) — executable background helper (see Debug helper section above).
+- **C5h/Core/** (app target, not a package) — app-side adapters and drivers:
+  - `Providers/`: `ProviderAdapter` protocol implementations (`ClaudeProviderAdapter`, `CodexProviderAdapter`, `CLIBackedProviderAdapter`), `ProviderRegistry`
+  - `Services/`: `AppSchedulerDriver`, `ManualTriggerCoordinator`, `SchedulerTicker`
+  - `Helper/`: `HelperDevModeRunner`, `HelperRegistrationService`
+  - `DebugBundle/`: `DebugBundleExporter`
+  - `Paths/`: `AppPaths`
 
 ## Domain Model (Quick Reference)
 
 - **Provider** — registered AI CLI (Claude, Codex) with path, brand color, enabled flag.
+- **ProviderID** — `String`-backed enum (`.claude`, `.codex`); provides `displayName` ("Claude", "Codex") and `executableName`.
 - **PlannedWindow** — user-scheduled time block; status: `draft → scheduled → triggered | missed | cancelled`.
 - **ActualWindow** — recorded execution window; `source: c5hTriggered | detectedFromUsage | manual`; `confidence: exact | estimated`; links to `CommandRun` and `UsageSnapshot`.
 - **ScheduledPrompt** — prompt to run at a specific time; status: `scheduled → due → running → succeeded | failed | missed | cancelled`.
 - **CommandRun** — single CLI invocation (args, stdout/stderr paths, exit code, tool version).
 - **PromptTemplate** — reusable prompt text (provider-specific or generic).
 - **UsageSnapshot** — point-in-time API usage metrics (tokens, cost).
-- **Scheduler flow**: `SchedulerTicker` polls `SchedulerService` → finds due `ScheduledPrompt`s → dispatches via `ProviderAdapter` → `CommandRunner` records `CommandRun` + `ActualWindow`.
+- **Scheduler flow**: `SchedulerTicker` polls `AppSchedulerDriver` → `SchedulerService` finds due `ScheduledPrompt`s → dispatches via `ProviderAdapter` → `CommandRunner` records `CommandRun` + `ActualWindow`.
 
 ## Testing
 
@@ -126,3 +141,4 @@ swift test --package-path Packages/C5hStore
 - No CI workflows (`.github/` is absent).
 - Custom errors flow through `C5hError`; avoid bare `throw NSError`.
 - DB-touching code goes through repository protocols, not raw GRDB calls in views.
+- Provider display names are "Claude" and "Codex" (short form); avoid "Claude Code" or "OpenAI Codex".
