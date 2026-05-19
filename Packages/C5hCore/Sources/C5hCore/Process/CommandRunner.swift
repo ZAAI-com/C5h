@@ -54,7 +54,8 @@ public actor CommandRunner: CommandRunning {
             status: .running,
             stdoutPath: logPaths.stdoutURL.path,
             stderrPath: logPaths.stderrURL.path,
-            toolVersion: spec.toolVersion
+            toolVersion: spec.toolVersion,
+            ownerPID: getpid()
         )
         try await onStart(run)
 

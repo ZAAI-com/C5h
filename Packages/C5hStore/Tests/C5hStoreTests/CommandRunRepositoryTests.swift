@@ -58,4 +58,62 @@ struct CommandRunRepositoryTests {
         #expect(recent.first { $0.status == .cancelled }?.errorMessage == "orphaned by app restart")
         #expect(recent.contains { $0.status == .succeeded })
     }
+
+    @Test("Sweep only cancels runs whose owner pid is dead or unknown")
+    func sweepScopedByOwnerPID() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        let alivePID: Int32 = 1234
+        let deadPID: Int32 = 4321
+        let liveRunID = UUID()
+        let deadRunID = UUID()
+        let legacyRunID = UUID()
+
+        try await repo.create(CommandRun(
+            id: liveRunID,
+            providerID: .claude,
+            runType: .triggerPrompt,
+            command: "claude",
+            argumentsJSON: "[]",
+            status: .running,
+            ownerPID: alivePID
+        ))
+        try await repo.create(CommandRun(
+            id: deadRunID,
+            providerID: .claude,
+            runType: .triggerPrompt,
+            command: "claude",
+            argumentsJSON: "[]",
+            status: .running,
+            ownerPID: deadPID
+        ))
+        try await repo.create(CommandRun(
+            id: legacyRunID,
+            providerID: .codex,
+            runType: .triggerPrompt,
+            command: "codex",
+            argumentsJSON: "[]",
+            status: .running,
+            ownerPID: nil
+        ))
+
+        let swept = try await repo.sweepStaleRunning(
+            message: "orphaned",
+            isAlive: { pid in pid == alivePID }
+        )
+        #expect(swept == 2)
+
+        let live = try await repo.fetch(id: liveRunID)
+        #expect(live?.status == .running)
+
+        let dead = try await repo.fetch(id: deadRunID)
+        #expect(dead?.status == .cancelled)
+        #expect(dead?.errorMessage == "orphaned")
+
+        let legacy = try await repo.fetch(id: legacyRunID)
+        #expect(legacy?.status == .cancelled)
+        #expect(legacy?.errorMessage == "orphaned")
+    }
 }

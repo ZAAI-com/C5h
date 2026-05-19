@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import GRDB
 import C5hCore
 
@@ -26,7 +27,25 @@ public protocol CommandRunRepository: Sendable {
     func update(_ run: CommandRun) async throws
     func fetch(id: UUID) async throws -> CommandRun?
     func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun]
-    func sweepStaleRunning(message: String) async throws -> Int
+    func sweepStaleRunning(message: String, isAlive: @Sendable (Int32) -> Bool) async throws -> Int
+}
+
+public extension CommandRunRepository {
+    func sweepStaleRunning(message: String) async throws -> Int {
+        try await sweepStaleRunning(message: message, isAlive: ProcessLiveness.isAlive)
+    }
+}
+
+public enum ProcessLiveness {
+    /// Returns true if `pid` names a process this user can observe.
+    /// `kill(pid, 0)` returns 0 if the process exists and is signalable, -1
+    /// with `errno == ESRCH` if it doesn't exist, or `errno == EPERM` if it
+    /// exists but we cannot signal it (treat as alive).
+    public static func isAlive(_ pid: Int32) -> Bool {
+        guard pid > 0 else { return false }
+        if kill(pid, 0) == 0 { return true }
+        return errno == EPERM
+    }
 }
 
 public struct GRDBCommandRunRepository: CommandRunRepository {
@@ -77,20 +96,45 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
         return try records.map { try $0.toCommandRun() }
     }
 
-    public func sweepStaleRunning(message: String) async throws -> Int {
+    public func sweepStaleRunning(
+        message: String,
+        isAlive: @Sendable (Int32) -> Bool
+    ) async throws -> Int {
         try await writer.write { db in
+            let runningRows = try Row.fetchAll(
+                db,
+                sql: "SELECT id, owner_pid FROM command_runs WHERE status = ?",
+                arguments: [CommandRunStatus.running.rawValue]
+            )
+
+            // Legacy rows (owner_pid NULL) and rows whose owner is no longer
+            // alive are eligible. Rows owned by a live process — possibly this
+            // process itself or a sibling app/helper — stay running.
+            let staleIDs: [String] = runningRows.compactMap { row in
+                guard let id: String = row["id"] else { return nil }
+                let ownerPid: Int? = row["owner_pid"]
+                if let ownerPid {
+                    return isAlive(Int32(ownerPid)) ? nil : id
+                }
+                return id
+            }
+
+            guard !staleIDs.isEmpty else { return 0 }
+
+            let placeholders = Array(repeating: "?", count: staleIDs.count).joined(separator: ",")
+            var arguments: [DatabaseValueConvertible?] = [
+                CommandRunStatus.cancelled.rawValue,
+                DateTimeService.formatUTC(.now),
+                message
+            ]
+            arguments.append(contentsOf: staleIDs.map { $0 as DatabaseValueConvertible? })
             try db.execute(
                 sql: """
                 UPDATE command_runs
                 SET status = ?, ended_at = ?, error = ?
-                WHERE status = ?
+                WHERE id IN (\(placeholders))
                 """,
-                arguments: [
-                    CommandRunStatus.cancelled.rawValue,
-                    DateTimeService.formatUTC(.now),
-                    message,
-                    CommandRunStatus.running.rawValue
-                ]
+                arguments: StatementArguments(arguments)
             )
             return db.changesCount
         }

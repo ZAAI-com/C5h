@@ -8,6 +8,25 @@ struct MainWindowView: View {
 
     var body: some View {
         Group {
+            switch appEnv.loadState {
+            case .loading:
+                bootstrapSplash
+            case .failed(let message):
+                bootstrapFailure(message: message)
+            case .ready:
+                readyBody
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 980, minHeight: 640)
+        // Glass-aware Material backdrop so the detail area never reads as flat
+        // white during route bootstrap.
+        .containerBackground(.thinMaterial, for: .window)
+    }
+
+    @ViewBuilder
+    private var readyBody: some View {
+        Group {
             if showOnboarding {
                 OnboardingView(appSettings: appEnv.appSettingsRepository) {
                     withAnimation(C5hAnimation.morph) {
@@ -32,17 +51,42 @@ struct MainWindowView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(minWidth: 980, minHeight: 640)
-        // Glass-aware Material backdrop so the detail area never reads as flat
-        // white during route bootstrap.
-        .containerBackground(.thinMaterial, for: .window)
-        .task(id: ObjectIdentifier(appEnv)) {
+        .task {
             guard let settings = appEnv.appSettingsRepository else { return }
             if await OnboardingView.shouldShow(appSettings: settings) {
                 showOnboarding = true
             }
         }
+    }
+
+    private var bootstrapSplash: some View {
+        VStack(spacing: C5hSpacing.md) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Starting C5h…")
+                .font(C5hTypography.bodyFont)
+                .foregroundStyle(C5hColors.fgSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func bootstrapFailure(message: String) -> some View {
+        VStack(spacing: C5hSpacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.red)
+            Text("C5h failed to start")
+                .font(C5hTypography.bodyFont)
+            Text(message)
+                .font(C5hTypography.captionFont)
+                .foregroundStyle(C5hColors.fgSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, C5hSpacing.lg)
+            Button("Retry") {
+                Task { await appEnv.bootstrap() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

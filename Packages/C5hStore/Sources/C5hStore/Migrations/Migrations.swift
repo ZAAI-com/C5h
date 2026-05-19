@@ -134,5 +134,11 @@ enum Migrations {
                 t.column("pid", .integer)
             }
         }
+
+        migrator.registerMigration("v2_command_run_owner") { db in
+            try db.alter(table: "command_runs") { t in
+                t.add(column: "owner_pid", .integer)
+            }
+        }
     }
 }

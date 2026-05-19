@@ -20,6 +20,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
     var parsedEventsJson: String?
     var error: String?
     var toolVersion: String?
+    var ownerPid: Int?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -37,6 +38,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
         case parsedEventsJson = "parsed_events_json"
         case error
         case toolVersion = "tool_version"
+        case ownerPid = "owner_pid"
     }
 
     init(from run: CommandRun) {
@@ -55,6 +57,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
         self.parsedEventsJson = run.parsedEventsJSON
         self.error = run.errorMessage
         self.toolVersion = run.toolVersion
+        self.ownerPid = run.ownerPID.map { Int($0) }
     }
 
     func toCommandRun() throws -> CommandRun {
@@ -82,7 +85,8 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
             stderrPath: stderrPath,
             parsedEventsJSON: parsedEventsJson,
             errorMessage: error,
-            toolVersion: toolVersion
+            toolVersion: toolVersion,
+            ownerPID: ownerPid.map { Int32($0) }
         )
     }
 }

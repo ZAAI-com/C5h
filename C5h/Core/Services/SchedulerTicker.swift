@@ -22,15 +22,15 @@ final class SchedulerTicker {
         guard task == nil else { return }
         isRunning = true
         let scheduler = scheduler
-        let interval = tickInterval
         task = Task { [weak self] in
             while !Task.isCancelled {
                 let report = await scheduler.tick(now: .now)
-                await MainActor.run {
+                let interval = await MainActor.run { () -> TimeInterval in
                     self?.lastReport = report
                     self?.lastError = report.lastError
+                    return self?.tickInterval ?? 30
                 }
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                try? await Task.sleep(for: .seconds(interval))
             }
         }
     }

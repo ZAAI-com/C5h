@@ -51,6 +51,8 @@ final class AppEnvironment {
                 NSLog("Swept \(sweptCount) stale running command runs at startup")
             }
 
+            let settingsRepo = GRDBAppSettingsRepository(database: db)
+
             self.providerRepository = providerRepo
             self.plannedWindowRepository = GRDBPlannedWindowRepository(database: db)
             self.actualWindowRepository = GRDBActualWindowRepository(database: db)
@@ -58,7 +60,7 @@ final class AppEnvironment {
             self.commandRunRepository = cmdRepo
             self.usageSnapshotRepository = GRDBUsageSnapshotRepository(database: db)
             self.promptTemplateRepository = GRDBPromptTemplateRepository(database: db)
-            self.appSettingsRepository = GRDBAppSettingsRepository(database: db)
+            self.appSettingsRepository = settingsRepo
             self.helperHeartbeatRepository = GRDBHelperHeartbeatRepository(database: db)
 
             self.providers = try await providerRepo.fetchAll()
@@ -72,8 +74,6 @@ final class AppEnvironment {
                 onComplete: { [cmdRepo] run in try await cmdRepo.update(run) }
             )
             self.commandRunner = runner
-            let settingsRepo = GRDBAppSettingsRepository(database: db)
-            self.appSettingsRepository = settingsRepo
             let registry = ProviderRegistry(adapters: [
                 ClaudeProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo),
                 CodexProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo)

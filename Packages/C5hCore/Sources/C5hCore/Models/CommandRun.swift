@@ -16,6 +16,7 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     public var parsedEventsJSON: String?
     public var errorMessage: String?
     public var toolVersion: String?
+    public var ownerPID: Int32?
 
     public init(
         id: UUID = UUID(),
@@ -32,7 +33,8 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
         stderrPath: String? = nil,
         parsedEventsJSON: String? = nil,
         errorMessage: String? = nil,
-        toolVersion: String? = nil
+        toolVersion: String? = nil,
+        ownerPID: Int32? = nil
     ) {
         self.id = id
         self.providerID = providerID
@@ -49,6 +51,7 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
         self.parsedEventsJSON = parsedEventsJSON
         self.errorMessage = errorMessage
         self.toolVersion = toolVersion
+        self.ownerPID = ownerPID
     }
 
     public var durationSeconds: Double? {
