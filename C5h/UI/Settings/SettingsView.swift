@@ -16,6 +16,13 @@ struct SettingsView: View {
             helperTab.tabItem { Label("Helper", systemImage: "bolt.horizontal.circle") }
             advancedTab.tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
         }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Settings")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+        }
         .task { await reloadHeartbeat() }
     }
 

@@ -21,14 +21,6 @@ struct MainWindowView: View {
                         .toolbar(removing: .sidebarToggle)
                 } detail: {
                     detail
-                        .toolbar {
-                            // Always-present principal title so the title bar shows
-                            // the Liquid Glass capsule even before the route's
-                            // view-model finishes bootstrapping.
-                            ToolbarItem(placement: .principal) {
-                                Text(selectedTab.title).font(.headline)
-                            }
-                        }
                 }
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: columnVisibility) { _, newValue in
@@ -59,10 +51,11 @@ struct MainWindowView: View {
         case .dashboard:
             DashboardView()
         case .today:
-            DayCalendarScreen(date: .now)
+            DayCalendarScreen(date: .now, title: "Today")
         case .tomorrow:
             DayCalendarScreen(
-                date: Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
+                date: Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now,
+                title: "Tomorrow"
             )
         case .calendar:
             WeekCalendarScreen()

@@ -4,6 +4,7 @@ import C5hStore
 
 struct DayCalendarScreen: View {
     let date: Date
+    var title: String = ""
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DayCalendarViewModel?
     @State private var coordinator: ManualTriggerCoordinator?
@@ -19,6 +20,7 @@ struct DayCalendarScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .toolbar { principalTitle }
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
@@ -54,6 +56,16 @@ struct DayCalendarScreen: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private var principalTitle: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text("\(title) \(date.c5hISODate)")
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .padding(.horizontal, C5hSpacing.sm)
+        }
+    }
+
     @ViewBuilder
     private func content(_ viewModel: DayCalendarViewModel) -> some View {
         @Bindable var bound = viewModel
@@ -82,7 +94,7 @@ struct DayCalendarScreen: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .toolbar { toolbar(viewModel: viewModel) }
+        .toolbar { actionToolbar(viewModel: viewModel) }
         // Non-blocking right-side glass pane (replaces the old .sheet inspector).
         .inspector(isPresented: Binding(
             get: { viewModel.selection != nil },
@@ -138,29 +150,7 @@ struct DayCalendarScreen: View {
     }
 
     @ToolbarContentBuilder
-    private func toolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
-            Button {
-                viewModel.goToPreviousDay()
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "chevron.left")
-            }
-            .help("Previous day")
-
-            Text(viewModel.date.formatted(date: .abbreviated, time: .omitted))
-                .font(.headline)
-                .monospacedDigit()
-
-            Button {
-                viewModel.goToNextDay()
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-            .help("Next day")
-        }
-
+    private func actionToolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Button {
                 viewModel.presentNewDraft()

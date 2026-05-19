@@ -13,6 +13,13 @@ struct WeekCalendarScreen: View {
             } else {
                 ProgressView("Loading week…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            Text("Calendar")
+                                .font(.title3.weight(.semibold))
+                                .padding(.horizontal, C5hSpacing.sm)
+                        }
+                    }
             }
         }
         .task(id: ObjectIdentifier(appEnv)) {
@@ -49,26 +56,29 @@ struct WeekCalendarScreen: View {
                 }
             }
             .toolbar {
-                ToolbarItemGroup(placement: .navigation) {
-                    Button {
-                        viewModel.goToPreviousWeek()
-                        Task { await viewModel.reload() }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .help("Previous week")
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: C5hSpacing.sm) {
+                        Button {
+                            viewModel.goToPreviousWeek()
+                            Task { await viewModel.reload() }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .help("Previous week")
 
-                    Text("Week of \(viewModel.weekStart.formatted(date: .abbreviated, time: .omitted))")
-                        .font(.headline)
-                        .monospacedDigit()
+                        Text("Week of \(viewModel.weekStart.c5hISODate)")
+                            .font(.title3.weight(.semibold))
+                            .monospacedDigit()
 
-                    Button {
-                        viewModel.goToNextWeek()
-                        Task { await viewModel.reload() }
-                    } label: {
-                        Image(systemName: "chevron.right")
+                        Button {
+                            viewModel.goToNextWeek()
+                            Task { await viewModel.reload() }
+                        } label: {
+                            Image(systemName: "chevron.right")
+                        }
+                        .help("Next week")
                     }
-                    .help("Next week")
+                    .padding(.horizontal, C5hSpacing.sm)
                 }
 
                 ToolbarItem(placement: .primaryAction) {

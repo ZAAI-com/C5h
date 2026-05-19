@@ -62,6 +62,7 @@
 		0A0012020700000000000005 /* C5hMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000005 /* C5hMaterials.swift */; };
 		0A0012020700000000000006 /* C5hShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000006 /* C5hShape.swift */; };
 		0A0012020700000000000007 /* C5hAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000007 /* C5hAnimations.swift */; };
+		0A0012020700000000000008 /* C5hDateFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000008 /* C5hDateFormat.swift */; };
 		0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000001 /* UsageAreaChartView.swift */; };
 		0A0012020800000000000002 /* UsageSparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000002 /* UsageSparklineView.swift */; };
 		0A0012020900000000000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020900000000000001 /* OnboardingView.swift */; };
@@ -124,6 +125,7 @@
 		0A0011020700000000000005 /* C5hMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hMaterials.swift; sourceTree = "<group>"; };
 		0A0011020700000000000006 /* C5hShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hShape.swift; sourceTree = "<group>"; };
 		0A0011020700000000000007 /* C5hAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hAnimations.swift; sourceTree = "<group>"; };
+		0A0011020700000000000008 /* C5hDateFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hDateFormat.swift; sourceTree = "<group>"; };
 		0A0011020800000000000001 /* UsageAreaChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAreaChartView.swift; sourceTree = "<group>"; };
 		0A0011020800000000000002 /* UsageSparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSparklineView.swift; sourceTree = "<group>"; };
 		0A0011020900000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -379,6 +381,7 @@
 				0A0011020700000000000005 /* C5hMaterials.swift */,
 				0A0011020700000000000006 /* C5hShape.swift */,
 				0A0011020700000000000007 /* C5hAnimations.swift */,
+				0A0011020700000000000008 /* C5hDateFormat.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -491,6 +494,7 @@
 				0A0012020700000000000005 /* C5hMaterials.swift in Sources */,
 				0A0012020700000000000006 /* C5hShape.swift in Sources */,
 				0A0012020700000000000007 /* C5hAnimations.swift in Sources */,
+				0A0012020700000000000008 /* C5hDateFormat.swift in Sources */,
 				0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */,
 				0A0012020800000000000002 /* UsageSparklineView.swift in Sources */,
 				0A0012020900000000000001 /* OnboardingView.swift in Sources */,

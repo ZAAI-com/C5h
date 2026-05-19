@@ -60,6 +60,12 @@ struct ProvidersView: View {
             .padding(C5hSpacing.xl)
         }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Providers")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task {

@@ -36,8 +36,8 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
     }
 
     /// Tabs shown in the in-window navigation surface.
-    /// `.settings` is intentionally excluded — Settings opens via the macOS Settings scene (Cmd-,).
-    static let navTabs: [AppTab] = [.dashboard, .today, .tomorrow, .calendar, .logs, .providers]
+    /// `.settings` is reachable from both the sidebar (this list) and the macOS Settings scene (⌘,).
+    static let navTabs: [AppTab] = [.dashboard, .today, .tomorrow, .calendar, .logs, .providers, .settings]
 
     struct SidebarSection: Identifiable {
         let title: String
@@ -48,6 +48,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
     static let navSections: [SidebarSection] = [
         SidebarSection(title: "Overview", tabs: [.dashboard]),
         SidebarSection(title: "Calendar", tabs: [.today, .tomorrow, .calendar]),
-        SidebarSection(title: "Activity", tabs: [.logs, .providers])
+        SidebarSection(title: "Activity", tabs: [.logs, .providers]),
+        SidebarSection(title: "App",      tabs: [.settings])
     ]
 }

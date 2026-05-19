@@ -94,6 +94,12 @@ struct DashboardView: View {
             .padding(C5hSpacing.xl)
         }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Dashboard")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     ForEach(ProviderID.allCases) { id in

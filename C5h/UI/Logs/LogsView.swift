@@ -50,6 +50,12 @@ struct LogsView: View {
             prompt: "Search prompt, cwd, error…"
         )
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Logs")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Picker("Provider", selection: providerBinding(viewModel: viewModel)) {
                     Text("All providers").tag(Optional<ProviderID>.none)
