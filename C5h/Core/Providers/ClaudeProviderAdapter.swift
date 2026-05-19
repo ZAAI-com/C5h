@@ -105,7 +105,7 @@ private struct ClaudeUsageCollector: Sendable {
                 executableURL: executableURL,
                 arguments: arguments,
                 environment: environment,
-                workingDirectory: environment["HOME"].map { URL(fileURLWithPath: $0) },
+                workingDirectory: Self.safeWorkingDirectory(),
                 stdin: .fileHandle(inputHandle),
                 stdout: .fileHandle(outputHandle),
                 stderr: .fileHandle(errorHandle)
@@ -241,6 +241,25 @@ private struct ClaudeUsageCollector: Sendable {
 
     private static func errnoMessage(_ prefix: String) -> String {
         "\(prefix): \(String(cString: strerror(errno)))"
+    }
+
+    /// Working directory for the usage collector subprocess.
+    ///
+    /// Avoid `$HOME`: launching `claude` there causes it to enumerate the home
+    /// directory on startup, which trips TCC prompts for `~/Library/Containers/*`
+    /// ("access data from other apps") and file-provider mounts like `~/OneDrive`.
+    /// The app's Application Support directory is owned by C5h and TCC-safe.
+    private static func safeWorkingDirectory() -> URL? {
+        let fm = FileManager.default
+        guard let support = try? fm.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ) else { return nil }
+        let dir = support.appendingPathComponent("C5h", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
     }
 }
 
