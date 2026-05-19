@@ -40,7 +40,7 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: C5hSpacing.md) {
                 bulletRow(icon: "calendar.day.timeline.left", text: "See active windows on the day calendar")
-                bulletRow(icon: "shippingbox", text: "Connect Claude Code and OpenAI Codex CLIs")
+                bulletRow(icon: "shippingbox", text: "Connect Claude and Codex CLIs")
                 bulletRow(icon: "chart.xyaxis.line", text: "Watch usage trends over time")
             }
             .padding(.vertical, C5hSpacing.sm)

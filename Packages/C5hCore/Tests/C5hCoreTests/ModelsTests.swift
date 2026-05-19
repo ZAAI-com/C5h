@@ -40,9 +40,9 @@ struct ModelsTests {
 
     @Test("ProviderID exposes display + executable names")
     func providerNames() {
-        #expect(ProviderID.claude.displayName == "Claude Code")
+        #expect(ProviderID.claude.displayName == "Claude")
         #expect(ProviderID.claude.executableName == "claude")
-        #expect(ProviderID.codex.displayName == "OpenAI Codex")
+        #expect(ProviderID.codex.displayName == "Codex")
         #expect(ProviderID.codex.executableName == "codex")
     }
 }

@@ -8,8 +8,8 @@ public enum ProviderID: String, Codable, Sendable, CaseIterable, Identifiable, H
 
     public var displayName: String {
         switch self {
-        case .claude: "Claude Code"
-        case .codex: "OpenAI Codex"
+        case .claude: "Claude"
+        case .codex: "Codex"
         }
     }
 
