@@ -23,6 +23,16 @@ struct CommandRunnerTests {
         return (runner, recorder)
     }
 
+    private static func stdout(_ run: CommandRun) throws -> String {
+        let path = try #require(run.stdoutPath)
+        return try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+    }
+
+    private static func stderr(_ run: CommandRun) throws -> String {
+        let path = try #require(run.stderrPath)
+        return try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+    }
+
     @Test("succeed exits 0 and stdout file contains 'ok'")
     func succeed() async throws {
         let dir = try TempDirectory.make()
@@ -39,9 +49,7 @@ struct CommandRunnerTests {
 
         #expect(result.status == .succeeded)
         #expect(result.exitCode == 0)
-        let stdoutPath = try #require(result.stdoutPath)
-        let stdout = try String(contentsOf: URL(fileURLWithPath: stdoutPath), encoding: .utf8)
-        #expect(stdout.contains("fake-cli ok"))
+        #expect(try Self.stdout(result).contains("fake-cli ok"))
 
         let calls = await recorder.calls
         #expect(calls == ["start", "complete"])
@@ -66,6 +74,92 @@ struct CommandRunnerTests {
         #expect(result.exitCode == 7)
     }
 
+    @Test("stderr is captured")
+    func stderrCapture() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let url = try Self.fakeCLIURL()
+        let (runner, _) = Self.makeRunner(directory: dir)
+
+        let result = try await runner.run(CommandSpec(
+            providerID: .codex,
+            runType: .testCommand,
+            executableURL: url,
+            arguments: ["echo-stderr", "problem details"],
+            timeoutSeconds: 5
+        ))
+
+        #expect(result.status == .succeeded)
+        #expect(try Self.stderr(result).contains("problem details"))
+    }
+
+    @Test("environment is passed to child process")
+    func environment() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let url = try Self.fakeCLIURL()
+        let (runner, _) = Self.makeRunner(directory: dir)
+        var environment = EnvironmentResolver.defaultEnvironment()
+        environment["C5H_TEST_ENV"] = "from-test"
+
+        let result = try await runner.run(CommandSpec(
+            providerID: .claude,
+            runType: .testCommand,
+            executableURL: url,
+            arguments: ["echo-env", "C5H_TEST_ENV"],
+            environment: environment,
+            timeoutSeconds: 5
+        ))
+
+        #expect(result.status == .succeeded)
+        #expect(try Self.stdout(result).trimmingCharacters(in: .whitespacesAndNewlines) == "from-test")
+    }
+
+    @Test("working directory is passed to child process")
+    func workingDirectory() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let workdir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(workdir) }
+        let url = try Self.fakeCLIURL()
+        let (runner, _) = Self.makeRunner(directory: dir)
+
+        let result = try await runner.run(CommandSpec(
+            providerID: .claude,
+            runType: .testCommand,
+            executableURL: url,
+            arguments: ["pwd"],
+            workingDirectory: workdir,
+            timeoutSeconds: 5
+        ))
+
+        #expect(result.status == .succeeded)
+        let actual = URL(fileURLWithPath: try Self.stdout(result).trimmingCharacters(in: .whitespacesAndNewlines))
+            .resolvingSymlinksInPath()
+            .path
+        let expected = workdir.resolvingSymlinksInPath().path
+        #expect(actual == expected)
+    }
+
+    @Test("large stdout is drained")
+    func largeOutput() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let url = try Self.fakeCLIURL()
+        let (runner, _) = Self.makeRunner(directory: dir)
+
+        let result = try await runner.run(CommandSpec(
+            providerID: .claude,
+            runType: .testCommand,
+            executableURL: url,
+            arguments: ["spam", "262144"],
+            timeoutSeconds: 5
+        ))
+
+        #expect(result.status == .succeeded)
+        #expect(try Self.stdout(result).utf8.count > 200_000)
+    }
+
     @Test("timeout marks status timedOut")
     func timeout() async throws {
         let dir = try TempDirectory.make()
@@ -82,6 +176,33 @@ struct CommandRunnerTests {
         ))
 
         #expect(result.status == .timedOut)
+    }
+
+    @Test("cancellation marks status cancelled")
+    func cancellation() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let url = try Self.fakeCLIURL()
+        let (runner, recorder) = Self.makeRunner(directory: dir)
+
+        let task = Task {
+            try await runner.run(CommandSpec(
+                providerID: .claude,
+                runType: .testCommand,
+                executableURL: url,
+                arguments: ["sleep", "10"],
+                timeoutSeconds: 30
+            ))
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        task.cancel()
+
+        let result = try await task.value
+        #expect(result.status == .cancelled)
+        #expect(result.errorMessage == "Cancelled")
+
+        let calls = await recorder.calls
+        #expect(calls == ["start", "complete"])
     }
 }
 

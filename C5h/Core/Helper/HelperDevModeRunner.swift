@@ -8,7 +8,7 @@ import C5hCore
 /// exercise the same scheduler loop end-to-end during development.
 @MainActor
 final class HelperDevModeRunner {
-    private(set) var process: Process?
+    private(set) var process: LaunchedProcess?
     private(set) var lastError: String?
 
     var isRunning: Bool {
@@ -22,14 +22,24 @@ final class HelperDevModeRunner {
             lastError = "Helper binary missing at \(url.path) — run `swift build --package-path Packages/C5hHelper` first."
             return
         }
-        let p = Process()
-        p.executableURL = url
-        p.environment = EnvironmentResolver.defaultEnvironment()
-        p.standardOutput = FileHandle(forWritingAtPath: "/tmp/c5hhelper.dev.out") ?? FileHandle.standardOutput
-        p.standardError = FileHandle(forWritingAtPath: "/tmp/c5hhelper.dev.err") ?? FileHandle.standardError
+
+        let stdoutURL = URL(fileURLWithPath: "/tmp/c5hhelper.dev.out")
+        let stderrURL = URL(fileURLWithPath: "/tmp/c5hhelper.dev.err")
         do {
-            try p.run()
-            process = p
+            let stdoutHandle = try Self.truncatedLogHandle(at: stdoutURL)
+            let stderrHandle = try Self.truncatedLogHandle(at: stderrURL)
+            defer {
+                try? stdoutHandle.close()
+                try? stderrHandle.close()
+            }
+
+            process = try DisclaimingSpawn.launch(
+                executableURL: url,
+                arguments: [],
+                environment: EnvironmentResolver.defaultEnvironment(),
+                stdout: .fileHandle(stdoutHandle),
+                stderr: .fileHandle(stderrHandle)
+            )
             lastError = nil
         } catch {
             lastError = String(describing: error)
@@ -37,8 +47,19 @@ final class HelperDevModeRunner {
     }
 
     func stop() {
-        process?.terminate()
-        process = nil
+        guard let process else { return }
+        process.terminate()
+        Task.detached(priority: .utility) {
+            _ = process.waitBlocking()
+        }
+        self.process = nil
+    }
+
+    private static func truncatedLogHandle(at url: URL) throws -> FileHandle {
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: 0)
+        return handle
     }
 
     private static func helperBinaryURL() -> URL {

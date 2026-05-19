@@ -42,21 +42,24 @@ public struct DefaultCLIPathResolver: CLIPathResolving {
         guard fm.isExecutableFile(atPath: whichExecutable.path) else {
             return nil
         }
-        let process = Process()
-        process.executableURL = whichExecutable
-        process.arguments = [name]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        process.environment = EnvironmentResolver.defaultEnvironment()
+
+        let launched: LaunchedProcess
         do {
-            try process.run()
+            launched = try DisclaimingSpawn.launch(
+                executableURL: whichExecutable,
+                arguments: [name],
+                environment: EnvironmentResolver.defaultEnvironment(),
+                stdout: .pipe,
+                stderr: .devNull
+            )
         } catch {
             return nil
         }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        defer { try? launched.stdoutHandle?.close() }
+
+        let exitCode = await launched.wait()
+        guard exitCode == 0 else { return nil }
+        let data = launched.stdoutHandle?.readDataToEndOfFile() ?? Data()
         guard
             let raw = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),

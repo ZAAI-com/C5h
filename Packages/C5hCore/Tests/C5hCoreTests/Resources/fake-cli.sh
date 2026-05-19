@@ -7,6 +7,7 @@
 #   spam <bytes>           — write N bytes to stdout
 #   echo-stderr <msg>      — write msg to stderr, exit 0
 #   echo-env <VAR>         — print env var to stdout
+#   pwd                    — print current working directory
 case "$1" in
   succeed)
     echo "fake-cli ok" ;;
@@ -23,7 +24,9 @@ case "$1" in
     echo "$*" 1>&2 ;;
   echo-env)
     eval "echo \$$2" ;;
+  pwd)
+    pwd ;;
   *)
-    echo "fake-cli: usage: succeed|fail|sleep|spam|echo-stderr|echo-env" 1>&2
+    echo "fake-cli: usage: succeed|fail|sleep|spam|echo-stderr|echo-env|pwd" 1>&2
     exit 2 ;;
 esac

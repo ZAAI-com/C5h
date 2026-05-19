@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public protocol CommandRunning: Sendable {
     func run(_ spec: CommandSpec, runID: UUID) async throws -> CommandRun
@@ -88,78 +89,75 @@ public actor CommandRunner: CommandRunning {
     }
 
     private func execute(spec: CommandSpec, logPaths: LogFilePaths) async throws -> ProcessOutcome {
-        let process = Process()
-        process.executableURL = spec.executableURL
-        process.arguments = spec.arguments
-        if let cwd = spec.workingDirectory {
-            process.currentDirectoryURL = cwd
-        }
-        if !spec.environment.isEmpty {
-            process.environment = spec.environment
-        }
+        let stdoutLog = FileHandle(forWritingAtPath: logPaths.stdoutURL.path)
+        let stderrLog = FileHandle(forWritingAtPath: logPaths.stderrURL.path)
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        let stdoutHandle = FileHandle(forWritingAtPath: logPaths.stdoutURL.path)
-        let stderrHandle = FileHandle(forWritingAtPath: logPaths.stderrURL.path)
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty { return }
-            try? stdoutHandle?.write(contentsOf: data)
-        }
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty { return }
-            try? stderrHandle?.write(contentsOf: data)
-        }
-
+        let launched: LaunchedProcess
         do {
-            try process.run()
+            launched = try DisclaimingSpawn.launch(
+                executableURL: spec.executableURL,
+                arguments: spec.arguments,
+                environment: spec.environment,
+                workingDirectory: spec.workingDirectory,
+                stdin: .devNull,
+                stdout: .pipe,
+                stderr: .pipe
+            )
         } catch {
-            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-            stderrPipe.fileHandleForReading.readabilityHandler = nil
-            try? stdoutHandle?.close()
-            try? stderrHandle?.close()
+            try? stdoutLog?.close()
+            try? stderrLog?.close()
             return ProcessOutcome(kind: .launchFailed(String(describing: error)))
         }
 
-        let outcome = await withTaskGroup(of: ProcessOutcome.Kind.self) { group in
-            group.addTask {
-                await waitForExit(process: process)
-            }
-            group.addTask {
-                let nanos = UInt64(spec.timeoutSeconds * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
-                if Task.isCancelled { return .cancelled }
-                if process.isRunning {
-                    process.terminate()
-                    return .timedOut
-                }
-                return .completed(process.terminationStatus)
-            }
-            let first = await group.next() ?? .launchFailed("no outcome")
-            group.cancelAll()
-            return first
+        launched.stdoutHandle?.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty { return }
+            try? stdoutLog?.write(contentsOf: data)
+        }
+        launched.stderrHandle?.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty { return }
+            try? stderrLog?.write(contentsOf: data)
         }
 
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        if process.isRunning {
-            process.terminate()
-            process.waitUntilExit()
+        let outcome = await withTaskCancellationHandler {
+            await withTaskGroup(of: ProcessOutcome.Kind.self) { group in
+                group.addTask {
+                    let code = await launched.wait()
+                    return .completed(code)
+                }
+                group.addTask {
+                    let nanos = UInt64(spec.timeoutSeconds * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: nanos)
+                    if Task.isCancelled { return .cancelled }
+                    if launched.isRunning {
+                        launched.terminate()
+                        return .timedOut
+                    }
+                    return .completed(launched.waitBlocking())
+                }
+                let first = await group.next() ?? .launchFailed("no outcome")
+                group.cancelAll()
+                return first
+            }
+        } onCancel: {
+            launched.terminate()
+        }
+
+        launched.stdoutHandle?.readabilityHandler = nil
+        launched.stderrHandle?.readabilityHandler = nil
+        if launched.isRunning {
+            launched.terminate()
+            _ = launched.waitBlocking()
         }
         // Drain any bytes that landed in the pipe buffer after the
         // readabilityHandler was cleared. Without this, fast-exiting
         // processes can leave a few bytes unread under parallel test
         // execution where GCD's readability queue is contended.
-        Self.drain(pipe: stdoutPipe, into: stdoutHandle)
-        Self.drain(pipe: stderrPipe, into: stderrHandle)
-        try? stdoutHandle?.close()
-        try? stderrHandle?.close()
+        if let h = launched.stdoutHandle { Self.drain(handle: h, into: stdoutLog) }
+        if let h = launched.stderrHandle { Self.drain(handle: h, into: stderrLog) }
+        try? stdoutLog?.close()
+        try? stderrLog?.close()
 
         if Task.isCancelled {
             return ProcessOutcome(kind: .cancelled)
@@ -167,20 +165,26 @@ public actor CommandRunner: CommandRunning {
         return ProcessOutcome(kind: outcome)
     }
 
-    private static func drain(pipe: Pipe, into handle: FileHandle?) {
-        let read = pipe.fileHandleForReading
+    private static func drain(handle: FileHandle, into log: FileHandle?) {
+        // Non-blocking read so a still-running grandchild (e.g. an orphan
+        // `sleep` inherited from a terminated shell) holding the pipe open
+        // doesn't stall us — we only want what's already buffered.
+        let fd = handle.fileDescriptor
+        let flags = fcntl(fd, F_GETFL, 0)
+        if flags >= 0 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
         while true {
-            let data = read.availableData
-            if data.isEmpty { break }
-            try? handle?.write(contentsOf: data)
-        }
-    }
-}
-
-private func waitForExit(process: Process) async -> CommandRunner.ProcessOutcome.Kind {
-    await withCheckedContinuation { (cont: CheckedContinuation<CommandRunner.ProcessOutcome.Kind, Never>) in
-        process.terminationHandler = { p in
-            cont.resume(returning: .completed(p.terminationStatus))
+            let n = buffer.withUnsafeMutableBufferPointer { buf -> Int in
+                Darwin.read(fd, buf.baseAddress, buf.count)
+            }
+            if n > 0 {
+                try? log?.write(contentsOf: Data(bytes: buffer, count: n))
+            } else if n == 0 {
+                break
+            } else {
+                if errno == EINTR { continue }
+                break
+            }
         }
     }
 }

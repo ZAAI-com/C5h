@@ -94,21 +94,25 @@ private struct ClaudeUsageCollector: Sendable {
             try? errorHandle.close()
         }
 
-        let process = Process()
-        process.executableURL = executableURL
-        process.arguments = [
+        let arguments = [
             "--setting-sources", "local",
             "--settings", try settingsJSON()
         ]
-        process.environment = environment
-        if let home = environment["HOME"] {
-            process.currentDirectoryURL = URL(fileURLWithPath: home)
-        }
-        process.standardInput = inputHandle
-        process.standardOutput = outputHandle
-        process.standardError = errorHandle
 
-        try process.run()
+        let launched: LaunchedProcess
+        do {
+            launched = try DisclaimingSpawn.launch(
+                executableURL: executableURL,
+                arguments: arguments,
+                environment: environment,
+                workingDirectory: environment["HOME"].map { URL(fileURLWithPath: $0) },
+                stdin: .fileHandle(inputHandle),
+                stdout: .fileHandle(outputHandle),
+                stderr: .fileHandle(errorHandle)
+            )
+        } catch {
+            throw C5hError.processLaunchFailed(String(describing: error))
+        }
 
         let existingFlags = fcntl(masterFD, F_GETFL, 0)
         if existingFlags >= 0 {
@@ -123,13 +127,18 @@ private struct ClaudeUsageCollector: Sendable {
         let deadline = startedAt.addingTimeInterval(timeoutSeconds)
 
         defer {
-            if process.isRunning {
+            if launched.isRunning {
                 try? Self.write("/exit\r", to: masterFD)
                 usleep(150_000)
-                if process.isRunning {
-                    process.terminate()
+                if launched.isRunning {
+                    launched.terminate()
+                    usleep(150_000)
+                }
+                if launched.isRunning {
+                    launched.kill()
                 }
             }
+            _ = launched.waitBlocking()
         }
 
         while Date() < deadline {
@@ -156,14 +165,14 @@ private struct ClaudeUsageCollector: Sendable {
                 }
             }
 
-            if !process.isRunning, sentUsageCommand {
+            if !launched.isRunning, sentUsageCommand {
                 break
             }
 
             usleep(100_000)
         }
 
-        if !process.isRunning {
+        if !launched.isRunning {
             throw C5hError.processLaunchFailed("Claude exited before reporting rate_limits.five_hour")
         }
         throw C5hError.processTimedOut

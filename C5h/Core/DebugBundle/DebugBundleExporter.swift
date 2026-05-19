@@ -1,4 +1,5 @@
 import Foundation
+import C5hCore
 
 @MainActor
 final class DebugBundleExporter {
@@ -57,19 +58,21 @@ final class DebugBundleExporter {
             }
         }
 
-        // Zip via Process + /usr/bin/zip (always available on macOS)
+        // Zip via /usr/bin/zip (always available on macOS)
         let zipURL = stagingRoot.appendingPathComponent("c5h-debug-bundle.zip")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-        process.arguments = ["-r", "-q", zipURL.path, "c5h-debug-bundle"]
-        process.currentDirectoryURL = stagingRoot
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
+        let process = try DisclaimingSpawn.launch(
+            executableURL: URL(fileURLWithPath: "/usr/bin/zip"),
+            arguments: ["-r", "-q", zipURL.path, "c5h-debug-bundle"],
+            workingDirectory: stagingRoot,
+            stdout: .devNull,
+            stderr: .devNull
+        )
+        let exitCode = await process.wait()
+        guard exitCode == 0 else {
             throw NSError(
                 domain: "DebugBundleExporter",
-                code: Int(process.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: "zip exited \(process.terminationStatus)"]
+                code: Int(exitCode),
+                userInfo: [NSLocalizedDescriptionKey: "zip exited \(exitCode)"]
             )
         }
 
