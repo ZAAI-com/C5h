@@ -1,28 +1,56 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+!Docs/Icons/
+!Docs/Icons/**
+._*
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# tauri-pilot E2E artifacts (screenshots, failure dumps)
-e2e/.artifacts/
-tauri-pilot-failures/
+# Xcode — user-specific state
+**/xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Xcode — derived / build outputs
+DerivedData/
+build/
+.build/
+.swiftpm/
+
+# Swift Package Manager — per-package resolution (workspace-level Package.resolved is kept)
+Packages/*/.build/
+Packages/*/Package.resolved
+Packages/*/.swiftpm/
+
+# Tests / fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Generic log files (use *.log; do NOT add a bare "logs" pattern — on
+# macOS APFS git's core.ignorecase=true makes it match C5h/UI/Logs/ too).
+*.log

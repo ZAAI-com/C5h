@@ -1,0 +1,764 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A0012010000000000000005 /* AppPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011030000000000000001 /* AppPaths.swift */; };
+		0A0080010000000000000002 /* C5hCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080010000000000000001 /* C5hCore */; };
+		0A0080020000000000000002 /* C5hStore in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0080020000000000000001 /* C5hStore */; };
+		0A0012020401000000000001 /* LogsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000001 /* LogsViewModel.swift */; };
+		0A0012020401000000000003 /* CommandRunTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000003 /* CommandRunTable.swift */; };
+		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
+		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
+		0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000001 /* LogsFixtureLoader.swift */; };
+		0A0012050000000000000001 /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000001 /* ProviderRegistry.swift */; };
+		0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */; };
+		0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000003 /* ClaudeProviderAdapter.swift */; };
+		0A0012050000000000000004 /* CodexProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000004 /* CodexProviderAdapter.swift */; };
+		0A0012020501000000000001 /* ProvidersViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000001 /* ProvidersViewModel.swift */; };
+		0A0012020501000000000002 /* ProviderCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000002 /* ProviderCardView.swift */; };
+		0A0012020501000000000003 /* ProviderStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020501000000000003 /* ProviderStatusBadge.swift */; };
+		0A0012020301000000000001 /* DayCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000001 /* DayCalendarView.swift */; };
+		0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000002 /* DayCalendarViewModel.swift */; };
+		0A0012020301000000000003 /* TimeRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000003 /* TimeRulerView.swift */; };
+		0A0012020301000000000004 /* NowLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000004 /* NowLineView.swift */; };
+		0A0012020301000000000005 /* ProviderColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000005 /* ProviderColumnView.swift */; };
+		0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000006 /* PlannedWindowBlockView.swift */; };
+		0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000007 /* ActualWindowBlockView.swift */; };
+		0A0012020301000000000008 /* WindowInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000008 /* WindowInspectorView.swift */; };
+		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
+		0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000002 /* CalendarFixtureLoader.swift */; };
+		0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000011 /* StartProviderNowSheet.swift */; };
+		0A0012020301000000000012 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000012 /* WeekCalendarView.swift */; };
+		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
+		0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000001 /* ManualTriggerCoordinator.swift */; };
+		0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000002 /* AppSchedulerDriver.swift */; };
+		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
+		0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000001 /* HelperRegistrationService.swift */; };
+		0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000002 /* HelperDevModeRunner.swift */; };
+		0A0012080000000000000001 /* DebugBundleExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011080000000000000001 /* DebugBundleExporter.swift */; };
+		0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */; };
+		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
+		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
+		0A0012010000000000000003 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000003 /* AppEnvironment.swift */; };
+		0A0012010000000000000004 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000004 /* AppCommands.swift */; };
+		0A0012020100000000000001 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000001 /* AppTab.swift */; };
+		0A0012020100000000000002 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000002 /* MainWindowView.swift */; };
+		0A0012020100000000000004 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020100000000000004 /* SidebarView.swift */; };
+		0A0012020200000000000001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000001 /* DashboardView.swift */; };
+		0A0012020200000000000002 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000002 /* DashboardViewModel.swift */; };
+		0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020300000000000001 /* DayCalendarScreen.swift */; };
+		0A0012020400000000000001 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020400000000000001 /* LogsView.swift */; };
+		0A0012020500000000000001 /* ProvidersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020500000000000001 /* ProvidersView.swift */; };
+		0A0012020600000000000001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020600000000000001 /* SettingsView.swift */; };
+		0A0012020700000000000001 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000001 /* PlaceholderScreen.swift */; };
+		0A0012020700000000000002 /* C5hColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000002 /* C5hColors.swift */; };
+		0A0012020700000000000003 /* C5hSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000003 /* C5hSpacing.swift */; };
+		0A0012020700000000000004 /* C5hTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000004 /* C5hTypography.swift */; };
+		0A0012020700000000000005 /* C5hMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000005 /* C5hMaterials.swift */; };
+		0A0012020700000000000006 /* C5hShape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000006 /* C5hShape.swift */; };
+		0A0012020700000000000007 /* C5hAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000007 /* C5hAnimations.swift */; };
+		0A0012020700000000000008 /* C5hDateFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020700000000000008 /* C5hDateFormat.swift */; };
+		0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000001 /* UsageAreaChartView.swift */; };
+		0A0012020800000000000002 /* UsageSparklineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020800000000000002 /* UsageSparklineView.swift */; };
+		0A0012020900000000000001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020900000000000001 /* OnboardingView.swift */; };
+		0A0012020200000000000003 /* UsageTrendCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020200000000000003 /* UsageTrendCard.swift */; };
+		0A0014010000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A0013010000000000000001 /* Assets.xcassets */; };
+		0A0014010000000000000002 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0A0013010000000000000002 /* AppIcon.icon */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0A0011030000000000000001 /* AppPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPaths.swift; sourceTree = "<group>"; };
+		0A0011010000000000000001 /* C5hApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hApp.swift; sourceTree = "<group>"; };
+		0A0011010000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		0A0011010000000000000003 /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		0A0011010000000000000004 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
+		0A0011020100000000000001 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
+		0A0011020100000000000002 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
+		0A0011020100000000000004 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		0A0011020200000000000001 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		0A0011020200000000000002 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+		0A0011020300000000000001 /* DayCalendarScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarScreen.swift; sourceTree = "<group>"; };
+		0A0011020400000000000001 /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
+		0A0011020401000000000001 /* LogsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsViewModel.swift; sourceTree = "<group>"; };
+		0A0011020401000000000003 /* CommandRunTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunTable.swift; sourceTree = "<group>"; };
+		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
+		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
+		0A0011040000000000000001 /* LogsFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsFixtureLoader.swift; sourceTree = "<group>"; };
+		0A0011050000000000000001 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
+		0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIBackedProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011050000000000000003 /* ClaudeProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011050000000000000004 /* CodexProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProviderAdapter.swift; sourceTree = "<group>"; };
+		0A0011020501000000000001 /* ProvidersViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersViewModel.swift; sourceTree = "<group>"; };
+		0A0011020501000000000002 /* ProviderCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderCardView.swift; sourceTree = "<group>"; };
+		0A0011020501000000000003 /* ProviderStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderStatusBadge.swift; sourceTree = "<group>"; };
+		0A0011020301000000000001 /* DayCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000002 /* DayCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarViewModel.swift; sourceTree = "<group>"; };
+		0A0011020301000000000003 /* TimeRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeRulerView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000004 /* NowLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowLineView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000005 /* ProviderColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColumnView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000006 /* PlannedWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowBlockView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000007 /* ActualWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualWindowBlockView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000008 /* WindowInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInspectorView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
+		0A0011040000000000000002 /* CalendarFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFixtureLoader.swift; sourceTree = "<group>"; };
+		0A0011020301000000000011 /* StartProviderNowSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartProviderNowSheet.swift; sourceTree = "<group>"; };
+		0A0011020301000000000012 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000013 /* WeekCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarViewModel.swift; sourceTree = "<group>"; };
+		0A0011060000000000000001 /* ManualTriggerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualTriggerCoordinator.swift; sourceTree = "<group>"; };
+		0A0011060000000000000002 /* AppSchedulerDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSchedulerDriver.swift; sourceTree = "<group>"; };
+		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
+		0A0011070000000000000001 /* HelperRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRegistrationService.swift; sourceTree = "<group>"; };
+		0A0011070000000000000002 /* HelperDevModeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperDevModeRunner.swift; sourceTree = "<group>"; };
+		0A0011080000000000000001 /* DebugBundleExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugBundleExporter.swift; sourceTree = "<group>"; };
+		0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowEditorSheet.swift; sourceTree = "<group>"; };
+		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
+		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0A0011020700000000000001 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
+		0A0011020700000000000002 /* C5hColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hColors.swift; sourceTree = "<group>"; };
+		0A0011020700000000000003 /* C5hSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hSpacing.swift; sourceTree = "<group>"; };
+		0A0011020700000000000004 /* C5hTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hTypography.swift; sourceTree = "<group>"; };
+		0A0011020700000000000005 /* C5hMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hMaterials.swift; sourceTree = "<group>"; };
+		0A0011020700000000000006 /* C5hShape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hShape.swift; sourceTree = "<group>"; };
+		0A0011020700000000000007 /* C5hAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hAnimations.swift; sourceTree = "<group>"; };
+		0A0011020700000000000008 /* C5hDateFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C5hDateFormat.swift; sourceTree = "<group>"; };
+		0A0011020800000000000001 /* UsageAreaChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAreaChartView.swift; sourceTree = "<group>"; };
+		0A0011020800000000000002 /* UsageSparklineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageSparklineView.swift; sourceTree = "<group>"; };
+		0A0011020900000000000001 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		0A0011020200000000000003 /* UsageTrendCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageTrendCard.swift; sourceTree = "<group>"; };
+		0A0013010000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0A0013010000000000000002 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		0A0013020000000000000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0A0013030000000000000001 /* C5h.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = C5h.entitlements; sourceTree = "<group>"; };
+		0A0021000000000000000001 /* C5h.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = C5h.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0A0030030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A0080010000000000000002 /* C5hCore in Frameworks */,
+				0A0080020000000000000002 /* C5hStore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A0002000000000000000001 /* C5h Project */ = {
+			isa = PBXGroup;
+			children = (
+				0A0010000000000000000001 /* C5h */,
+				0A0003000000000000000001 /* Products */,
+				0A0004000000000000000001 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		0A0003000000000000000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0A0021000000000000000001 /* C5h.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0A0004000000000000000001 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		0A0010000000000000000001 /* C5h */ = {
+			isa = PBXGroup;
+			children = (
+				0A0010010000000000000001 /* App */,
+				0A0010020000000000000001 /* UI */,
+				0A0010040000000000000001 /* Core */,
+				0A0010030000000000000001 /* Resources */,
+				0A0013020000000000000001 /* Info.plist */,
+				0A0013030000000000000001 /* C5h.entitlements */,
+			);
+			path = C5h;
+			sourceTree = "<group>";
+		};
+		0A0010040000000000000001 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				0A0010040100000000000001 /* Paths */,
+				0A0010040200000000000001 /* DevSeed */,
+				0A0010040300000000000001 /* Providers */,
+				0A0010040400000000000001 /* Services */,
+				0A0010040500000000000001 /* Helper */,
+				0A0010040600000000000001 /* DebugBundle */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		0A0010040500000000000001 /* Helper */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011070000000000000001 /* HelperRegistrationService.swift */,
+				0A0011070000000000000002 /* HelperDevModeRunner.swift */,
+			);
+			path = Helper;
+			sourceTree = "<group>";
+		};
+		0A0010040600000000000001 /* DebugBundle */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011080000000000000001 /* DebugBundleExporter.swift */,
+			);
+			path = DebugBundle;
+			sourceTree = "<group>";
+		};
+		0A0010040400000000000001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011060000000000000001 /* ManualTriggerCoordinator.swift */,
+				0A0011060000000000000002 /* AppSchedulerDriver.swift */,
+				0A0011060000000000000003 /* SchedulerTicker.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		0A0010040300000000000001 /* Providers */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011050000000000000001 /* ProviderRegistry.swift */,
+				0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */,
+				0A0011050000000000000003 /* ClaudeProviderAdapter.swift */,
+				0A0011050000000000000004 /* CodexProviderAdapter.swift */,
+			);
+			path = Providers;
+			sourceTree = "<group>";
+		};
+		0A0010040100000000000001 /* Paths */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011030000000000000001 /* AppPaths.swift */,
+			);
+			path = Paths;
+			sourceTree = "<group>";
+		};
+		0A0010010000000000000001 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011010000000000000001 /* C5hApp.swift */,
+				0A0011010000000000000002 /* AppDelegate.swift */,
+				0A0011010000000000000003 /* AppEnvironment.swift */,
+				0A0011010000000000000004 /* AppCommands.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		0A0010020000000000000001 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				0A0010020100000000000001 /* Root */,
+				0A0010020200000000000001 /* Dashboard */,
+				0A0010020300000000000001 /* Calendar */,
+				0A0010020400000000000001 /* Logs */,
+				0A0010020500000000000001 /* Providers */,
+				0A0010020600000000000001 /* Settings */,
+				0A0010020700000000000001 /* DesignSystem */,
+				0A0010020800000000000001 /* Charts */,
+				0A0010020900000000000001 /* Onboarding */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		0A0010020100000000000001 /* Root */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020100000000000001 /* AppTab.swift */,
+				0A0011020100000000000002 /* MainWindowView.swift */,
+				0A0011020100000000000004 /* SidebarView.swift */,
+			);
+			path = Root;
+			sourceTree = "<group>";
+		};
+		0A0010020200000000000001 /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020200000000000001 /* DashboardView.swift */,
+				0A0011020200000000000002 /* DashboardViewModel.swift */,
+				0A0011020200000000000003 /* UsageTrendCard.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		0A0010020300000000000001 /* Calendar */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020300000000000001 /* DayCalendarScreen.swift */,
+				0A0011020301000000000001 /* DayCalendarView.swift */,
+				0A0011020301000000000002 /* DayCalendarViewModel.swift */,
+				0A0011020301000000000003 /* TimeRulerView.swift */,
+				0A0011020301000000000004 /* NowLineView.swift */,
+				0A0011020301000000000005 /* ProviderColumnView.swift */,
+				0A0011020301000000000006 /* PlannedWindowBlockView.swift */,
+				0A0011020301000000000007 /* ActualWindowBlockView.swift */,
+				0A0011020301000000000008 /* WindowInspectorView.swift */,
+				0A0011020301000000000009 /* CalendarLayoutConfig.swift */,
+				0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */,
+				0A0011020301000000000011 /* StartProviderNowSheet.swift */,
+				0A0011020301000000000012 /* WeekCalendarView.swift */,
+				0A0011020301000000000013 /* WeekCalendarViewModel.swift */,
+			);
+			path = Calendar;
+			sourceTree = "<group>";
+		};
+		0A0010020400000000000001 /* Logs */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020400000000000001 /* LogsView.swift */,
+				0A0011020401000000000001 /* LogsViewModel.swift */,
+				0A0011020401000000000003 /* CommandRunTable.swift */,
+				0A0011020401000000000004 /* CommandRunDetailView.swift */,
+				0A0011020401000000000005 /* OutputLogView.swift */,
+			);
+			path = Logs;
+			sourceTree = "<group>";
+		};
+		0A0010040200000000000001 /* DevSeed */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011040000000000000001 /* LogsFixtureLoader.swift */,
+				0A0011040000000000000002 /* CalendarFixtureLoader.swift */,
+			);
+			path = DevSeed;
+			sourceTree = "<group>";
+		};
+		0A0010020500000000000001 /* Providers */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020500000000000001 /* ProvidersView.swift */,
+				0A0011020501000000000001 /* ProvidersViewModel.swift */,
+				0A0011020501000000000002 /* ProviderCardView.swift */,
+				0A0011020501000000000003 /* ProviderStatusBadge.swift */,
+			);
+			path = Providers;
+			sourceTree = "<group>";
+		};
+		0A0010020600000000000001 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020600000000000001 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		0A0010020800000000000001 /* Charts */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020800000000000001 /* UsageAreaChartView.swift */,
+				0A0011020800000000000002 /* UsageSparklineView.swift */,
+			);
+			path = Charts;
+			sourceTree = "<group>";
+		};
+		0A0010020900000000000001 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020900000000000001 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		0A0010020700000000000001 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				0A0011020700000000000001 /* PlaceholderScreen.swift */,
+				0A0011020700000000000002 /* C5hColors.swift */,
+				0A0011020700000000000003 /* C5hSpacing.swift */,
+				0A0011020700000000000004 /* C5hTypography.swift */,
+				0A0011020700000000000005 /* C5hMaterials.swift */,
+				0A0011020700000000000006 /* C5hShape.swift */,
+				0A0011020700000000000007 /* C5hAnimations.swift */,
+				0A0011020700000000000008 /* C5hDateFormat.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		0A0010030000000000000001 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0A0013010000000000000001 /* Assets.xcassets */,
+				0A0013010000000000000002 /* AppIcon.icon */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0A0040010000000000000001 /* C5h */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0A0051020000000000000001 /* Build configuration list for PBXNativeTarget "C5h" */;
+			buildPhases = (
+				0A0030010000000000000001 /* Sources */,
+				0A0030020000000000000001 /* Resources */,
+				0A0030030000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = C5h;
+			packageProductDependencies = (
+				0A0080010000000000000001 /* C5hCore */,
+				0A0080020000000000000001 /* C5hStore */,
+			);
+			productName = C5h;
+			productReference = 0A0021000000000000000001 /* C5h.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0A0001000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					0A0040010000000000000001 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+				};
+			};
+			buildConfigurationList = 0A0051010000000000000001 /* Build configuration list for PBXProject "C5h" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0A0002000000000000000001 /* C5h Project */;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0A0070010000000000000001 /* XCLocalSwiftPackageReference "Packages/C5hCore" */,
+				0A0070020000000000000001 /* XCLocalSwiftPackageReference "Packages/C5hStore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0A0003000000000000000001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0A0040010000000000000001 /* C5h */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0A0030020000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A0014010000000000000001 /* Assets.xcassets in Resources */,
+				0A0014010000000000000002 /* AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0A0030010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A0012010000000000000001 /* C5hApp.swift in Sources */,
+				0A0012010000000000000002 /* AppDelegate.swift in Sources */,
+				0A0012010000000000000003 /* AppEnvironment.swift in Sources */,
+				0A0012010000000000000004 /* AppCommands.swift in Sources */,
+				0A0012020100000000000001 /* AppTab.swift in Sources */,
+				0A0012020100000000000002 /* MainWindowView.swift in Sources */,
+				0A0012020100000000000004 /* SidebarView.swift in Sources */,
+				0A0012020200000000000001 /* DashboardView.swift in Sources */,
+				0A0012020200000000000002 /* DashboardViewModel.swift in Sources */,
+				0A0012020300000000000001 /* DayCalendarScreen.swift in Sources */,
+				0A0012020400000000000001 /* LogsView.swift in Sources */,
+				0A0012020500000000000001 /* ProvidersView.swift in Sources */,
+				0A0012020600000000000001 /* SettingsView.swift in Sources */,
+				0A0012020700000000000001 /* PlaceholderScreen.swift in Sources */,
+				0A0012020700000000000002 /* C5hColors.swift in Sources */,
+				0A0012020700000000000003 /* C5hSpacing.swift in Sources */,
+				0A0012020700000000000004 /* C5hTypography.swift in Sources */,
+				0A0012020700000000000005 /* C5hMaterials.swift in Sources */,
+				0A0012020700000000000006 /* C5hShape.swift in Sources */,
+				0A0012020700000000000007 /* C5hAnimations.swift in Sources */,
+				0A0012020700000000000008 /* C5hDateFormat.swift in Sources */,
+				0A0012020800000000000001 /* UsageAreaChartView.swift in Sources */,
+				0A0012020800000000000002 /* UsageSparklineView.swift in Sources */,
+				0A0012020900000000000001 /* OnboardingView.swift in Sources */,
+				0A0012020200000000000003 /* UsageTrendCard.swift in Sources */,
+				0A0012010000000000000005 /* AppPaths.swift in Sources */,
+				0A0012020401000000000001 /* LogsViewModel.swift in Sources */,
+				0A0012020401000000000003 /* CommandRunTable.swift in Sources */,
+				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
+				0A0012020401000000000005 /* OutputLogView.swift in Sources */,
+				0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */,
+				0A0012050000000000000001 /* ProviderRegistry.swift in Sources */,
+				0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */,
+				0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */,
+				0A0012050000000000000004 /* CodexProviderAdapter.swift in Sources */,
+				0A0012020501000000000001 /* ProvidersViewModel.swift in Sources */,
+				0A0012020501000000000002 /* ProviderCardView.swift in Sources */,
+				0A0012020501000000000003 /* ProviderStatusBadge.swift in Sources */,
+				0A0012020301000000000001 /* DayCalendarView.swift in Sources */,
+				0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */,
+				0A0012020301000000000003 /* TimeRulerView.swift in Sources */,
+				0A0012020301000000000004 /* NowLineView.swift in Sources */,
+				0A0012020301000000000005 /* ProviderColumnView.swift in Sources */,
+				0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */,
+				0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */,
+				0A0012020301000000000008 /* WindowInspectorView.swift in Sources */,
+				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
+				0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */,
+				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
+				0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */,
+				0A0012020301000000000012 /* WeekCalendarView.swift in Sources */,
+				0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */,
+				0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */,
+				0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */,
+				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,
+				0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */,
+				0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */,
+				0A0012080000000000000001 /* DebugBundleExporter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0A0070010000000000000001 /* XCLocalSwiftPackageReference "Packages/C5hCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/C5hCore;
+		};
+		0A0070020000000000000001 /* XCLocalSwiftPackageReference "Packages/C5hStore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/C5hStore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0A0080010000000000000001 /* C5hCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = C5hCore;
+		};
+		0A0080020000000000000001 /* C5hStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = C5hStore;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0A0050010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		0A0050020000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		0A0050030000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = C5h/C5h.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"C5h/Resources/PreviewData\"";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = C5h/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		0A0050040000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = C5h/C5h.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"C5h/Resources/PreviewData\"";
+				DEVELOPMENT_TEAM = 57KL6Y7V32;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = C5h/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0A0051010000000000000001 /* Build configuration list for PBXProject "C5h" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A0050010000000000000001 /* Debug */,
+				0A0050020000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0A0051020000000000000001 /* Build configuration list for PBXNativeTarget "C5h" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0A0050030000000000000001 /* Debug */,
+				0A0050040000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0A0001000000000000000001 /* Project object */;
+}

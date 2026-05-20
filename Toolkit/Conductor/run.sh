@@ -1,42 +1,17 @@
 #!/bin/bash
-# C5h Development Server
-# Starts Tauri in development mode with hot-reload.
+# C5h Run Script — opens the workspace in Xcode for interactive dev.
+# Agents that just need to build can use:
+#   xcodebuild -workspace C5h.xcworkspace -scheme C5h -configuration Debug build
+set -euo pipefail
+cd "$(dirname "$0")/../.."
 
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-cd "$PROJECT_DIR"
-
-DEV_PORT="${CONDUCTOR_PORT:-1420}"
-export VITE_DEV_PORT="$DEV_PORT"
-
-TEMP_CONFIG="$(mktemp -t c5h-tauri-dev-config.XXXXXX.json)"
-cleanup() {
-    rm -f "$TEMP_CONFIG"
-}
-trap cleanup EXIT
-
-cat > "$TEMP_CONFIG" <<EOF
-{
-  "build": {
-    "devUrl": "http://localhost:${DEV_PORT}"
-  }
-}
-EOF
-
-if [ ! -d "node_modules" ]; then
-    echo "node_modules missing — running setup first..."
-    "$SCRIPT_DIR/setup.sh"
+if [ ! -d "C5h.xcworkspace" ]; then
+  echo "C5h.xcworkspace missing. Run ./.conductor/main first." >&2
+  exit 1
 fi
 
-echo "========================================"
-echo "  C5h Dev Server (bun tauri dev)"
-echo "========================================"
-echo ""
-echo "Project directory: $PROJECT_DIR"
-echo "Dev URL: http://localhost:$DEV_PORT"
-echo "Press Ctrl-C to stop."
-echo ""
-
-bun tauri dev --config "$TEMP_CONFIG"
+if command -v xed >/dev/null 2>&1; then
+  exec xed C5h.xcworkspace
+else
+  exec open C5h.xcworkspace
+fi

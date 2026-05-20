@@ -1,79 +1,62 @@
 #!/bin/bash
-# C5h Setup Script
-# Checks prerequisites and installs frontend dependencies.
-
+# C5h Setup Script — verifies Xcode toolchain and warms the build cache.
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-cd "$PROJECT_DIR"
+cd "$(dirname "$0")/../.."
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
-check_pass() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
+ok()   { echo -e "${GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+fail() { echo -e "${RED}[ERROR]${NC} $1"; echo -e "        $2"; exit 1; }
 
-check_fail() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    echo -e "        $2"
-    exit 1
-}
+echo "=== C5h — AI Coding Window Tracker — Setup ==="
+echo
 
-echo "========================================"
-echo "  C5h - AI Tool Usage Tracker Setup"
-echo "========================================"
-echo ""
-echo "Project directory: $PROJECT_DIR"
-echo ""
-echo "Checking prerequisites..."
-echo ""
-
-echo "1. Rust toolchain"
-if command -v rustc &>/dev/null; then
-    check_pass "Rust $(rustc --version | awk '{print $2}')"
-else
-    check_fail "Rust not installed" "Install from: https://rustup.rs"
+if ! command -v xcode-select >/dev/null 2>&1; then
+  fail "xcode-select not found" "Install Xcode from the Mac App Store"
 fi
 
-if command -v cargo &>/dev/null; then
-    check_pass "Cargo $(cargo --version | awk '{print $2}')"
-else
-    check_fail "Cargo not installed" "Install Rust toolchain from: https://rustup.rs"
+if ! xcode-select -p >/dev/null 2>&1; then
+  fail "Xcode CLT path not configured" "Run: sudo xcode-select --install"
+fi
+ok "Xcode CLT at $(xcode-select -p)"
+
+if ! command -v xcodebuild >/dev/null 2>&1; then
+  fail "xcodebuild not found" "Make sure Xcode (not just CLT) is installed"
 fi
 
-echo ""
-echo "2. Bun package manager"
-if command -v bun &>/dev/null; then
-    check_pass "Bun $(bun --version)"
-else
-    check_fail "Bun not installed" "Install from: https://bun.sh"
+XCODE_VERSION=$(xcodebuild -version | head -n1)
+ok "$XCODE_VERSION"
+
+REQUIRED_MAJOR=26
+ACTUAL_MAJOR=$(xcodebuild -version | head -n1 | sed -E 's/Xcode ([0-9]+).*/\1/')
+if [ "$ACTUAL_MAJOR" -lt "$REQUIRED_MAJOR" ]; then
+  warn "Xcode $ACTUAL_MAJOR found; C5h targets macOS 26 and was built against Xcode $REQUIRED_MAJOR+. Build may fail."
 fi
 
-echo ""
-echo "3. Xcode Command Line Tools"
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    if xcode-select -p &>/dev/null; then
-        check_pass "Xcode CLT installed"
-    else
-        check_fail "Xcode CLT not installed" "Run: xcode-select --install"
-    fi
-else
-    check_pass "Xcode CLT check skipped (non-macOS host)"
+if [ ! -d "C5h.xcworkspace" ]; then
+  fail "C5h.xcworkspace missing" "Run setup from the repo root"
 fi
 
-echo ""
-echo "--- Installing frontend dependencies ---"
-bun install
-check_pass "Frontend dependencies installed"
+echo
+echo "Warming the Debug build cache (first build can take a while)…"
+xcodebuild \
+  -workspace C5h.xcworkspace \
+  -scheme C5h \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  build \
+  CODE_SIGNING_ALLOWED=NO \
+  | tail -n 25
 
-echo ""
-echo "========================================"
-echo "  Setup Complete!"
-echo "========================================"
-echo ""
-echo "Next step:"
-echo "  ./Toolkit/Conductor/run.sh"
-echo ""
+echo
+ok "Setup complete."
+echo
+echo "To open the project in Xcode:"
+echo "  ./.conductor/run"
+echo
+echo "Or build from the command line:"
+echo "  xcodebuild -workspace C5h.xcworkspace -scheme C5h -configuration Debug build"

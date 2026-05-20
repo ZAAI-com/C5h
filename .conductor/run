@@ -1,5 +1,5 @@
 #!/bin/bash
-# C5h Development Server
-# Starts Tauri in development mode with hot-reload
+# Conductor run entry-point: delegates to Toolkit/Conductor/run.sh
+set -euo pipefail
 cd "$(dirname "$0")/.."
-exec bun tauri dev
+exec ./Toolkit/Conductor/run.sh "$@"

@@ -1,0 +1,49 @@
+import Foundation
+import C5hCore
+import C5hStore
+
+struct CodexProviderAdapter: ProviderAdapter {
+    let id: ProviderID = .codex
+    let displayName: String = ProviderID.codex.displayName
+    private let backing: CLIBackedProviderAdapter
+
+    init(
+        runner: any CommandRunning,
+        resolver: any CLIPathResolving,
+        appSettings: any AppSettingsRepository
+    ) {
+        self.backing = CLIBackedProviderAdapter(
+            id: .codex,
+            displayName: ProviderID.codex.displayName,
+            executableName: ProviderID.codex.executableName,
+            runner: runner,
+            resolver: resolver,
+            appSettings: appSettings
+        )
+    }
+
+    func runVersionCommand() async -> ProviderStatus { await backing.runVersionCommand() }
+    func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
+
+    func runUsageCommand() async throws -> UsageSnapshot {
+        // Codex usage reset detection is intentionally disabled: reading
+        // ~/.codex/sessions/*.jsonl triggers macOS's "access data from other
+        // apps" TCC dialog, and the Codex CLI does not expose a programmatic
+        // /usage equivalent we could shell out to instead.
+        throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
+    }
+
+    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
+        let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
+        guard let cliURL = await backing.resolver.resolveCLI(
+            named: backing.executableName,
+            configuredPath: configured
+        ) else {
+            throw C5hError.cliNotFound(backing.executableName)
+        }
+        return try await backing.runner.run(
+            PromptCommand(providerID: .codex, executableURL: cliURL, input: input).spec(),
+            runID: runID
+        )
+    }
+}
