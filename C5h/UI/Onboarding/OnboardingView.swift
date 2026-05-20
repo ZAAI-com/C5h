@@ -4,6 +4,7 @@ import C5hStore
 struct OnboardingView: View {
     let onFinish: () -> Void
     private let appSettings: (any AppSettingsRepository)?
+    @State private var isFinishing = false
 
     init(appSettings: (any AppSettingsRepository)? = nil, onFinish: @escaping () -> Void) {
         self.appSettings = appSettings
@@ -48,10 +49,12 @@ struct OnboardingView: View {
             HStack(spacing: C5hSpacing.md) {
                 Button("Skip") { Task { await finish() } }
                     .buttonStyle(.glass)
+                    .disabled(isFinishing)
 
                 Button("Get started") { Task { await finish() } }
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
+                    .disabled(isFinishing)
             }
         }
         .padding(C5hSpacing.xxl)
@@ -71,6 +74,8 @@ struct OnboardingView: View {
     }
 
     private func finish() async {
+        guard !isFinishing else { return }
+        isFinishing = true
         if let appSettings {
             do {
                 try await appSettings.set(OnboardingView.completedKey, value: true)

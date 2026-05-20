@@ -87,10 +87,14 @@ final class DayCalendarViewModel {
             do {
                 try await scheduledRepository.create(prompt)
             } catch {
-                if draft.existingID == nil {
-                    try? await plannedRepository.delete(id: window.id)
-                } else if let original {
-                    try? await plannedRepository.update(original)
+                do {
+                    if draft.existingID == nil {
+                        try await plannedRepository.delete(id: window.id)
+                    } else if let original {
+                        try await plannedRepository.update(original)
+                    }
+                } catch let rollbackError {
+                    NSLog("DayCalendarViewModel: rollback after scheduled-prompt create failed: \(rollbackError)")
                 }
                 throw error
             }

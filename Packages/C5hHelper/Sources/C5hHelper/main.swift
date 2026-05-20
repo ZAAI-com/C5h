@@ -27,9 +27,20 @@ struct HelperMain {
         // Redirect stdout/stderr into the app's log directory so launchd doesn't
         // need StandardOutPath/StandardErrorPath (which can't expand ~).
         let helperLogsDir = appSupport.appendingPathComponent("logs", isDirectory: true)
-        try? FileManager.default.createDirectory(at: helperLogsDir, withIntermediateDirectories: true)
-        _ = freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.out.log").path, "a", stdout)
-        _ = freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.err.log").path, "a", stderr)
+        do {
+            try FileManager.default.createDirectory(at: helperLogsDir, withIntermediateDirectories: true)
+        } catch {
+            NSLog("C5hHelper: cannot create logs dir at \(helperLogsDir.path): \(error)")
+            exit(1)
+        }
+        guard freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.out.log").path, "a", stdout) != nil else {
+            NSLog("C5hHelper: failed to redirect stdout to \(helperLogsDir.path)")
+            exit(1)
+        }
+        guard freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.err.log").path, "a", stderr) != nil else {
+            NSLog("C5hHelper: failed to redirect stderr to \(helperLogsDir.path)")
+            exit(1)
+        }
 
         NSLog("C5hHelper \(helperVersion) starting (pid \(getpid()))")
         let dbURL = appSupport.appendingPathComponent("c5h.sqlite")
