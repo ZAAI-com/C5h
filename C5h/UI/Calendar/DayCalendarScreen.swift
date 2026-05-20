@@ -21,7 +21,7 @@ struct DayCalendarScreen: View {
             }
         }
         .toolbar { principalTitle }
-        .task(id: ObjectIdentifier(appEnv)) {
+        .task(id: BootstrapKey(env: ObjectIdentifier(appEnv), day: Calendar.current.startOfDay(for: date))) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
                let actualRepo = appEnv.actualWindowRepository,
@@ -33,6 +33,10 @@ struct DayCalendarScreen: View {
                     scheduledRepository: scheduledRepo
                 )
                 viewModel = vm
+                await vm.reload()
+            } else if let vm = viewModel,
+                      !Calendar.current.isDate(vm.date, inSameDayAs: date) {
+                vm.date = date
                 await vm.reload()
             }
             if coordinator == nil,
@@ -206,4 +210,9 @@ private extension Date {
     func atHour(_ hour: Int) -> Date {
         Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: self) ?? self
     }
+}
+
+private struct BootstrapKey: Hashable {
+    let env: ObjectIdentifier
+    let day: Date
 }

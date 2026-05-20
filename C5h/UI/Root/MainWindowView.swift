@@ -4,7 +4,9 @@ struct MainWindowView: View {
     @State private var selectedTab: AppTab = .today
     @State private var showOnboarding: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var dayAnchor: Date = .now
     @Environment(AppEnvironment.self) private var appEnv
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -57,6 +59,20 @@ struct MainWindowView: View {
                 showOnboarding = true
             }
         }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged).map({ $0 }) {
+                dayAnchor = .now
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                // Sleep/wake or app activation may have crossed midnight without
+                // delivering NSCalendarDayChanged; re-anchor on activation.
+                if !Calendar.current.isDate(dayAnchor, inSameDayAs: .now) {
+                    dayAnchor = .now
+                }
+            }
+        }
     }
 
     private var bootstrapSplash: some View {
@@ -95,10 +111,10 @@ struct MainWindowView: View {
         case .dashboard:
             DashboardView()
         case .today:
-            DayCalendarScreen(date: .now, title: "Today")
+            DayCalendarScreen(date: dayAnchor, title: "Today")
         case .tomorrow:
             DayCalendarScreen(
-                date: Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now,
+                date: Calendar.current.date(byAdding: .day, value: 1, to: dayAnchor) ?? dayAnchor,
                 title: "Tomorrow"
             )
         case .calendar:
