@@ -11,7 +11,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
     let resolver: any CLIPathResolving
     let appSettings: any AppSettingsRepository
 
-    func detectStatus() async -> ProviderStatus {
+    func runVersionCommand() async -> ProviderStatus {
         let configured = try? await appSettings.get(settingsKey, as: String.self)
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
             return ProviderStatus(
@@ -21,14 +21,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
             )
         }
         do {
-            let run = try await runner.run(CommandSpec(
-                providerID: id,
-                runType: .detectStatus,
-                executableURL: cliURL,
-                arguments: ["--version"],
-                environment: EnvironmentResolver.defaultEnvironment(),
-                timeoutSeconds: 10
-            ))
+            let run = try await runner.run(VersionCommand(providerID: id, executableURL: cliURL).spec())
             let version = try await firstLineOfStdout(run: run)
             return ProviderStatus(
                 providerID: id,
@@ -37,7 +30,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
                 version: version,
                 isAuthenticated: nil,
                 lastCheckedAt: .now,
-                errorMessage: run.status == .succeeded ? nil : run.errorMessage
+                errorMessage: run.status == .succeeded ? nil : await firstLineOfStderr(run: run) ?? run.errorMessage
             )
         } catch {
             return ProviderStatus(
@@ -49,22 +42,43 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         }
     }
 
-    func runTestCommand() async throws -> CommandRun {
+    func runAuthStatusCommand() async -> ProviderStatus {
         let configured = try? await appSettings.get(settingsKey, as: String.self)
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
-            throw C5hError.cliNotFound(executableName)
+            return ProviderStatus(
+                providerID: id,
+                isInstalled: false,
+                errorMessage: "Could not find '\(executableName)' on PATH or in known prefixes."
+            )
         }
-        return try await runner.run(CommandSpec(
-            providerID: id,
-            runType: .testCommand,
-            executableURL: cliURL,
-            arguments: ["--version"],
-            environment: EnvironmentResolver.defaultEnvironment(),
-            timeoutSeconds: 10
-        ))
+        do {
+            let run = try await runner.run(AuthStatusCommand(providerID: id, executableURL: cliURL).spec())
+            let stdout = try await stdout(run: run)
+            let authenticated = AuthStatusCommand.isAuthenticated(
+                providerID: id,
+                stdout: stdout,
+                exitCode: run.exitCode
+            )
+            return ProviderStatus(
+                providerID: id,
+                isInstalled: true,
+                cliPath: cliURL.path,
+                isAuthenticated: authenticated,
+                lastCheckedAt: .now,
+                errorMessage: authenticated ? nil : await firstLineOfStderr(run: run) ?? run.errorMessage
+            )
+        } catch {
+            return ProviderStatus(
+                providerID: id,
+                isInstalled: true,
+                cliPath: cliURL.path,
+                isAuthenticated: false,
+                errorMessage: String(describing: error)
+            )
+        }
     }
 
-    func collectUsage() async throws -> UsageSnapshot {
+    func runUsageCommand() async throws -> UsageSnapshot {
         // Real implementation arrives in M12. For now, a placeholder snapshot
         // keeps higher layers compilable.
         UsageSnapshot(
@@ -75,7 +89,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         )
     }
 
-    func triggerPrompt(_ input: TriggerPromptInput) async throws -> CommandRun {
+    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
         // Concrete adapters override this. Default falls back to a CLI run with
         // generic args so the path is still observable from Logs in early
         // milestones.
@@ -83,29 +97,33 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
             throw C5hError.cliNotFound(executableName)
         }
-        return try await runner.run(CommandSpec(
-            providerID: id,
-            runType: .triggerPrompt,
-            executableURL: cliURL,
-            arguments: defaultPromptArguments(input),
-            workingDirectory: input.projectPath.map { URL(fileURLWithPath: $0) },
-            environment: EnvironmentResolver.defaultEnvironment(),
-            timeoutSeconds: 60 * 60 * 6
-        ))
+        return try await runner.run(PromptCommand(providerID: id, executableURL: cliURL, input: input).spec())
     }
 
     var settingsKey: String { "providers.\(id.rawValue).cliPath" }
 
-    func defaultPromptArguments(_ input: TriggerPromptInput) -> [String] {
-        ["-p", input.prompt]
+    private func firstLineOfStdout(run: CommandRun) async throws -> String? {
+        let output = try await stdout(run: run)
+        return output
+            .components(separatedBy: .newlines)
+            .first?
+            .trimmingCharacters(in: .whitespaces)
     }
 
-    private func firstLineOfStdout(run: CommandRun) async throws -> String? {
-        guard let path = run.stdoutPath else { return nil }
-        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+    private func firstLineOfStderr(run: CommandRun) async -> String? {
+        guard let path = run.stderrPath,
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            return nil
+        }
         return String(data: data, encoding: .utf8)?
             .components(separatedBy: .newlines)
             .first?
             .trimmingCharacters(in: .whitespaces)
+    }
+
+    private func stdout(run: CommandRun) async throws -> String {
+        guard let path = run.stdoutPath else { return "" }
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        return String(data: data, encoding: .utf8) ?? ""
     }
 }

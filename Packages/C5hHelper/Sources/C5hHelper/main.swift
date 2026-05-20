@@ -114,19 +114,14 @@ struct HelperSchedulerDriver: SchedulerDriver {
         ) else {
             throw C5hError.cliNotFound(prompt.providerID.executableName)
         }
-        let args: [String]
-        switch prompt.providerID {
-        case .claude: args = ["-p", prompt.prompt]
-        case .codex: args = ["chat", "-p", prompt.prompt]
-        }
-        return try await runner.run(CommandSpec(
+        return try await runner.run(PromptCommand(
             providerID: prompt.providerID,
-            runType: .triggerPrompt,
             executableURL: cliURL,
-            arguments: args,
-            workingDirectory: prompt.projectPath.map { URL(fileURLWithPath: $0) },
-            environment: EnvironmentResolver.defaultEnvironment(),
-            timeoutSeconds: 60 * 60 * 6
-        ))
+            input: TriggerPromptInput(
+                prompt: prompt.prompt,
+                projectPath: prompt.projectPath,
+                mode: .newSession
+            )
+        ).spec())
     }
 }

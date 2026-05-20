@@ -6,8 +6,8 @@ struct ProviderCardView: View {
     let status: ProviderStatus?
     let configuredPath: String
     let isLoading: Bool
-    let onDetect: () -> Void
-    let onTest: () -> Void
+    let onVersion: () -> Void
+    let onAuthStatus: () -> Void
     let onSetPath: (String) -> Void
     let onClearPath: () -> Void
 
@@ -84,10 +84,10 @@ struct ProviderCardView: View {
 
     private var actions: some View {
         HStack(spacing: C5hSpacing.sm) {
-            Button("Detect CLI", action: onDetect)
+            Button("Version", action: onVersion)
                 .buttonStyle(.glass)
                 .disabled(isLoading)
-            Button("Run test command", action: onTest)
+            Button("Auth status", action: onAuthStatus)
                 .buttonStyle(.glass)
                 .disabled(isLoading)
             Spacer()

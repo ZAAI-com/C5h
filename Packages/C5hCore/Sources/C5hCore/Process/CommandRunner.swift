@@ -46,7 +46,7 @@ public actor CommandRunner: CommandRunning {
         var run = CommandRun(
             id: id,
             providerID: spec.providerID,
-            runType: spec.runType,
+            commandName: spec.commandName,
             command: spec.executableURL.path,
             argumentsJSON: spec.argumentsJSON(),
             workingDirectory: spec.workingDirectory?.path,

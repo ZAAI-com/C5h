@@ -37,7 +37,7 @@ final class ManualTriggerCoordinator {
 
         Task.detached(priority: .background) {
             do {
-                _ = try await adapter.triggerPrompt(
+                _ = try await adapter.runPromptCommand(
                     TriggerPromptInput(prompt: prompt, projectPath: projectPath, mode: .newSession)
                 )
             } catch {

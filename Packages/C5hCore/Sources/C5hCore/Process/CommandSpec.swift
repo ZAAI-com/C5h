@@ -2,7 +2,7 @@ import Foundation
 
 public struct CommandSpec: Sendable {
     public var providerID: ProviderID
-    public var runType: CommandRunType
+    public var commandName: CommandName
     public var executableURL: URL
     public var arguments: [String]
     public var workingDirectory: URL?
@@ -12,7 +12,7 @@ public struct CommandSpec: Sendable {
 
     public init(
         providerID: ProviderID,
-        runType: CommandRunType,
+        commandName: CommandName,
         executableURL: URL,
         arguments: [String],
         workingDirectory: URL? = nil,
@@ -21,7 +21,7 @@ public struct CommandSpec: Sendable {
         toolVersion: String? = nil
     ) {
         self.providerID = providerID
-        self.runType = runType
+        self.commandName = commandName
         self.executableURL = executableURL
         self.arguments = arguments
         self.workingDirectory = workingDirectory

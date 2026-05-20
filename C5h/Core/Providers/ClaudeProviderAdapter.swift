@@ -23,10 +23,10 @@ struct ClaudeProviderAdapter: ProviderAdapter {
         )
     }
 
-    func detectStatus() async -> ProviderStatus { await backing.detectStatus() }
-    func runTestCommand() async throws -> CommandRun { try await backing.runTestCommand() }
+    func runVersionCommand() async -> ProviderStatus { await backing.runVersionCommand() }
+    func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
 
-    func collectUsage() async throws -> UsageSnapshot {
+    func runUsageCommand() async throws -> UsageSnapshot {
         let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
         guard let cliURL = await backing.resolver.resolveCLI(
             named: backing.executableName,
@@ -38,8 +38,8 @@ struct ClaudeProviderAdapter: ProviderAdapter {
         return try await ClaudeUsageCollector(executableURL: cliURL).collect()
     }
 
-    func triggerPrompt(_ input: TriggerPromptInput) async throws -> CommandRun {
-        try await backing.triggerPrompt(input)
+    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
+        try await backing.runPromptCommand(input)
     }
 }
 
@@ -94,10 +94,8 @@ private struct ClaudeUsageCollector: Sendable {
             try? errorHandle.close()
         }
 
-        let arguments = [
-            "--setting-sources", "local",
-            "--settings", try settingsJSON()
-        ]
+        let usageCommand = UsageCommand(providerID: .claude, executableURL: executableURL)
+        let arguments = try usageCommand.claudeArguments(settingsJSON: settingsJSON())
 
         let launched: LaunchedProcess
         do {

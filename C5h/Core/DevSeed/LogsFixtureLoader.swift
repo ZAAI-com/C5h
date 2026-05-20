@@ -19,7 +19,7 @@ enum LogsFixtureLoader {
         let now = Date()
         let runs: [(CommandRun, String, String?)] = [
             makeRun(
-                provider: .claude, type: .triggerPrompt, status: .succeeded,
+                provider: .claude, commandName: .promptCommand, status: .succeeded,
                 exit: 0, startedMinutesAgo: 30, durationSeconds: 18,
                 command: "/opt/homebrew/bin/claude",
                 args: ["-p", "Continue refactoring the auth module"],
@@ -34,7 +34,7 @@ enum LogsFixtureLoader {
                 base: cal.date(byAdding: .minute, value: -30, to: now) ?? now
             ),
             makeRun(
-                provider: .codex, type: .triggerPrompt, status: .succeeded,
+                provider: .codex, commandName: .promptCommand, status: .succeeded,
                 exit: 0, startedMinutesAgo: 18, durationSeconds: 22,
                 command: "/usr/local/bin/codex",
                 args: ["chat", "-p", "Implement pagination on /users endpoint"],
@@ -48,7 +48,7 @@ enum LogsFixtureLoader {
                 base: cal.date(byAdding: .minute, value: -18, to: now) ?? now
             ),
             makeRun(
-                provider: .claude, type: .testCommand, status: .failed,
+                provider: .claude, commandName: .versionCommand, status: .failed,
                 exit: 1, startedMinutesAgo: 12, durationSeconds: 4,
                 command: "/opt/homebrew/bin/claude",
                 args: ["--version"],
@@ -58,7 +58,7 @@ enum LogsFixtureLoader {
                 base: cal.date(byAdding: .minute, value: -12, to: now) ?? now
             ),
             makeRun(
-                provider: .codex, type: .detectStatus, status: .succeeded,
+                provider: .codex, commandName: .versionCommand, status: .succeeded,
                 exit: 0, startedMinutesAgo: 6, durationSeconds: 1,
                 command: "/usr/local/bin/codex",
                 args: ["--version"],
@@ -68,7 +68,7 @@ enum LogsFixtureLoader {
                 base: cal.date(byAdding: .minute, value: -6, to: now) ?? now
             ),
             makeRun(
-                provider: .claude, type: .triggerPrompt, status: .timedOut,
+                provider: .claude, commandName: .promptCommand, status: .timedOut,
                 exit: nil, startedMinutesAgo: 60 * 26, durationSeconds: 600,
                 command: "/opt/homebrew/bin/claude",
                 args: ["-p", "Run the full test suite and fix any failures"],
@@ -78,27 +78,27 @@ enum LogsFixtureLoader {
                 base: cal.date(byAdding: .hour, value: -26, to: now) ?? now
             ),
             makeRun(
-                provider: .claude, type: .collectUsage, status: .succeeded,
+                provider: .claude, commandName: .usageCommand, status: .succeeded,
                 exit: 0, startedMinutesAgo: 60 * 8, durationSeconds: 2,
                 command: "/opt/homebrew/bin/claude",
-                args: ["usage", "--json"],
+                args: ["--setting-sources", "local", "--settings", "{statusLine:{...}}"],
                 cwd: nil, toolVersion: "claude 1.4.0",
                 stdout: "{\"messages\":42,\"window_started_at\":\"…\"}",
                 stderr: nil,
                 base: cal.date(byAdding: .hour, value: -8, to: now) ?? now
             ),
             makeRun(
-                provider: .codex, type: .authStatus, status: .succeeded,
+                provider: .codex, commandName: .authStatusCommand, status: .succeeded,
                 exit: 0, startedMinutesAgo: 60 * 24 * 2, durationSeconds: 1,
                 command: "/usr/local/bin/codex",
-                args: ["whoami"],
+                args: ["login", "status"],
                 cwd: nil, toolVersion: "codex 0.9.1",
-                stdout: "Signed in as anthropic.com@manuelgruber.com\n",
+                stdout: "Logged in using ChatGPT\n",
                 stderr: nil,
                 base: cal.date(byAdding: .day, value: -2, to: now) ?? now
             ),
             makeRun(
-                provider: .codex, type: .triggerPrompt, status: .cancelled,
+                provider: .codex, commandName: .promptCommand, status: .cancelled,
                 exit: nil, startedMinutesAgo: 60 * 24 * 3, durationSeconds: 8,
                 command: "/usr/local/bin/codex",
                 args: ["chat", "-p", "Refactor logging"],
@@ -138,7 +138,7 @@ enum LogsFixtureLoader {
 
     private static func makeRun(
         provider: ProviderID,
-        type: CommandRunType,
+        commandName: CommandName,
         status: CommandRunStatus,
         exit: Int32?,
         startedMinutesAgo _: Int,
@@ -155,7 +155,7 @@ enum LogsFixtureLoader {
         let ended = base.addingTimeInterval(TimeInterval(durationSeconds))
         let run = CommandRun(
             providerID: provider,
-            runType: type,
+            commandName: commandName,
             command: command,
             argumentsJSON: argsJSON,
             workingDirectory: cwd,

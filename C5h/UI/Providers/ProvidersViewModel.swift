@@ -8,7 +8,6 @@ import C5hStore
 final class ProvidersViewModel {
     var statuses: [ProviderID: ProviderStatus] = [:]
     var loadingProviders: Set<ProviderID> = []
-    var lastTestRunID: [ProviderID: UUID] = [:]
     var configuredPaths: [ProviderID: String] = [:]
     var lastError: String?
 
@@ -23,7 +22,7 @@ final class ProvidersViewModel {
     func bootstrap() async {
         for id in ProviderID.allCases {
             await loadConfiguredPath(for: id)
-            await detect(id: id)
+            await refreshProvider(id: id)
         }
     }
 
@@ -40,29 +39,68 @@ final class ProvidersViewModel {
         }
     }
 
-    func detect(id: ProviderID) async {
+    func refreshProvider(id: ProviderID) async {
         loadingProviders.insert(id)
         defer { loadingProviders.remove(id) }
+
+        let versionStatus = await runVersion(id: id, managesLoading: false)
+        guard versionStatus.isInstalled, versionStatus.errorMessage == nil else { return }
+        await runAuthStatus(id: id, managesLoading: false)
+    }
+
+    @discardableResult
+    func runVersion(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
+        if managesLoading { loadingProviders.insert(id) }
+        defer { if managesLoading { loadingProviders.remove(id) } }
         do {
             let adapter = try registry.adapter(for: id)
-            let status = await adapter.detectStatus()
+            var status = await adapter.runVersionCommand()
+            if status.isInstalled {
+                status.isAuthenticated = statuses[id]?.isAuthenticated
+            }
             statuses[id] = status
             lastError = nil
+            return status
         } catch {
             lastError = String(describing: error)
+            let status = ProviderStatus(providerID: id, isInstalled: false, errorMessage: lastError)
+            statuses[id] = status
+            return status
         }
     }
 
-    func runTestCommand(id: ProviderID) async {
-        loadingProviders.insert(id)
-        defer { loadingProviders.remove(id) }
+    @discardableResult
+    func runAuthStatus(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
+        if managesLoading { loadingProviders.insert(id) }
+        defer { if managesLoading { loadingProviders.remove(id) } }
         do {
             let adapter = try registry.adapter(for: id)
-            let run = try await adapter.runTestCommand()
-            lastTestRunID[id] = run.id
-            await detect(id: id)
+            let authStatus = await adapter.runAuthStatusCommand()
+            let existing = statuses[id]
+            let status = ProviderStatus(
+                providerID: id,
+                isInstalled: existing?.isInstalled ?? authStatus.isInstalled,
+                cliPath: authStatus.cliPath ?? existing?.cliPath,
+                version: existing?.version,
+                isAuthenticated: authStatus.isAuthenticated,
+                lastCheckedAt: authStatus.lastCheckedAt,
+                errorMessage: authStatus.errorMessage
+            )
+            statuses[id] = status
+            lastError = nil
+            return status
         } catch {
             lastError = String(describing: error)
+            let status = ProviderStatus(
+                providerID: id,
+                isInstalled: statuses[id]?.isInstalled ?? false,
+                cliPath: statuses[id]?.cliPath,
+                version: statuses[id]?.version,
+                isAuthenticated: false,
+                errorMessage: lastError
+            )
+            statuses[id] = status
+            return status
         }
     }
 
@@ -76,7 +114,7 @@ final class ProvidersViewModel {
                 try await appSettings.remove(key)
                 configuredPaths[id] = ""
             }
-            await detect(id: id)
+            await refreshProvider(id: id)
         } catch {
             lastError = String(describing: error)
         }

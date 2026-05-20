@@ -3,7 +3,7 @@ import Foundation
 public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     public var id: UUID
     public var providerID: ProviderID
-    public var runType: CommandRunType
+    public var commandName: CommandName
     public var command: String
     public var argumentsJSON: String
     public var workingDirectory: String?
@@ -21,7 +21,7 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     public init(
         id: UUID = UUID(),
         providerID: ProviderID,
-        runType: CommandRunType,
+        commandName: CommandName,
         command: String,
         argumentsJSON: String,
         workingDirectory: String? = nil,
@@ -38,7 +38,7 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     ) {
         self.id = id
         self.providerID = providerID
-        self.runType = runType
+        self.commandName = commandName
         self.command = command
         self.argumentsJSON = argumentsJSON
         self.workingDirectory = workingDirectory
@@ -60,12 +60,11 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     }
 }
 
-public enum CommandRunType: String, Codable, Sendable, CaseIterable {
-    case detectStatus
-    case authStatus
-    case collectUsage
-    case triggerPrompt
-    case testCommand
+public enum CommandName: String, Codable, Sendable, CaseIterable {
+    case versionCommand = "VersionCommand"
+    case authStatusCommand = "AuthStatusCommand"
+    case usageCommand = "UsageCommand"
+    case promptCommand = "PromptCommand"
 }
 
 public enum CommandRunStatus: String, Codable, Sendable, CaseIterable {

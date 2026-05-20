@@ -33,7 +33,7 @@ struct AppSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let adapter = try await MainActor.run { try registry.adapter(for: prompt.providerID) }
-        return try await adapter.triggerPrompt(
+        return try await adapter.runPromptCommand(
             TriggerPromptInput(
                 prompt: prompt.prompt,
                 projectPath: prompt.projectPath,

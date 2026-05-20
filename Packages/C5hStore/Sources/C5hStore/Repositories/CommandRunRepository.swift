@@ -6,18 +6,18 @@ import C5hCore
 public struct CommandRunFilter: Sendable {
     public var providerID: ProviderID?
     public var status: CommandRunStatus?
-    public var runType: CommandRunType?
+    public var commandName: CommandName?
     public var since: Date?
 
     public init(
         providerID: ProviderID? = nil,
         status: CommandRunStatus? = nil,
-        runType: CommandRunType? = nil,
+        commandName: CommandName? = nil,
         since: Date? = nil
     ) {
         self.providerID = providerID
         self.status = status
-        self.runType = runType
+        self.commandName = commandName
         self.since = since
     }
 }
@@ -85,8 +85,8 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
             if let st = filter.status {
                 request = request.filter(Column("status") == st.rawValue)
             }
-            if let rt = filter.runType {
-                request = request.filter(Column("run_type") == rt.rawValue)
+            if let name = filter.commandName {
+                request = request.filter(Column("run_type") == name.rawValue)
             }
             if let since = filter.since {
                 request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))

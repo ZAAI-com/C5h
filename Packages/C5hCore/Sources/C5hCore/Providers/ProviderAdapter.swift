@@ -4,10 +4,10 @@ public protocol ProviderAdapter: Sendable {
     var id: ProviderID { get }
     var displayName: String { get }
 
-    func detectStatus() async -> ProviderStatus
-    func collectUsage() async throws -> UsageSnapshot
-    func triggerPrompt(_ input: TriggerPromptInput) async throws -> CommandRun
-    func runTestCommand() async throws -> CommandRun
+    func runVersionCommand() async -> ProviderStatus
+    func runAuthStatusCommand() async -> ProviderStatus
+    func runUsageCommand() async throws -> UsageSnapshot
+    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun
 }
 
 public struct ProviderStatus: Codable, Sendable, Hashable {
@@ -58,7 +58,11 @@ public enum ProviderHealthState: Sendable, Hashable {
             self = .error(err)
             return
         }
-        self = .ready
+        if status.isAuthenticated == true {
+            self = .ready
+            return
+        }
+        self = .unknown
     }
 
     public var label: String {

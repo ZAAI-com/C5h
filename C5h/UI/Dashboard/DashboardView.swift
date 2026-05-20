@@ -234,7 +234,7 @@ struct DashboardView: View {
                     ForEach(viewModel.recentRuns) { run in
                         HStack(spacing: C5hSpacing.sm) {
                             StatusBadge(status: run.status)
-                            Text(run.runType.rawValue)
+                            Text(run.commandName.rawValue)
                                 .font(C5hTypography.captionFont)
                             Text(run.providerID.displayName)
                                 .font(C5hTypography.captionFont)

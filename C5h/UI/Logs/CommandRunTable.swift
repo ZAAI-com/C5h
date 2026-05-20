@@ -19,8 +19,8 @@ struct CommandRunTable: View {
             }
             .width(min: 110, ideal: 120)
 
-            TableColumn("Type") { run in
-                Text(run.runType.rawValue)
+            TableColumn("Command") { run in
+                Text(run.commandName.rawValue)
                     .font(C5hTypography.captionFont)
                     .lineLimit(1)
             }

@@ -11,7 +11,7 @@ final class LogsViewModel {
 
     var providerFilter: ProviderID?
     var statusFilter: CommandRunStatus?
-    var typeFilter: CommandRunType?
+    var commandNameFilter: CommandName?
     var dateRange: LogsDateRange = .last7Days
     var searchText: String = ""
 
@@ -50,7 +50,7 @@ final class LogsViewModel {
             let filter = CommandRunFilter(
                 providerID: providerFilter,
                 status: statusFilter,
-                runType: typeFilter,
+                commandName: commandNameFilter,
                 since: dateRange.since
             )
             runs = try await repository.fetchRecent(limit: 500, filter: filter)

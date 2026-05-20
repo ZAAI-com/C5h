@@ -47,8 +47,8 @@ struct ProvidersView: View {
                             status: viewModel.statuses[id],
                             configuredPath: viewModel.configuredPaths[id] ?? "",
                             isLoading: viewModel.loadingProviders.contains(id),
-                            onDetect: { Task { await viewModel.detect(id: id) } },
-                            onTest: { Task { await viewModel.runTestCommand(id: id) } },
+                            onVersion: { Task { await viewModel.runVersion(id: id) } },
+                            onAuthStatus: { Task { await viewModel.runAuthStatus(id: id) } },
                             onSetPath: { newPath in
                                 Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
                             },
@@ -70,13 +70,13 @@ struct ProvidersView: View {
                 Button {
                     Task {
                         for id in ProviderID.allCases {
-                            await viewModel.detect(id: id)
+                            await viewModel.refreshProvider(id: id)
                         }
                     }
                 } label: {
                     Label("Refresh all", systemImage: "arrow.clockwise")
                 }
-                .help("Re-detect all providers")
+                .help("Refresh provider version and authentication status")
             }
         }
     }

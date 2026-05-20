@@ -44,7 +44,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
     init(from run: CommandRun) {
         self.id = run.id.uuidString
         self.providerId = run.providerID.rawValue
-        self.runType = run.runType.rawValue
+        self.runType = run.commandName.rawValue
         self.command = run.command
         self.argumentsJson = run.argumentsJSON
         self.cwd = run.workingDirectory
@@ -64,7 +64,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
         guard
             let uuid = UUID(uuidString: id),
             let pid = ProviderID(rawValue: providerId),
-            let rtype = CommandRunType(rawValue: runType),
+            let commandName = CommandName(rawValue: runType),
             let started = DateTimeService.parseUTC(startedAt),
             let st = CommandRunStatus(rawValue: status)
         else {
@@ -73,7 +73,7 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
         return CommandRun(
             id: uuid,
             providerID: pid,
-            runType: rtype,
+            commandName: commandName,
             command: command,
             argumentsJSON: argumentsJson,
             workingDirectory: cwd,

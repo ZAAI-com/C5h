@@ -22,10 +22,10 @@ struct CodexProviderAdapter: ProviderAdapter {
         )
     }
 
-    func detectStatus() async -> ProviderStatus { await backing.detectStatus() }
-    func runTestCommand() async throws -> CommandRun { try await backing.runTestCommand() }
+    func runVersionCommand() async -> ProviderStatus { await backing.runVersionCommand() }
+    func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
 
-    func collectUsage() async throws -> UsageSnapshot {
+    func runUsageCommand() async throws -> UsageSnapshot {
         // Codex usage reset detection is intentionally disabled: reading
         // ~/.codex/sessions/*.jsonl triggers macOS's "access data from other
         // apps" TCC dialog, and the Codex CLI does not expose a programmatic
@@ -33,7 +33,7 @@ struct CodexProviderAdapter: ProviderAdapter {
         throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
     }
 
-    func triggerPrompt(_ input: TriggerPromptInput) async throws -> CommandRun {
+    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
         let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
         guard let cliURL = await backing.resolver.resolveCLI(
             named: backing.executableName,
@@ -41,16 +41,6 @@ struct CodexProviderAdapter: ProviderAdapter {
         ) else {
             throw C5hError.cliNotFound(backing.executableName)
         }
-        let args = ["chat", "-p", input.prompt]
-        return try await backing.runner.run(CommandSpec(
-            providerID: .codex,
-            runType: .triggerPrompt,
-            executableURL: cliURL,
-            arguments: args,
-            workingDirectory: input.projectPath.map { URL(fileURLWithPath: $0) },
-            environment: EnvironmentResolver.defaultEnvironment(),
-            timeoutSeconds: 60 * 60 * 6
-        ))
+        return try await backing.runner.run(PromptCommand(providerID: .codex, executableURL: cliURL, input: input).spec())
     }
 }
-

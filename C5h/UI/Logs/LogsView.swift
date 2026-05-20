@@ -71,9 +71,9 @@ struct LogsView: View {
                     }
                 }
 
-                Picker("Type", selection: typeBinding(viewModel: viewModel)) {
-                    Text("Any type").tag(Optional<CommandRunType>.none)
-                    ForEach(CommandRunType.allCases, id: \.self) { t in
+                Picker("Command", selection: commandBinding(viewModel: viewModel)) {
+                    Text("Any command").tag(Optional<CommandName>.none)
+                    ForEach(CommandName.allCases, id: \.self) { t in
                         Text(t.rawValue).tag(Optional(t))
                     }
                 }
@@ -142,10 +142,10 @@ struct LogsView: View {
         )
     }
 
-    private func typeBinding(viewModel: LogsViewModel) -> Binding<CommandRunType?> {
+    private func commandBinding(viewModel: LogsViewModel) -> Binding<CommandName?> {
         Binding(
-            get: { viewModel.typeFilter },
-            set: { viewModel.typeFilter = $0; Task { await viewModel.reload() } }
+            get: { viewModel.commandNameFilter },
+            set: { viewModel.commandNameFilter = $0; Task { await viewModel.reload() } }
         )
     }
 

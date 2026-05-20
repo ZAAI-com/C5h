@@ -13,7 +13,7 @@ struct CommandRunRepositoryTests {
 
         let run = CommandRun(
             providerID: .claude,
-            runType: .triggerPrompt,
+            commandName: .promptCommand,
             command: "/opt/homebrew/bin/claude",
             argumentsJSON: "[\"-p\",\"hi\"]",
             workingDirectory: "/tmp",
@@ -24,6 +24,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(run)
 
         let fetched = try await repo.fetch(id: run.id)
+        #expect(fetched?.commandName == .promptCommand)
         #expect(fetched?.toolVersion == "claude 1.2.3")
         #expect(fetched?.status == .running)
         #expect(fetched?.workingDirectory == "/tmp")
@@ -37,14 +38,14 @@ struct CommandRunRepositoryTests {
 
         try await repo.create(CommandRun(
             providerID: .claude,
-            runType: .triggerPrompt,
+            commandName: .promptCommand,
             command: "claude",
             argumentsJSON: "[]",
             status: .running
         ))
         try await repo.create(CommandRun(
             providerID: .codex,
-            runType: .testCommand,
+            commandName: .versionCommand,
             command: "codex",
             argumentsJSON: "[]",
             status: .succeeded
@@ -74,7 +75,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: liveRunID,
             providerID: .claude,
-            runType: .triggerPrompt,
+            commandName: .promptCommand,
             command: "claude",
             argumentsJSON: "[]",
             status: .running,
@@ -83,7 +84,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: deadRunID,
             providerID: .claude,
-            runType: .triggerPrompt,
+            commandName: .promptCommand,
             command: "claude",
             argumentsJSON: "[]",
             status: .running,
@@ -92,7 +93,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: legacyRunID,
             providerID: .codex,
-            runType: .triggerPrompt,
+            commandName: .promptCommand,
             command: "codex",
             argumentsJSON: "[]",
             status: .running,
