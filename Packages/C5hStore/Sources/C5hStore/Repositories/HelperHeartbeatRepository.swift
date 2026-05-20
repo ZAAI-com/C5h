@@ -27,10 +27,15 @@ public struct GRDBHelperHeartbeatRepository: HelperHeartbeatRepository {
         let nowStr = DateTimeService.formatUTC(.now)
         try await writer.write { db in
             let existing = try HelperHeartbeatRecord.fetchOne(db, key: Self.singletonID)
+            // Reset startedAt when a new helper process is writing (pid
+            // differs from the row's pid, or no prior row exists). Otherwise
+            // preserve it so plain heartbeats from the same process keep
+            // their original boot time.
+            let isNewProcess = existing == nil || existing?.pid != pid
             let record = HelperHeartbeatRecord(
                 id: Self.singletonID,
                 helperVersion: version,
-                startedAt: existing?.startedAt ?? nowStr,
+                startedAt: isNewProcess ? nowStr : (existing?.startedAt ?? nowStr),
                 lastSeenAt: nowStr,
                 pid: pid
             )

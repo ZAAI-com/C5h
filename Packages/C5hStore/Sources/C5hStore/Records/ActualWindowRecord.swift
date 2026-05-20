@@ -62,9 +62,9 @@ struct ActualWindowRecord: Codable, FetchableRecord, PersistableRecord {
             durationSeconds: durationSeconds,
             source: src,
             confidence: conf,
-            commandRunID: commandRunId.flatMap(UUID.init),
-            usageStartSnapshotID: usageStartSnapshotId.flatMap(UUID.init),
-            usageEndSnapshotID: usageEndSnapshotId.flatMap(UUID.init),
+            commandRunID: commandRunId.flatMap { UUID(uuidString: $0) },
+            usageStartSnapshotID: usageStartSnapshotId.flatMap { UUID(uuidString: $0) },
+            usageEndSnapshotID: usageEndSnapshotId.flatMap { UUID(uuidString: $0) },
             createdAt: DateTimeService.parseUTC(createdAt) ?? .now,
             updatedAt: DateTimeService.parseUTC(updatedAt) ?? .now
         )

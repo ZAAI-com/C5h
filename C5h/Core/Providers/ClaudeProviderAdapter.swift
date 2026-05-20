@@ -38,8 +38,8 @@ struct ClaudeProviderAdapter: ProviderAdapter {
         return try await ClaudeUsageCollector(executableURL: cliURL).collect()
     }
 
-    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
-        try await backing.runPromptCommand(input)
+    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
+        try await backing.runPromptCommand(input, runID: runID)
     }
 }
 

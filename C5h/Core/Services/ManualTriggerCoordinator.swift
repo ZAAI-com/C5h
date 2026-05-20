@@ -38,7 +38,8 @@ final class ManualTriggerCoordinator {
         Task.detached(priority: .background) {
             do {
                 _ = try await adapter.runPromptCommand(
-                    TriggerPromptInput(prompt: prompt, projectPath: projectPath, mode: .newSession)
+                    TriggerPromptInput(prompt: prompt, projectPath: projectPath, mode: .newSession),
+                    runID: runID
                 )
             } catch {
                 NSLog("Manual trigger run failed: \(error)")

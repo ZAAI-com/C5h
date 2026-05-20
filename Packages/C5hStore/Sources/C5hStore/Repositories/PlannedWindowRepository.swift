@@ -28,9 +28,15 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
     public func fetchWindows(for interval: DateInterval) async throws -> [PlannedWindow] {
         let startStr = DateTimeService.formatUTC(interval.start)
         let endStr = DateTimeService.formatUTC(interval.end)
+        // Match every window that overlaps the interval, not just those whose
+        // start_at falls inside it. A 5h window starting at 22:00 should still
+        // appear on the following day's view.
         let records = try await writer.read { db in
             try PlannedWindowRecord
-                .filter(Column("start_at") >= startStr && Column("start_at") < endStr)
+                .filter(sql: """
+                    datetime(start_at) < datetime(?) AND
+                    datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
+                    """, arguments: [endStr, startStr])
                 .order(Column("start_at"))
                 .fetchAll(db)
         }

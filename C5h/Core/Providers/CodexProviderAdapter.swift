@@ -33,7 +33,7 @@ struct CodexProviderAdapter: ProviderAdapter {
         throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
     }
 
-    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
+    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
         let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
         guard let cliURL = await backing.resolver.resolveCLI(
             named: backing.executableName,
@@ -41,6 +41,9 @@ struct CodexProviderAdapter: ProviderAdapter {
         ) else {
             throw C5hError.cliNotFound(backing.executableName)
         }
-        return try await backing.runner.run(PromptCommand(providerID: .codex, executableURL: cliURL, input: input).spec())
+        return try await backing.runner.run(
+            PromptCommand(providerID: .codex, executableURL: cliURL, input: input).spec(),
+            runID: runID
+        )
     }
 }

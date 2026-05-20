@@ -26,9 +26,13 @@ public struct GRDBActualWindowRepository: ActualWindowRepository {
     public func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow] {
         let startStr = DateTimeService.formatUTC(interval.start)
         let endStr = DateTimeService.formatUTC(interval.end)
+        // Overlap match — see PlannedWindowRepository.fetchWindows for rationale.
         let records = try await writer.read { db in
             try ActualWindowRecord
-                .filter(Column("start_at") >= startStr && Column("start_at") < endStr)
+                .filter(sql: """
+                    datetime(start_at) < datetime(?) AND
+                    datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
+                    """, arguments: [endStr, startStr])
                 .order(Column("start_at"))
                 .fetchAll(db)
         }

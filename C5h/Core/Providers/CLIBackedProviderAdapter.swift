@@ -89,7 +89,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         )
     }
 
-    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
+    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
         // Concrete adapters override this. Default falls back to a CLI run with
         // generic args so the path is still observable from Logs in early
         // milestones.
@@ -97,7 +97,10 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
             throw C5hError.cliNotFound(executableName)
         }
-        return try await runner.run(PromptCommand(providerID: id, executableURL: cliURL, input: input).spec())
+        return try await runner.run(
+            PromptCommand(providerID: id, executableURL: cliURL, input: input).spec(),
+            runID: runID
+        )
     }
 
     var settingsKey: String { "providers.\(id.rawValue).cliPath" }

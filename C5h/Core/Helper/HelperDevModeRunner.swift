@@ -68,9 +68,7 @@ final class HelperDevModeRunner {
             URL(fileURLWithPath: cwd)
                 .appendingPathComponent("Packages/C5hHelper/.build/debug/C5hHelper"),
             URL(fileURLWithPath: cwd)
-                .appendingPathComponent("Packages/C5hHelper/.build/arm64-apple-macosx/debug/C5hHelper"),
-            URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Manuel-Sun/Engineering/Conductor/workspaces/C5h/albuquerque-v1/Packages/C5hHelper/.build/debug/C5hHelper")
+                .appendingPathComponent("Packages/C5hHelper/.build/arm64-apple-macosx/debug/C5hHelper")
         ]
         for c in candidates where FileManager.default.isExecutableFile(atPath: c.path) {
             return c

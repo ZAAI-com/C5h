@@ -57,7 +57,7 @@ struct ScheduledPromptRecord: Codable, FetchableRecord, PersistableRecord {
         return ScheduledPrompt(
             id: uuid,
             providerID: pid,
-            plannedWindowID: plannedWindowId.flatMap(UUID.init),
+            plannedWindowID: plannedWindowId.flatMap { UUID(uuidString: $0) },
             prompt: prompt,
             projectPath: projectPath,
             runAt: runDate,

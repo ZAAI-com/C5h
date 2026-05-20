@@ -7,7 +7,13 @@ public protocol ProviderAdapter: Sendable {
     func runVersionCommand() async -> ProviderStatus
     func runAuthStatusCommand() async -> ProviderStatus
     func runUsageCommand() async throws -> UsageSnapshot
-    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun
+    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun
+}
+
+public extension ProviderAdapter {
+    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
+        try await runPromptCommand(input, runID: UUID())
+    }
 }
 
 public struct ProviderStatus: Codable, Sendable, Hashable {

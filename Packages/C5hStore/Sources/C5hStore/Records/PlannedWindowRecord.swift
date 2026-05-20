@@ -53,7 +53,7 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
             providerID: pid,
             startAt: start,
             durationSeconds: durationSeconds,
-            promptTemplateID: promptTemplateId.flatMap(UUID.init),
+            promptTemplateID: promptTemplateId.flatMap { UUID(uuidString: $0) },
             projectPath: projectPath,
             status: st,
             createdAt: DateTimeService.parseUTC(createdAt) ?? .now,
