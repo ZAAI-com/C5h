@@ -9,7 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../C5hCore"),
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.7.0")
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.10.0")
     ],
     targets: [
         .target(
