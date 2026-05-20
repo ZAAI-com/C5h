@@ -4,7 +4,8 @@ public struct MissedPromptPolicy: Sendable, Hashable {
     public var graceSeconds: TimeInterval
 
     public init(graceSeconds: TimeInterval = 15 * 60) {
-        self.graceSeconds = graceSeconds
+        // Invariant: non-negative — a negative grace would invert isOverdue.
+        self.graceSeconds = max(0, graceSeconds)
     }
 
     public static let `default` = MissedPromptPolicy()

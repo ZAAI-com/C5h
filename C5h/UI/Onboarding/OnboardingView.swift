@@ -46,10 +46,10 @@ struct OnboardingView: View {
             .padding(.vertical, C5hSpacing.sm)
 
             HStack(spacing: C5hSpacing.md) {
-                Button("Skip") { finish() }
+                Button("Skip") { Task { await finish() } }
                     .buttonStyle(.glass)
 
-                Button("Get started") { finish() }
+                Button("Get started") { Task { await finish() } }
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
             }
@@ -70,10 +70,12 @@ struct OnboardingView: View {
         }
     }
 
-    private func finish() {
+    private func finish() async {
         if let appSettings {
-            Task {
-                try? await appSettings.set(OnboardingView.completedKey, value: true)
+            do {
+                try await appSettings.set(OnboardingView.completedKey, value: true)
+            } catch {
+                NSLog("OnboardingView: failed to persist completion flag: \(error)")
             }
         }
         onFinish()

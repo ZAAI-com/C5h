@@ -10,6 +10,7 @@ public struct PlannedWindowDraft: Sendable {
     public var status: PlannedWindowStatus
     public var schedulePrompt: Bool
     public var promptBody: String
+    public var createdAt: Date
 
     public init(
         existingID: UUID? = nil,
@@ -20,7 +21,8 @@ public struct PlannedWindowDraft: Sendable {
         promptTemplateID: UUID? = nil,
         status: PlannedWindowStatus = .scheduled,
         schedulePrompt: Bool = false,
-        promptBody: String = ""
+        promptBody: String = "",
+        createdAt: Date = .now
     ) {
         self.existingID = existingID
         self.providerID = providerID
@@ -31,6 +33,7 @@ public struct PlannedWindowDraft: Sendable {
         self.status = status
         self.schedulePrompt = schedulePrompt
         self.promptBody = promptBody
+        self.createdAt = createdAt
     }
 
     public func toPlannedWindow() -> PlannedWindow {
@@ -42,7 +45,7 @@ public struct PlannedWindowDraft: Sendable {
             promptTemplateID: promptTemplateID,
             projectPath: projectPath,
             status: status,
-            createdAt: .now,
+            createdAt: createdAt,
             updatedAt: .now
         )
     }

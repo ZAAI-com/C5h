@@ -39,8 +39,8 @@ struct PromptTemplateRecord: Codable, FetchableRecord, PersistableRecord {
             name: name,
             providerID: providerId.flatMap(ProviderID.init),
             body: body,
-            createdAt: DateTimeService.parseUTC(createdAt) ?? .now,
-            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .now
+            createdAt: DateTimeService.parseUTC(createdAt) ?? .distantPast,
+            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .distantPast
         )
     }
 }

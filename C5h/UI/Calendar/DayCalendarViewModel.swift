@@ -75,13 +75,25 @@ final class DayCalendarViewModel {
 
     func save(draft: PlannedWindowDraft) async throws {
         let window = draft.toPlannedWindow()
-        if draft.existingID != nil {
+        let original: PlannedWindow?
+        if let id = draft.existingID {
+            original = try await plannedRepository.fetch(id: id)
             try await plannedRepository.update(window)
         } else {
+            original = nil
             try await plannedRepository.create(window)
         }
         if let prompt = draft.toScheduledPrompt(plannedWindow: window) {
-            try await scheduledRepository.create(prompt)
+            do {
+                try await scheduledRepository.create(prompt)
+            } catch {
+                if draft.existingID == nil {
+                    try? await plannedRepository.delete(id: window.id)
+                } else if let original {
+                    try? await plannedRepository.update(original)
+                }
+                throw error
+            }
         }
         await reload()
     }

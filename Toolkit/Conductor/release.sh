@@ -3,6 +3,8 @@
 #
 # Required environment:
 #   DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)"
+#
+# Optional (needed for notarization — script skips notarization if any are unset):
 #   APPLE_ID="apple-id@example.com"
 #   APPLE_TEAM_ID="ABCDEFGHIJ"
 #   APPLE_APP_PASSWORD="app-specific password"  # for notarytool

@@ -38,7 +38,7 @@ struct ClaudeUsageStatusTests {
         prompt C5H_RATE_LIMITS:{"rate_limits":{"five_hour":{"used_percentage":"20","resets_at":"1778373600000"}}}
         """
 
-        let status = try ClaudeUsageStatus.parseFirstSentinel(in: output)
+        let status = try ClaudeUsageStatus.parseLatestSentinel(in: output)
 
         #expect(status.fiveHour.usedPercentage == 20)
         #expect(status.fiveHour.resetsAt.timeIntervalSince1970 == 1_778_373_600)

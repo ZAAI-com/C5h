@@ -27,7 +27,9 @@ public struct GRDBAppSettingsRepository: AppSettingsRepository {
 
     public func set<T: Encodable & Sendable>(_ key: String, value: T) async throws {
         let data = try JSONEncoder().encode(value)
-        let json = String(data: data, encoding: .utf8) ?? "null"
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw C5hError.databaseError("AppSettingsRepository: failed to encode \(key) value as UTF-8")
+        }
         let record = AppSettingRecord(
             key: key,
             valueJson: json,

@@ -51,7 +51,7 @@ final class HelperRegistrationService {
         #endif
     }
 
-    func register() async {
+    func register() {
         #if DEBUG
         status = .unsupported
         #else

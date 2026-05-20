@@ -34,12 +34,17 @@ final class DebugBundleExporter {
 
         // Database snapshot
         let dbCopy = staging.appendingPathComponent("c5h.sqlite")
-        try? FileManager.default.copyItem(at: appPaths.databaseURL, to: dbCopy)
+        do {
+            try FileManager.default.copyItem(at: appPaths.databaseURL, to: dbCopy)
+        } catch {
+            NSLog("DebugBundleExporter: DB copy failed from \(appPaths.databaseURL.path) to \(dbCopy.path): \(error)")
+        }
 
-        // Recent logs
+        // Recent logs — preserve subdirectory structure (e.g. month folders)
         let logsDest = staging.appendingPathComponent("logs", isDirectory: true)
         try FileManager.default.createDirectory(at: logsDest, withIntermediateDirectories: true)
         let cutoff = Date().addingTimeInterval(-7 * 86_400)
+        let sourceRoot = appPaths.commandRunsDirectory.path
         if let enumerator = FileManager.default.enumerator(
             at: appPaths.commandRunsDirectory,
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
@@ -53,7 +58,14 @@ final class DebugBundleExporter {
                       let modified = values.contentModificationDate,
                       modified >= cutoff
                 else { continue }
-                let dest = logsDest.appendingPathComponent(url.lastPathComponent)
+                let relative = url.path.hasPrefix(sourceRoot + "/")
+                    ? String(url.path.dropFirst(sourceRoot.count + 1))
+                    : url.lastPathComponent
+                let dest = logsDest.appendingPathComponent(relative)
+                try? FileManager.default.createDirectory(
+                    at: dest.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
                 try? FileManager.default.copyItem(at: url, to: dest)
             }
         }

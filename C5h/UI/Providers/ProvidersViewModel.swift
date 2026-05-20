@@ -96,7 +96,7 @@ final class ProvidersViewModel {
                 isInstalled: statuses[id]?.isInstalled ?? false,
                 cliPath: statuses[id]?.cliPath,
                 version: statuses[id]?.version,
-                isAuthenticated: false,
+                isAuthenticated: statuses[id]?.isAuthenticated,
                 errorMessage: lastError
             )
             statuses[id] = status

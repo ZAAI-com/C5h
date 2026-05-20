@@ -25,7 +25,7 @@ final class WeekCalendarViewModel {
     }
 
     static func startOfWeek(for date: Date) -> Date {
-        let cal = Calendar.current
+        let cal = Calendar(identifier: .iso8601)
         let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
         return cal.date(from: comps) ?? cal.startOfDay(for: date)
     }
@@ -53,7 +53,6 @@ final class WeekCalendarViewModel {
     }
 
     func windows(forDay day: Date, providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow]) {
-        let cal = Calendar.current
         let dayInterval = CalendarPositioning.dayInterval(for: day)
         let p = planned.filter {
             $0.providerID == providerID && dayInterval.contains($0.startAt)
@@ -61,7 +60,6 @@ final class WeekCalendarViewModel {
         let a = actual.filter {
             $0.providerID == providerID && dayInterval.contains($0.startAt)
         }
-        _ = cal
         return (p, a)
     }
 

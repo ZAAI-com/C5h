@@ -43,6 +43,7 @@ struct DayCalendarView: View {
                     // Aim to position "now" ~200pt below the floating toolbar (which adds ~50pt
                     // of top safe-area inset on macOS 26). yOffset is in pixels relative to the
                     // top of the day; we convert to a 0–1 anchor fraction across the ruler.
+                    guard layout.dayHeight > 0 else { return }
                     let topInset = proxy.safeAreaInsets.top
                     let target = CalendarPositioning.yOffset(
                         for: now,

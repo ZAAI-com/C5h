@@ -10,6 +10,9 @@ public enum PlannedWindowValidator {
         candidate: PlannedWindow,
         against existing: [PlannedWindow]
     ) -> PlannedWindowValidationResult {
+        guard candidate.durationSeconds >= 0 else {
+            return PlannedWindowValidationResult(conflictingWindowIDs: [])
+        }
         let candidateInterval = DateInterval(
             start: candidate.startAt,
             duration: TimeInterval(candidate.durationSeconds)
@@ -17,6 +20,7 @@ public enum PlannedWindowValidator {
         let conflicts = existing.filter { other in
             guard other.id != candidate.id else { return false }
             guard other.providerID == candidate.providerID else { return false }
+            guard other.durationSeconds >= 0 else { return false }
             let otherInterval = DateInterval(
                 start: other.startAt,
                 duration: TimeInterval(other.durationSeconds)

@@ -43,8 +43,8 @@ struct ProviderRecord: Codable, FetchableRecord, PersistableRecord {
             cliPath: cliPath,
             isEnabled: enabled != 0,
             brandColorHex: brandColor,
-            createdAt: DateTimeService.parseUTC(createdAt) ?? .now,
-            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .now
+            createdAt: DateTimeService.parseUTC(createdAt) ?? .distantPast,
+            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .distantPast
         )
     }
 }

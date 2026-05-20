@@ -80,7 +80,7 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
         )
     }
 
-    public static func parseFirstSentinel(in output: String) throws -> ClaudeUsageStatus {
+    public static func parseLatestSentinel(in output: String) throws -> ClaudeUsageStatus {
         for payload in sentinelPayloads(in: output).reversed() {
             if let status = try? parsePayload(payload) {
                 return status

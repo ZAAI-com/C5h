@@ -56,8 +56,8 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
             promptTemplateID: promptTemplateId.flatMap { UUID(uuidString: $0) },
             projectPath: projectPath,
             status: st,
-            createdAt: DateTimeService.parseUTC(createdAt) ?? .now,
-            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .now
+            createdAt: DateTimeService.parseUTC(createdAt) ?? start,
+            updatedAt: DateTimeService.parseUTC(updatedAt) ?? .distantPast
         )
     }
 }

@@ -6,7 +6,7 @@ final class ProviderRegistry {
     private(set) var adapters: [ProviderID: any ProviderAdapter]
 
     init(adapters: [any ProviderAdapter]) {
-        self.adapters = Dictionary(uniqueKeysWithValues: adapters.map { ($0.id, $0) })
+        self.adapters = Dictionary(adapters.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func adapter(for id: ProviderID) throws -> any ProviderAdapter {

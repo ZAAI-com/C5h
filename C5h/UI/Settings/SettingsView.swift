@@ -51,7 +51,7 @@ struct SettingsView: View {
                 HStack {
                     Button("Refresh status") { registration.refresh() }
                         .buttonStyle(.glass)
-                    Button("Register") { Task { await registration.register() } }
+                    Button("Register") { registration.register() }
                         .buttonStyle(.glass)
                     Button("Unregister") { Task { await registration.unregister() } }
                         .buttonStyle(.glass)
@@ -121,12 +121,16 @@ struct SettingsView: View {
                     Task { await exportDebugBundle() }
                 }
                 .buttonStyle(.glass)
-                if let path = lastExportedBundlePath {
+                if let path = lastExportedBundlePath, !path.isEmpty {
                     Text("Saved to \(path)")
                         .font(C5hTypography.captionFont)
                         .foregroundStyle(C5hColors.fgSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                } else if let err = lastExportError, !err.isEmpty {
+                    Text("Export failed: \(err)")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(.red)
                 }
             }
         }
@@ -135,6 +139,7 @@ struct SettingsView: View {
 
     @State private var lastSweepResult: LogRetentionResult?
     @State private var lastExportedBundlePath: String?
+    @State private var lastExportError: String?
 
     private func sweepLogs(policy: LogRetentionPolicy) async {
         guard let dir = appEnv.paths?.commandRunsDirectory else { return }
@@ -154,9 +159,11 @@ struct SettingsView: View {
         do {
             try await exporter.export(to: dest)
             lastExportedBundlePath = dest.path
+            lastExportError = nil
             NSWorkspace.shared.activateFileViewerSelecting([dest])
         } catch {
-            lastExportedBundlePath = "Export failed: \(error.localizedDescription)"
+            lastExportedBundlePath = nil
+            lastExportError = error.localizedDescription
         }
     }
 

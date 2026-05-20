@@ -6,7 +6,6 @@ import C5hStore
 struct HelperMain {
     static func main() async {
         let helperVersion = "0.0.1"
-        NSLog("C5hHelper \(helperVersion) starting (pid \(getpid()))")
 
         let appSupport: URL
         do {
@@ -24,6 +23,15 @@ struct HelperMain {
             NSLog("C5hHelper: cannot create app support dir: \(error)")
             exit(1)
         }
+
+        // Redirect stdout/stderr into the app's log directory so launchd doesn't
+        // need StandardOutPath/StandardErrorPath (which can't expand ~).
+        let helperLogsDir = appSupport.appendingPathComponent("logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: helperLogsDir, withIntermediateDirectories: true)
+        _ = freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.out.log").path, "a", stdout)
+        _ = freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.err.log").path, "a", stderr)
+
+        NSLog("C5hHelper \(helperVersion) starting (pid \(getpid()))")
         let dbURL = appSupport.appendingPathComponent("c5h.sqlite")
 
         let database: Database
@@ -107,7 +115,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let key = "providers.\(prompt.providerID.rawValue).cliPath"
-        let configured = try? await settingsRepo.get(key, as: String.self)
+        let configured = try await settingsRepo.get(key, as: String.self)
         guard let cliURL = await resolver.resolveCLI(
             named: prompt.providerID.executableName,
             configuredPath: configured

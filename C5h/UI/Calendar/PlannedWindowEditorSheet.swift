@@ -31,7 +31,8 @@ struct PlannedWindowEditorSheet: View {
                 promptTemplateID: existing.promptTemplateID,
                 status: existing.status,
                 schedulePrompt: false,
-                promptBody: ""
+                promptBody: "",
+                createdAt: existing.createdAt
             ))
         } else {
             _draft = State(initialValue: PlannedWindowDraft(

@@ -13,9 +13,5 @@
 		<key>SuccessfulExit</key>
 		<false/>
 	</dict>
-	<key>StandardOutPath</key>
-	<string>/tmp/com.zaai.c5h.helper.out.log</string>
-	<key>StandardErrorPath</key>
-	<string>/tmp/com.zaai.c5h.helper.err.log</string>
 </dict>
 </plist>
