@@ -15,13 +15,21 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("General") {
-                LabeledContent("Database location", value: appEnv.paths?.databaseURL.path ?? "—")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                LabeledContent("Logs directory", value: appEnv.paths?.logsDirectory.path ?? "—")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
                 LabeledContent("Default window length", value: "5 hours")
+            }
+            Section("Paths") {
+                pathRow("Application Support", url: appEnv.paths?.appSupportDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Logs", url: appEnv.paths?.logsDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Command run logs", url: appEnv.paths?.commandRunsDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Database", url: appEnv.paths?.databaseURL, actionTitle: "Reveal in Finder") { url in
+                    revealInFinder(url)
+                }
             }
             Section("Default wake prompts") {
                 Text("Sent automatically when a planned window's start time arrives, to open the actual 5h limit window.")
@@ -80,16 +88,6 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
-            Section("Database") {
-                LabeledContent("Path", value: appEnv.paths?.databaseURL.path ?? "—")
-                    .lineLimit(1).truncationMode(.middle)
-                Button("Reveal in Finder") {
-                    if let url = appEnv.paths?.databaseURL {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                }
-                .buttonStyle(.glass)
-            }
             Section("Bundle") {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
@@ -144,6 +142,39 @@ struct SettingsView: View {
     @State private var lastSweepResult: LogRetentionResult?
     @State private var lastExportedBundlePath: String?
     @State private var lastExportError: String?
+
+    private func pathRow(
+        _ title: String,
+        url: URL?,
+        actionTitle: String = "Open in Finder",
+        action: @escaping (URL) -> Void
+    ) -> some View {
+        LabeledContent {
+            HStack(spacing: C5hSpacing.sm) {
+                Text(url?.path ?? "—")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Button(actionTitle) {
+                    if let url {
+                        action(url)
+                    }
+                }
+                .buttonStyle(.glass)
+                .disabled(url == nil)
+            }
+        } label: {
+            Text(title)
+        }
+    }
+
+    private func openFolder(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
+    private func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
 
     private func sweepLogs(policy: LogRetentionPolicy) async {
         guard let dir = appEnv.paths?.commandRunsDirectory else { return }
