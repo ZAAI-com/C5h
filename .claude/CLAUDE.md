@@ -54,7 +54,7 @@ runner > Start**. Use **Refresh** under **Heartbeat** to verify a recent last-se
 time and PID.
 
 The Debug helper wakes every 30 seconds, writes a heartbeat, checks due scheduled
-prompts, runs `claude -p ...` or `codex chat -p ...`, and records command logs
+prompts, runs `claude -p ...` or `codex exec ...`, and records command logs
 and actual windows in the app database.
 
 Debug helper logs:

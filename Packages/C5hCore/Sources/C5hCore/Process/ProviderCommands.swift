@@ -137,7 +137,7 @@ public struct PromptCommand: Sendable {
         case .claude:
             ["-p", input.prompt]
         case .codex:
-            ["chat", "-p", input.prompt]
+            ["exec", input.prompt]
         }
     }
 

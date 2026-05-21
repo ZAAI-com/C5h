@@ -83,7 +83,7 @@ struct ProviderCommandsTests {
 
         let codex = PromptCommand(providerID: .codex, executableURL: codexURL, input: input).spec()
         #expect(codex.commandName == .promptCommand)
-        #expect(codex.arguments == ["chat", "-p", "do work"])
+        #expect(codex.arguments == ["exec", "do work"])
         #expect(codex.workingDirectory?.path == "/tmp/project")
         #expect(codex.timeoutSeconds == 60 * 60 * 6)
     }
