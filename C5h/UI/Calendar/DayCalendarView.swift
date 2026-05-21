@@ -16,7 +16,7 @@ struct DayCalendarView: View {
             let providers = ProviderID.allCases
             let usableHeight = max(
                 0,
-                proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom
+                proxy.size.height - proxy.safeAreaInsets.top
             )
             let availableForGrid = max(0, usableHeight - 2 * Self.gridVerticalPadding)
             let fitPpm = availableForGrid / (24 * 60)
@@ -47,7 +47,10 @@ struct DayCalendarView: View {
                                     layout: dynamicLayout,
                                     columnWidth: columnWidth,
                                     onSelectPlanned: onSelectPlanned,
-                                    onSelectActual: onSelectActual
+                                    onSelectActual: onSelectActual,
+                                    onQuickPlan: { start in
+                                        Task { await viewModel.quickPlan(provider: providerID, startAt: start) }
+                                    }
                                 )
                             }
                             TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
@@ -79,6 +82,7 @@ struct DayCalendarView: View {
                 .allowsHitTesting(false)
             }
         }
+        .ignoresSafeArea(.container, edges: .bottom)
         .background(.background, ignoresSafeAreaEdges: .all)
     }
 
