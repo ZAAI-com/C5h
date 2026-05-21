@@ -24,7 +24,6 @@
 		0A0012020301000000000001 /* DayCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000001 /* DayCalendarView.swift */; };
 		0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000002 /* DayCalendarViewModel.swift */; };
 		0A0012020301000000000003 /* TimeRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000003 /* TimeRulerView.swift */; };
-		0A0012020301000000000004 /* NowLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000004 /* NowLineView.swift */; };
 		0A0012020301000000000005 /* ProviderColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000005 /* ProviderColumnView.swift */; };
 		0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000006 /* PlannedWindowBlockView.swift */; };
 		0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000007 /* ActualWindowBlockView.swift */; };
@@ -94,7 +93,6 @@
 		0A0011020301000000000001 /* DayCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000002 /* DayCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarViewModel.swift; sourceTree = "<group>"; };
 		0A0011020301000000000003 /* TimeRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeRulerView.swift; sourceTree = "<group>"; };
-		0A0011020301000000000004 /* NowLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowLineView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000005 /* ProviderColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColumnView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000006 /* PlannedWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowBlockView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000007 /* ActualWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualWindowBlockView.swift; sourceTree = "<group>"; };
@@ -290,7 +288,6 @@
 				0A0011020301000000000001 /* DayCalendarView.swift */,
 				0A0011020301000000000002 /* DayCalendarViewModel.swift */,
 				0A0011020301000000000003 /* TimeRulerView.swift */,
-				0A0011020301000000000004 /* NowLineView.swift */,
 				0A0011020301000000000005 /* ProviderColumnView.swift */,
 				0A0011020301000000000006 /* PlannedWindowBlockView.swift */,
 				0A0011020301000000000007 /* ActualWindowBlockView.swift */,
@@ -494,7 +491,6 @@
 				0A0012020301000000000001 /* DayCalendarView.swift in Sources */,
 				0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */,
 				0A0012020301000000000003 /* TimeRulerView.swift in Sources */,
-				0A0012020301000000000004 /* NowLineView.swift in Sources */,
 				0A0012020301000000000005 /* ProviderColumnView.swift in Sources */,
 				0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */,
 				0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */,

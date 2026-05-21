@@ -94,12 +94,6 @@ struct ProviderColumnView: View {
                 )
                 .zIndex(2)
             }
-            if Calendar.current.isDate(now, inSameDayAs: date) {
-                NowLineView(layout: layout)
-                    .frame(width: columnWidth)
-                    .offset(y: yOffset(for: now))
-                    .zIndex(4)
-            }
         }
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
         .clipped()
