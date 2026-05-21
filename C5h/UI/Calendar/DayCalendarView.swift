@@ -13,44 +13,55 @@ struct DayCalendarView: View {
             let providers = ProviderID.allCases
             let columnWidth = max(
                 layout.providerMinWidth,
-                (proxy.size.width - layout.timeRulerWidth) / CGFloat(providers.count)
+                (proxy.size.width - 2 * layout.timeRulerWidth) / CGFloat(providers.count)
             )
-            ScrollViewReader { scroller in
-                ScrollView {
-                    HStack(alignment: .top, spacing: 0) {
-                        TimeRulerView(layout: layout)
-                            .id("ruler")
-                        ForEach(providers) { providerID in
-                            let cw = viewModel.windows(for: providerID)
-                            ProviderColumnView(
-                                providerID: providerID,
-                                plannedWindows: cw.planned,
-                                actualWindows: cw.actual,
-                                date: viewModel.date,
-                                now: now,
-                                layout: layout,
-                                columnWidth: columnWidth,
-                                onSelectPlanned: onSelectPlanned,
-                                onSelectActual: onSelectActual
-                            )
-                            .overlay(alignment: .top) {
-                                providerHeader(providerID: providerID)
+            ZStack(alignment: .top) {
+                ScrollViewReader { scroller in
+                    ScrollView {
+                        HStack(alignment: .top, spacing: 0) {
+                            TimeRulerView(layout: layout)
+                                .id("ruler")
+                            ForEach(providers) { providerID in
+                                let cw = viewModel.windows(for: providerID)
+                                ProviderColumnView(
+                                    providerID: providerID,
+                                    plannedWindows: cw.planned,
+                                    actualWindows: cw.actual,
+                                    date: viewModel.date,
+                                    now: now,
+                                    layout: layout,
+                                    columnWidth: columnWidth,
+                                    onSelectPlanned: onSelectPlanned,
+                                    onSelectActual: onSelectActual
+                                )
                             }
+                            TimeRulerView(layout: layout, labelAlignment: .leading)
                         }
                     }
+                    .onAppear {
+                        // Aim to position "now" ~200pt below the floating toolbar (which adds ~50pt
+                        // of top safe-area inset on macOS 26). yOffset is in pixels relative to the
+                        // top of the day; we convert to a 0–1 anchor fraction across the ruler.
+                        guard layout.dayHeight > 0 else { return }
+                        let topInset = proxy.safeAreaInsets.top
+                        let target = CalendarPositioning.yOffset(
+                            for: now,
+                            pixelsPerMinute: layout.pixelsPerMinute
+                        ) - 200 - topInset
+                        scroller.scrollTo("ruler", anchor: UnitPoint(x: 0, y: max(0, target / layout.dayHeight)))
+                    }
                 }
-                .onAppear {
-                    // Aim to position "now" ~200pt below the floating toolbar (which adds ~50pt
-                    // of top safe-area inset on macOS 26). yOffset is in pixels relative to the
-                    // top of the day; we convert to a 0–1 anchor fraction across the ruler.
-                    guard layout.dayHeight > 0 else { return }
-                    let topInset = proxy.safeAreaInsets.top
-                    let target = CalendarPositioning.yOffset(
-                        for: now,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ) - 200 - topInset
-                    scroller.scrollTo("ruler", anchor: UnitPoint(x: 0, y: max(0, target / layout.dayHeight)))
+
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: layout.timeRulerWidth)
+                    ForEach(providers) { providerID in
+                        providerHeader(providerID: providerID)
+                            .frame(width: columnWidth)
+                    }
+                    Color.clear.frame(width: layout.timeRulerWidth)
                 }
+                .padding(.top, 4)
+                .allowsHitTesting(false)
             }
         }
     }
@@ -68,6 +79,5 @@ struct DayCalendarView: View {
         .padding(.horizontal, C5hSpacing.sm)
         .padding(.vertical, 4)
         .glassEffect(C5hGlass.toolbar, in: .capsule)
-        .padding(.top, 4)
     }
 }
