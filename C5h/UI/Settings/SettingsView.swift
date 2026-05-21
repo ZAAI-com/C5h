@@ -6,41 +6,40 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var heartbeat: HelperHeartbeat?
     @State private var registration = HelperRegistrationService()
+    @State private var claudeWakePrompt: String = AppSettingsKeys.defaultWakePromptFallback
+    @State private var codexWakePrompt: String = AppSettingsKeys.defaultWakePromptFallback
     #if DEBUG
     @State private var devRunner = HelperDevModeRunner()
     #endif
 
     var body: some View {
-        TabView {
-            generalTab.tabItem { Label("General", systemImage: "gearshape") }
-            helperTab.tabItem { Label("Helper", systemImage: "bolt.horizontal.circle") }
-            advancedTab.tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Settings")
-                    .font(.title3.weight(.semibold))
-                    .padding(.horizontal, C5hSpacing.sm)
+        Form {
+            Section("General") {
+                LabeledContent("Database location", value: appEnv.paths?.databaseURL.path ?? "—")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                LabeledContent("Logs directory", value: appEnv.paths?.logsDirectory.path ?? "—")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                LabeledContent("Default window length", value: "5 hours")
             }
-        }
-        .task { await reloadHeartbeat() }
-    }
-
-    private var generalTab: some View {
-        Form {
-            LabeledContent("Database location", value: appEnv.paths?.databaseURL.path ?? "—")
-                .lineLimit(1)
-                .truncationMode(.middle)
-            LabeledContent("Logs directory", value: appEnv.paths?.logsDirectory.path ?? "—")
-                .lineLimit(1)
-                .truncationMode(.middle)
-            LabeledContent("Default window length", value: "5 hours")
-        }
-        .formStyle(.grouped)
-    }
-
-    private var helperTab: some View {
-        Form {
+            Section("Default wake prompts") {
+                Text("Sent automatically when a planned window's start time arrives, to open the actual 5h limit window.")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                TextField(
+                    "Claude",
+                    text: $claudeWakePrompt,
+                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
+                )
+                .onSubmit { Task { await saveWakePrompt(.claude, value: claudeWakePrompt) } }
+                TextField(
+                    "Codex",
+                    text: $codexWakePrompt,
+                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
+                )
+                .onSubmit { Task { await saveWakePrompt(.codex, value: codexWakePrompt) } }
+            }
             Section("LaunchAgent") {
                 LabeledContent("Status", value: registration.status.label)
                 if case .error(let message) = registration.status {
@@ -81,12 +80,6 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
-        }
-        .formStyle(.grouped)
-    }
-
-    private var advancedTab: some View {
-        Form {
             Section("Database") {
                 LabeledContent("Path", value: appEnv.paths?.databaseURL.path ?? "—")
                     .lineLimit(1).truncationMode(.middle)
@@ -135,6 +128,17 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Settings")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+        }
+        .task {
+            await reloadHeartbeat()
+            await reloadWakePrompts()
+        }
     }
 
     @State private var lastSweepResult: LogRetentionResult?
@@ -170,5 +174,26 @@ struct SettingsView: View {
     private func reloadHeartbeat() async {
         guard let repo = appEnv.helperHeartbeatRepository else { return }
         heartbeat = try? await repo.latest()
+    }
+
+    private func reloadWakePrompts() async {
+        guard let settings = appEnv.appSettingsRepository else { return }
+        let claudeKey = AppSettingsKeys.defaultWakePrompt(for: .claude)
+        let codexKey = AppSettingsKeys.defaultWakePrompt(for: .codex)
+        let claudeValue = (try? await settings.get(claudeKey, as: String.self)) ?? nil
+        let codexValue = (try? await settings.get(codexKey, as: String.self)) ?? nil
+        claudeWakePrompt = claudeValue ?? AppSettingsKeys.defaultWakePromptFallback
+        codexWakePrompt = codexValue ?? AppSettingsKeys.defaultWakePromptFallback
+    }
+
+    private func saveWakePrompt(_ providerID: ProviderID, value: String) async {
+        guard let settings = appEnv.appSettingsRepository else { return }
+        let key = AppSettingsKeys.defaultWakePrompt(for: providerID)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            try? await settings.remove(key)
+        } else {
+            try? await settings.set(key, value: trimmed)
+        }
     }
 }
