@@ -15,7 +15,7 @@ struct DayCalendarView: View {
                 layout.providerMinWidth,
                 (proxy.size.width - 2 * layout.timeRulerWidth) / CGFloat(providers.count)
             )
-            ZStack(alignment: .top) {
+            ZStack(alignment: .topLeading) {
                 ScrollViewReader { scroller in
                     ScrollView {
                         HStack(alignment: .top, spacing: 0) {
@@ -53,13 +53,12 @@ struct DayCalendarView: View {
                 }
 
                 HStack(spacing: 0) {
-                    Color.clear.frame(width: layout.timeRulerWidth)
                     ForEach(providers) { providerID in
                         providerHeader(providerID: providerID)
                             .frame(width: columnWidth)
                     }
-                    Color.clear.frame(width: layout.timeRulerWidth)
                 }
+                .padding(.leading, layout.timeRulerWidth)
                 .padding(.top, 4)
                 .allowsHitTesting(false)
             }
