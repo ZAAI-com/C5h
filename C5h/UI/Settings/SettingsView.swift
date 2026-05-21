@@ -66,6 +66,14 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
+            Section("Time zone") {
+                LabeledContent("Identifier", value: TimeZone.current.identifier)
+                LabeledContent("Abbreviation", value: TimeZone.current.abbreviation() ?? "—")
+                LabeledContent("Offset", value: timeZoneOffsetLabel)
+                Text("Read-only — follows your system time zone. New windows are tagged with this zone at creation.")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgTertiary)
+            }
             Section("Bundle") {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
@@ -143,6 +151,15 @@ struct SettingsView: View {
         } label: {
             Text(title)
         }
+    }
+
+    private var timeZoneOffsetLabel: String {
+        let seconds = TimeZone.current.secondsFromGMT()
+        let sign = seconds >= 0 ? "+" : "-"
+        let abs = Swift.abs(seconds)
+        let h = abs / 3600
+        let m = (abs % 3600) / 60
+        return String(format: "GMT%@%02d:%02d", sign, h, m)
     }
 
     private func openFolder(_ url: URL) {
