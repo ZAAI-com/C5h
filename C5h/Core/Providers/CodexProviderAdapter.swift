@@ -26,11 +26,14 @@ struct CodexProviderAdapter: ProviderAdapter {
     func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
 
     func runUsageCommand() async throws -> UsageSnapshot {
-        // Codex usage reset detection is intentionally disabled: reading
-        // ~/.codex/sessions/*.jsonl triggers macOS's "access data from other
-        // apps" TCC dialog, and the Codex CLI does not expose a programmatic
-        // /usage equivalent we could shell out to instead.
-        throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
+        let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
+        guard let cliURL = await backing.resolver.resolveCLI(
+            named: backing.executableName,
+            configuredPath: configured
+        ) else {
+            throw C5hError.cliNotFound(backing.executableName)
+        }
+        return try await CodexUsageCollector(executableURL: cliURL).collect()
     }
 
     func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {

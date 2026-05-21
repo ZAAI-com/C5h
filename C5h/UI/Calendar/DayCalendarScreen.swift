@@ -30,7 +30,8 @@ struct DayCalendarScreen: View {
                     date: date,
                     plannedRepository: plannedRepo,
                     actualRepository: actualRepo,
-                    scheduledRepository: scheduledRepo
+                    scheduledRepository: scheduledRepo,
+                    appSettings: appEnv.appSettingsRepository
                 )
                 viewModel = vm
                 await vm.reload()

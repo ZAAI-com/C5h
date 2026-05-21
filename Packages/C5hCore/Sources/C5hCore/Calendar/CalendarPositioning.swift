@@ -33,4 +33,26 @@ public enum CalendarPositioning {
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
         return DateInterval(start: start, end: end)
     }
+
+    /// Inverse of `yOffset(for:pixelsPerMinute:)`: converts a Y pixel position
+    /// within a day column back to the corresponding `Date`. Used by the
+    /// hover-to-plan affordance in the day calendar.
+    public static func date(
+        forYOffset yOffset: CGFloat,
+        on day: Date,
+        pixelsPerMinute: CGFloat,
+        calendar: Calendar = .current
+    ) -> Date {
+        let clamped = max(0, yOffset)
+        let minutes = Double(clamped / pixelsPerMinute)
+        let startOfDay = calendar.startOfDay(for: day)
+        return startOfDay.addingTimeInterval(minutes * 60)
+    }
+
+    /// Snaps a date to a multiple of `minutes` (defaults to 5-minute grid).
+    public static func snap(_ date: Date, toMinutes minutes: Int) -> Date {
+        let interval = Double(minutes) * 60
+        let snapped = (date.timeIntervalSince1970 / interval).rounded() * interval
+        return Date(timeIntervalSince1970: snapped)
+    }
 }

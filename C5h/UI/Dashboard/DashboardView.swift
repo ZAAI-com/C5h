@@ -128,33 +128,44 @@ struct DashboardView: View {
             if viewModel.activeWindows.isEmpty {
                 Text("No active windows right now.").foregroundStyle(C5hColors.fgSecondary)
             } else {
-                VStack(alignment: .leading, spacing: C5hSpacing.sm) {
+                VStack(alignment: .leading, spacing: C5hSpacing.md) {
                     ForEach(viewModel.activeWindows) { window in
-                        HStack(spacing: C5hSpacing.sm) {
-                            Circle().fill(brandColor(for: window.providerID)).frame(width: 10, height: 10)
-                            Text(window.providerID.displayName).font(C5hTypography.bodyFont)
-                            Text(windowKindLabel(durationSeconds: window.durationSeconds))
-                                .font(C5hTypography.captionFont)
-                                .foregroundStyle(C5hColors.fgTertiary)
-                            if let pct = viewModel.activeWindowUsagePercentages[window.id] {
-                                let clamped = min(max(pct, 0), 100)
-                                ProgressView(value: clamped, total: 100)
-                                    .progressViewStyle(.linear)
-                                    .tint(brandColor(for: window.providerID))
-                                    .frame(width: 60)
-                                Text("\(Int(clamped.rounded()))%")
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: C5hSpacing.sm) {
+                                Circle().fill(brandColor(for: window.providerID)).frame(width: 10, height: 10)
+                                Text(window.providerID.displayName).font(C5hTypography.bodyFont)
+                                Text(windowKindLabel(durationSeconds: window.durationSeconds))
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgTertiary)
+                                if let pct = viewModel.activeWindowUsagePercentages[window.id] {
+                                    let clamped = min(max(pct, 0), 100)
+                                    ProgressView(value: clamped, total: 100)
+                                        .progressViewStyle(.linear)
+                                        .tint(brandColor(for: window.providerID))
+                                        .frame(width: 60)
+                                    Text("\(Int(clamped.rounded()))%")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                }
+                                Spacer()
+                                Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
                                     .font(C5hTypography.captionFont)
                                     .foregroundStyle(C5hColors.fgSecondary)
                             }
-                            Spacer()
-                            Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
+                            Text(dataSourceLabel(for: window))
                                 .font(C5hTypography.captionFont)
-                                .foregroundStyle(C5hColors.fgSecondary)
+                                .foregroundStyle(C5hColors.fgTertiary)
                         }
                     }
                 }
             }
         }
+    }
+
+    private func dataSourceLabel(for window: ActualWindow) -> String {
+        let source = "from \(window.providerID.displayName) CLI"
+        let confidence = window.confidence == .estimated ? "start: estimated" : "start: exact"
+        return "\(source) · \(confidence)"
     }
 
     private func windowKindLabel(durationSeconds: Int) -> String {

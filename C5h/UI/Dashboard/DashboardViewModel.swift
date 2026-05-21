@@ -21,6 +21,7 @@ final class DashboardViewModel {
     private let commandRepo: any CommandRunRepository
     private let usageRepo: any UsageSnapshotRepository
     private let registry: ProviderRegistry
+    private let fetcher: UsageFetcher
 
     init(
         actualRepository: any ActualWindowRepository,
@@ -34,6 +35,14 @@ final class DashboardViewModel {
         self.commandRepo = commandRunRepository
         self.usageRepo = usageSnapshotRepository
         self.registry = registry
+        self.fetcher = UsageFetcher(
+            persistSnapshot: { snapshot in
+                try await usageSnapshotRepository.create(snapshot)
+            },
+            upsertActualWindow: { window, tolerance in
+                try await actualRepository.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
     }
 
     func reload() async {
@@ -103,23 +112,7 @@ final class DashboardViewModel {
     private func refreshUsageWindow(providerID: ProviderID, now: Date) async {
         do {
             let adapter = try registry.adapter(for: providerID)
-            let snapshot = try await adapter.runUsageCommand()
-            guard !isSnapshotStale(snapshot, now: now) else {
-                NSLog("\(providerID.displayName) usage snapshot is stale; skipping")
-                return
-            }
-            try await usageRepo.create(snapshot)
-            let windows = try actualWindows(from: snapshot)
-
-            for window in windows where window.startAt <= now && window.endAt >= now {
-                let duplicateSearch = DateInterval(
-                    start: window.startAt.addingTimeInterval(-TimeInterval(window.durationSeconds)),
-                    end: window.endAt.addingTimeInterval(1)
-                )
-                let existing = try await actualRepo.fetchWindows(for: duplicateSearch)
-                guard !existing.contains(where: { overlaps($0, window) }) else { continue }
-                try await actualRepo.create(window)
-            }
+            _ = try await fetcher.fetchAndPersist(adapter: adapter, now: now)
         } catch {
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
@@ -151,33 +144,6 @@ final class DashboardViewModel {
         }
     }
 
-    private func actualWindows(from snapshot: UsageSnapshot) throws -> [ActualWindow] {
-        switch snapshot.providerID {
-        case .claude:
-            let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
-            var result = [status.actualWindow(providerID: .claude, createdAt: snapshot.capturedAt)]
-            if let weekly = status.sevenDayActualWindow(providerID: .claude, createdAt: snapshot.capturedAt) {
-                result.append(weekly)
-            }
-            return result
-        case .codex:
-            let status = try CodexUsageStatus.parsePayload(snapshot.rawJSON)
-            var result = [status.actualWindow(providerID: .codex, createdAt: snapshot.capturedAt)]
-            if let weekly = status.secondaryActualWindow(providerID: .codex, createdAt: snapshot.capturedAt) {
-                result.append(weekly)
-            }
-            return result
-        }
-    }
-
-    private func isSnapshotStale(_ snapshot: UsageSnapshot, now: Date) -> Bool {
-        guard snapshot.providerID == .codex,
-              let status = try? CodexUsageStatus.parsePayload(snapshot.rawJSON) else {
-            return false
-        }
-        return status.isStale(now: now)
-    }
-
     private func refreshUsagePercentages() async {
         var next: [UUID: Double] = [:]
         var cache: [ProviderID: NormalizedUsage?] = [:]
@@ -206,10 +172,4 @@ final class DashboardViewModel {
         return try? decoder.decode(NormalizedUsage.self, from: data)
     }
 
-    private func overlaps(_ existing: ActualWindow, _ detected: ActualWindow) -> Bool {
-        existing.providerID == detected.providerID
-            && existing.durationSeconds == detected.durationSeconds
-            && existing.startAt < detected.endAt
-            && existing.endAt > detected.startAt
-    }
 }

@@ -57,6 +57,7 @@ struct HelperMain {
         let scheduledRepo = GRDBScheduledPromptRepository(database: database)
         let actualRepo = GRDBActualWindowRepository(database: database)
         let cmdRepo = GRDBCommandRunRepository(database: database)
+        let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
 
         let logsDir = appSupport
@@ -81,6 +82,19 @@ struct HelperMain {
         )
         let scheduler = SchedulerService(driver: driver)
 
+        let usageFetcher = UsageFetcher(
+            persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
+            upsertActualWindow: { window, tolerance in
+                try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
+        let usageRefresher = HelperUsageRefresher(
+            resolver: resolver,
+            settingsRepo: settingsRepo,
+            fetcher: usageFetcher,
+            intervalSeconds: 5 * 60
+        )
+
         // Heartbeat + tick loop. Sleep 30s between iterations.
         while true {
             try? await heartbeatRepo.writeHeartbeat(
@@ -88,7 +102,69 @@ struct HelperMain {
                 pid: Int(getpid())
             )
             _ = await scheduler.tick(now: .now)
+            await usageRefresher.tickIfDue(now: .now)
             try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+        }
+    }
+}
+
+/// Polls every enabled provider's usage on a fixed cadence so the "current 5h
+/// window" we display stays accurate even when the main app isn't open.
+actor HelperUsageRefresher {
+    let resolver: any CLIPathResolving
+    let settingsRepo: any AppSettingsRepository
+    let fetcher: UsageFetcher
+    let intervalSeconds: TimeInterval
+
+    private var lastRefreshAt: Date?
+
+    init(
+        resolver: any CLIPathResolving,
+        settingsRepo: any AppSettingsRepository,
+        fetcher: UsageFetcher,
+        intervalSeconds: TimeInterval
+    ) {
+        self.resolver = resolver
+        self.settingsRepo = settingsRepo
+        self.fetcher = fetcher
+        self.intervalSeconds = intervalSeconds
+    }
+
+    func tickIfDue(now: Date) async {
+        if let last = lastRefreshAt, now.timeIntervalSince(last) < intervalSeconds {
+            return
+        }
+        lastRefreshAt = now
+        for providerID in ProviderID.allCases {
+            await refresh(providerID: providerID, now: now)
+        }
+    }
+
+    private func refresh(providerID: ProviderID, now: Date) async {
+        do {
+            let configured = try? await settingsRepo.get(
+                AppSettingsKeys.cliPath(for: providerID),
+                as: String.self
+            )
+            guard let cliURL = await resolver.resolveCLI(
+                named: providerID.executableName,
+                configuredPath: configured
+            ) else {
+                return
+            }
+            let snapshot: UsageSnapshot
+            switch providerID {
+            case .claude:
+                snapshot = try await ClaudeUsageCollector(executableURL: cliURL).collect()
+            case .codex:
+                snapshot = try await CodexUsageCollector(executableURL: cliURL).collect()
+            }
+            try await fetcher.persistSnapshot(snapshot)
+            for window in try fetcher.derivedActualWindows(from: snapshot, now: now) {
+                try await fetcher.upsertActualWindow(window, UsageFetcher.dedupTolerance)
+            }
+        } catch {
+            NSLog("C5hHelper: usage refresh failed for \(providerID.rawValue): \(error)")
         }
     }
 }

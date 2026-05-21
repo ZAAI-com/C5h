@@ -100,4 +100,41 @@ struct CodexUsageStatusTests {
 
         #expect(status.isStale(now: oneHourLater) == false)
     }
+
+    @Test("Parses codex app-server account/rateLimits/read result payload")
+    func parsesAppServerResponse() throws {
+        let result = """
+        {"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":2,"windowDurationMins":300,"resetsAt":1779365844},"secondary":{"usedPercent":12,"windowDurationMins":10080,"resetsAt":1779838110},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"plus","rateLimitReachedType":null}}
+        """
+        let capturedAt = Date(timeIntervalSince1970: 1_779_300_000)
+        let status = try CodexUsageStatus.parseAppServerResponse(result, capturedAt: capturedAt)
+
+        #expect(status.eventTimestamp == capturedAt)
+        #expect(status.primary.usedPercentage == 2)
+        #expect(status.primary.resetsAt.timeIntervalSince1970 == 1_779_365_844)
+        #expect(status.primaryWindowMinutes == 300)
+        #expect(status.secondary?.usedPercentage == 12)
+        #expect(status.secondary?.resetsAt.timeIntervalSince1970 == 1_779_838_110)
+        #expect(status.secondaryWindowMinutes == 10080)
+        #expect(status.planType == "plus")
+    }
+
+    @Test("App-server response uses CLI-provided duration (no 5h assumption)")
+    func appServerResponseDurationIsCLIProvided() throws {
+        let result = """
+        {"rateLimits":{"primary":{"usedPercent":50,"windowDurationMins":240,"resetsAt":1779365844},"secondary":{"usedPercent":1,"windowDurationMins":10080,"resetsAt":1779838110}}}
+        """
+        let status = try CodexUsageStatus.parseAppServerResponse(result)
+
+        #expect(status.primaryDurationSeconds == 240 * 60)
+        #expect(status.secondaryDurationSeconds == 10080 * 60)
+    }
+
+    @Test("App-server response raises on missing primary")
+    func appServerResponseMissingPrimary() {
+        let result = #"{"rateLimits":{"secondary":{"usedPercent":1,"windowDurationMins":10080,"resetsAt":1779838110}}}"#
+        #expect(throws: CodexUsageStatusParseError.self) {
+            _ = try CodexUsageStatus.parseAppServerResponse(result)
+        }
+    }
 }

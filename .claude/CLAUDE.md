@@ -96,7 +96,7 @@ LaunchAgent plist in the app bundle.
 - **C5hCore** (`Packages/C5hCore`) — domain models, services, process primitives. Has tests.
   - Models: `Provider`, `ProviderID`, `ScheduledPrompt`, `PlannedWindow`, `ActualWindow`, `CommandRun`, `PromptTemplate`, `UsageSnapshot`
   - Services: `SchedulerService`, `PlannedWindowService`, `MissedPromptPolicy`, `DateTimeService`, `CommandRunner`, `CLIPathResolver`, `EnvironmentResolver`, `CalendarPositioning`, `LogRetentionSweeper`
-  - Usage: `ClaudeUsageStatus`, `CodexUsageStatus`, `UsageDiffEngine`, `UsageNormalizer`
+  - Usage: `ClaudeUsageStatus`, `CodexUsageStatus`, `UsageNormalizer`, `UsageFetcher`
   - Validation: `PlannedWindowValidator`
   - Process: `DisclaimingSpawn` / `LaunchedProcess`, `CommandSpec`, `FileLogWriter`
   - Errors: `C5hError` (`LocalizedError`)
