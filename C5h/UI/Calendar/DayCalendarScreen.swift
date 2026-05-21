@@ -22,6 +22,16 @@ struct DayCalendarScreen: View {
         }
         .toolbar { principalTitle }
         .task(id: BootstrapKey(env: ObjectIdentifier(appEnv), day: Calendar.current.startOfDay(for: date))) {
+            if coordinator == nil,
+               let registry = appEnv.providerRegistry,
+               let actualRepo = appEnv.actualWindowRepository,
+               let usageRepo = appEnv.usageSnapshotRepository {
+                coordinator = ManualTriggerCoordinator(
+                    registry: registry,
+                    actualWindowRepository: actualRepo,
+                    usageSnapshotRepository: usageRepo
+                )
+            }
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
                let actualRepo = appEnv.actualWindowRepository,
@@ -41,16 +51,6 @@ struct DayCalendarScreen: View {
                       !Calendar.current.isDate(vm.date, inSameDayAs: date) {
                 vm.date = date
                 await vm.reload()
-            }
-            if coordinator == nil,
-               let registry = appEnv.providerRegistry,
-               let actualRepo = appEnv.actualWindowRepository,
-               let usageRepo = appEnv.usageSnapshotRepository {
-                coordinator = ManualTriggerCoordinator(
-                    registry: registry,
-                    actualWindowRepository: actualRepo,
-                    usageSnapshotRepository: usageRepo
-                )
             }
         }
         .task {
