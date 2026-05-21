@@ -19,16 +19,26 @@ struct ProvidersView: View {
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let registry = appEnv.providerRegistry,
-               let settings = appEnv.appSettingsRepository {
-                let vm = ProvidersViewModel(registry: registry, appSettings: settings)
+               let settings = appEnv.appSettingsRepository,
+               let usageRepo = appEnv.usageSnapshotRepository,
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let actual7dRepo = appEnv.actualWindow7dRepository {
+                let vm = ProvidersViewModel(
+                    registry: registry,
+                    appSettings: settings,
+                    usageSnapshotRepository: usageRepo,
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
+                    refreshProviderStatus: { id in
+                        await appEnv.refreshProviderStatus(id: id)
+                    }
+                )
                 viewModel = vm
                 await vm.bootstrap()
             }
         }
         .onChange(of: reloadToken) { _, _ in
-            if let viewModel {
-                Task { await refreshAllProviders(viewModel) }
-            }
+            Task { await appEnv.refreshAllProviderStatuses() }
         }
     }
 
@@ -47,12 +57,15 @@ struct ProvidersView: View {
                     ForEach(ProviderID.allCases) { id in
                         ProviderCardView(
                             id: id,
-                            status: viewModel.statuses[id],
+                            status: appEnv.providerStatuses[id],
                             configuredPath: viewModel.configuredPaths[id] ?? "",
                             wakePrompt: viewModel.wakePrompts[id] ?? "",
-                            isLoading: viewModel.loadingProviders.contains(id),
-                            onVersion: { Task { await viewModel.runVersion(id: id) } },
-                            onAuthStatus: { Task { await viewModel.runAuthStatus(id: id) } },
+                            usageCheck: viewModel.usageChecks[id],
+                            isStatusLoading: appEnv.providerStatusLoading.contains(id),
+                            isUsageLoading: viewModel.loadingUsageProviders.contains(id),
+                            onVersion: { Task { await appEnv.runProviderVersionStatus(id: id) } },
+                            onAuthStatus: { Task { await appEnv.runProviderAuthStatus(id: id) } },
+                            onUsage: { Task { await viewModel.runUsage(id: id) } },
                             onSetPath: { newPath in
                                 Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
                             },
@@ -72,12 +85,15 @@ struct ProvidersView: View {
                     .font(.title3.weight(.semibold))
                     .padding(.horizontal, C5hSpacing.sm)
             }
-        }
-    }
 
-    private func refreshAllProviders(_ viewModel: ProvidersViewModel) async {
-        for id in ProviderID.allCases {
-            await viewModel.refreshProvider(id: id)
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await appEnv.refreshAllProviderStatuses() }
+                } label: {
+                    Label("Refresh all", systemImage: "arrow.clockwise")
+                }
+                .help("Refresh provider version and authentication status")
+            }
         }
     }
 }

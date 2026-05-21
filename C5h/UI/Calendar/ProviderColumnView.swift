@@ -11,30 +11,71 @@ struct ProviderColumnView: View {
     let columnWidth: CGFloat
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    let onMovePlanned: (PlannedWindow, Date) -> Void
     var onQuickPlan: ((Date) -> Void)? = nil
 
     @State private var hoverY: CGFloat?
+    @State private var hoveredPlannedID: UUID?
+    @State private var draggingPlannedID: UUID?
+    @State private var dragPreviewStart: Date?
 
     private static let fiveHourSeconds = ClaudeUsageStatus.fiveHourDurationSeconds
-    private static let snapMinutes = 5
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
             ghostPlanBlock
             ForEach(plannedWindows) { window in
+                let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
+                let displayStart = displayedStart(for: window)
                 Button {
                     onSelectPlanned(window)
                 } label: {
-                    PlannedWindowBlockView(
-                        window: window,
-                        columnWidth: columnWidth,
-                        layout: layout
-                    )
+                    PlannedWindowBlockView(window: window, columnWidth: columnWidth, layout: layout)
+                        .overlay(alignment: .topTrailing) {
+                            if isActive {
+                                Image(systemName: "arrow.up.and.down")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(C5hColors.tintForProvider(providerID))
+                                    .padding(5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
-                .offset(y: yOffset(for: window.startAt))
+                .offset(y: yOffset(for: displayStart))
                 .padding(.leading, 2)
+                .opacity(draggingPlannedID == window.id ? 0.85 : 1)
+                .zIndex(draggingPlannedID == window.id ? 3 : 1)
+                .onHover { hovering in
+                    if hovering {
+                        hoveredPlannedID = window.id
+                    } else if hoveredPlannedID == window.id {
+                        hoveredPlannedID = nil
+                    }
+                }
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { value in
+                            draggingPlannedID = window.id
+                            hoverY = nil
+                            dragPreviewStart = draggedStart(
+                                for: window,
+                                translationY: value.translation.height
+                            )
+                        }
+                        .onEnded { value in
+                            let start = draggedStart(
+                                for: window,
+                                translationY: value.translation.height
+                            )
+                            draggingPlannedID = nil
+                            dragPreviewStart = nil
+                            if start != window.startAt {
+                                onMovePlanned(window, start)
+                            }
+                        }
+                )
             }
             ForEach(actualWindows) { window in
                 Button {
@@ -51,11 +92,13 @@ struct ProviderColumnView: View {
                     x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
                     y: yOffset(for: window.startAt)
                 )
+                .zIndex(2)
             }
             if Calendar.current.isDate(now, inSameDayAs: date) {
                 NowLineView(layout: layout)
                     .frame(width: columnWidth)
                     .offset(y: yOffset(for: now))
+                    .zIndex(4)
             }
         }
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
@@ -78,7 +121,9 @@ struct ProviderColumnView: View {
 
     @ViewBuilder
     private var ghostPlanBlock: some View {
-        if let hoverY,
+        if hoveredPlannedID == nil,
+           draggingPlannedID == nil,
+           let hoverY,
            let start = hoveredStart(forY: hoverY) {
             let height = CalendarPositioning.blockHeight(
                 durationSeconds: Self.fiveHourSeconds,
@@ -115,17 +160,48 @@ struct ProviderColumnView: View {
     }
 
     /// Maps a pointer Y to the planned-window start time, snapped to the
-    /// 5-minute grid. Returns nil for times that are in the past — the hover
-    /// affordance only shows for future slots.
+    /// provider grid. Returns nil for past or conflicting slots.
     private func hoveredStart(forY y: CGFloat) -> Date? {
+        let snapped = snappedStart(forY: y)
+        guard snapped > now else { return nil }
+        guard canQuickPlan(at: snapped) else { return nil }
+        return snapped
+    }
+
+    private func displayedStart(for window: PlannedWindow) -> Date {
+        if draggingPlannedID == window.id {
+            return dragPreviewStart ?? window.startAt
+        }
+        return window.startAt
+    }
+
+    private func draggedStart(for window: PlannedWindow, translationY: CGFloat) -> Date {
+        snappedStart(forY: yOffset(for: window.startAt) + translationY)
+    }
+
+    private func snappedStart(forY y: CGFloat) -> Date {
         let raw = CalendarPositioning.date(
             forYOffset: y,
             on: date,
             pixelsPerMinute: layout.pixelsPerMinute
         )
-        let snapped = CalendarPositioning.snap(raw, toMinutes: Self.snapMinutes)
-        guard snapped > now else { return nil }
-        return snapped
+        let snapped = CalendarPositioning.snap(raw, toMinutes: providerID.plannedWindowSnapMinutes)
+        let interval = CalendarPositioning.dayInterval(for: date)
+        let latestStart = interval.end.addingTimeInterval(
+            -Double(providerID.plannedWindowSnapMinutes) * 60
+        )
+        return min(max(snapped, interval.start), latestStart)
+    }
+
+    private func canQuickPlan(at start: Date) -> Bool {
+        let candidate = PlannedWindow(
+            providerID: providerID,
+            startAt: start,
+            durationSeconds: Self.fiveHourSeconds
+        )
+        return !PlannedWindowValidator
+            .validate(candidate: candidate, against: plannedWindows)
+            .hasConflict
     }
 
     private var background: some View {

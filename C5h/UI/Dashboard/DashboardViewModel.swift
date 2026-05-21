@@ -11,7 +11,6 @@ final class DashboardViewModel {
     var activeWindowUsagePercentages: [UUID: Double] = [:]
     var upcomingPrompts: [ScheduledPrompt] = []
     var recentRuns: [CommandRun] = []
-    var providerStatuses: [ProviderID: ProviderStatus] = [:]
     var dailyUsageHistory: [DailyProviderUsage] = []
     var sparklineCounts: [ProviderID: [Int]] = [:]
     var lastError: String?
@@ -69,9 +68,6 @@ final class DashboardViewModel {
                 limit: 5,
                 filter: CommandRunFilter()
             )
-            for id in ProviderID.allCases {
-                await refreshProviderStatus(id: id)
-            }
             await loadUsageHistory(now: now)
             self.lastError = nil
         } catch {
@@ -135,32 +131,6 @@ final class DashboardViewModel {
             }
         }
         return windows
-    }
-
-    private func refreshProviderStatus(id: ProviderID) async {
-        do {
-            let adapter = try registry.adapter(for: id)
-            let versionStatus = await adapter.runVersionCommand()
-            providerStatuses[id] = versionStatus
-            guard versionStatus.isInstalled, versionStatus.errorMessage == nil else { return }
-
-            let authStatus = await adapter.runAuthStatusCommand()
-            providerStatuses[id] = ProviderStatus(
-                providerID: id,
-                isInstalled: versionStatus.isInstalled,
-                cliPath: authStatus.cliPath ?? versionStatus.cliPath,
-                version: versionStatus.version,
-                isAuthenticated: authStatus.isAuthenticated,
-                lastCheckedAt: authStatus.lastCheckedAt,
-                errorMessage: authStatus.errorMessage
-            )
-        } catch {
-            providerStatuses[id] = ProviderStatus(
-                providerID: id,
-                isInstalled: false,
-                errorMessage: String(describing: error)
-            )
-        }
     }
 
     private func refreshUsagePercentages() async {

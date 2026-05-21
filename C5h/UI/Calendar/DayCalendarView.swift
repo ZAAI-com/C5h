@@ -7,6 +7,7 @@ struct DayCalendarView: View {
     let now: Date
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    let onMovePlanned: (PlannedWindow, Date) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16
@@ -48,6 +49,7 @@ struct DayCalendarView: View {
                                     columnWidth: columnWidth,
                                     onSelectPlanned: onSelectPlanned,
                                     onSelectActual: onSelectActual,
+                                    onMovePlanned: onMovePlanned,
                                     onQuickPlan: { start in
                                         Task { await viewModel.quickPlan(provider: providerID, startAt: start) }
                                     }

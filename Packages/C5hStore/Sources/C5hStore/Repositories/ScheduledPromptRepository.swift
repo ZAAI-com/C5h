@@ -6,6 +6,13 @@ public protocol ScheduledPromptRepository: Sendable {
     func create(_ prompt: ScheduledPrompt) async throws
     func fetch(id: UUID) async throws -> ScheduledPrompt?
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt]
+    func reschedulePendingPrompts(
+        plannedWindowID: UUID,
+        providerID: ProviderID,
+        projectPath: String?,
+        runAt: Date
+    ) async throws
+    func cancelPendingAndDetachPrompts(plannedWindowID: UUID) async throws
     func tryClaimAsRunning(id: UUID) async throws -> Bool
     func markSucceeded(id: UUID) async throws
     func markFailed(id: UUID, error: String) async throws
@@ -44,6 +51,57 @@ public struct GRDBScheduledPromptRepository: ScheduledPromptRepository {
                 .fetchAll(db)
         }
         return try records.map { try $0.toScheduledPrompt() }
+    }
+
+    public func reschedulePendingPrompts(
+        plannedWindowID: UUID,
+        providerID: ProviderID,
+        projectPath: String?,
+        runAt: Date
+    ) async throws {
+        try await writer.write { db in
+            try db.execute(
+                sql: """
+                UPDATE scheduled_prompts
+                SET provider_id = ?, project_path = ?, run_at = ?, updated_at = ?
+                WHERE planned_window_id = ?
+                  AND status IN (?, ?)
+                """,
+                arguments: [
+                    providerID.rawValue,
+                    projectPath,
+                    DateTimeService.formatUTC(runAt),
+                    DateTimeService.formatUTC(.now),
+                    plannedWindowID.uuidString,
+                    ScheduledPromptStatus.scheduled.rawValue,
+                    ScheduledPromptStatus.due.rawValue
+                ]
+            )
+        }
+    }
+
+    public func cancelPendingAndDetachPrompts(plannedWindowID: UUID) async throws {
+        try await writer.write { db in
+            try db.execute(
+                sql: """
+                UPDATE scheduled_prompts
+                SET status = CASE
+                        WHEN status IN (?, ?) THEN ?
+                        ELSE status
+                    END,
+                    planned_window_id = NULL,
+                    updated_at = ?
+                WHERE planned_window_id = ?
+                """,
+                arguments: [
+                    ScheduledPromptStatus.scheduled.rawValue,
+                    ScheduledPromptStatus.due.rawValue,
+                    ScheduledPromptStatus.cancelled.rawValue,
+                    DateTimeService.formatUTC(.now),
+                    plannedWindowID.uuidString
+                ]
+            )
+        }
     }
 
     public func tryClaimAsRunning(id: UUID) async throws -> Bool {

@@ -33,7 +33,7 @@ struct CodexProviderAdapter: ProviderAdapter {
         ) else {
             throw C5hError.cliNotFound(backing.executableName)
         }
-        return try await CodexUsageCollector(executableURL: cliURL).collect()
+        return try await UsageCommand(providerID: .codex, executableURL: cliURL).collect()
     }
 
     func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {

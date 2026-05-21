@@ -20,6 +20,7 @@ final class DayCalendarViewModel {
     private let usageSnapshotRepository: (any UsageSnapshotRepository)?
     private let providerRegistry: ProviderRegistry?
     private let appSettings: (any AppSettingsRepository)?
+    private var usageRefreshTask: Task<Void, Never>?
 
     init(
         date: Date,
@@ -42,7 +43,11 @@ final class DayCalendarViewModel {
     }
 
     func reload() async {
-        await refreshUsageWindows()
+        await loadLocalWindows()
+        refreshUsageWindowsInBackground()
+    }
+
+    private func loadLocalWindows() async {
         let interval = CalendarPositioning.dayInterval(for: date)
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
@@ -51,7 +56,7 @@ final class DayCalendarViewModel {
             self.actual = try await actual
             self.lastError = nil
         } catch {
-            self.lastError = String(describing: error)
+            self.lastError = errorMessage(error)
         }
     }
 
@@ -60,6 +65,17 @@ final class DayCalendarViewModel {
     /// didn't reconcile against upstream `resetsAt`) get corrected before the
     /// calendar reads them. Failures are silent — the calendar still shows
     /// whatever's already in the repo.
+    private func refreshUsageWindowsInBackground() {
+        guard usageRefreshTask == nil else { return }
+        usageRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            await self.refreshUsageWindows()
+            guard !Task.isCancelled else { return }
+            await self.loadLocalWindows()
+            self.usageRefreshTask = nil
+        }
+    }
+
     private func refreshUsageWindows() async {
         guard let usageRepo = usageSnapshotRepository,
               let registry = providerRegistry,
@@ -103,36 +119,89 @@ final class DayCalendarViewModel {
 
     func save(draft: PlannedWindowDraft) async throws {
         let window = draft.toPlannedWindow()
-        let original: PlannedWindow?
-        if let id = draft.existingID {
-            original = try await plannedRepository.fetch(id: id)
-            try await plannedRepository.update(window)
-        } else {
-            original = nil
-            try await plannedRepository.create(window)
-        }
-        if let prompt = draft.toScheduledPrompt(plannedWindow: window) {
-            do {
-                try await scheduledRepository.create(prompt)
-            } catch {
-                do {
-                    if draft.existingID == nil {
-                        try await plannedRepository.delete(id: window.id)
-                    } else if let original {
-                        try await plannedRepository.update(original)
-                    }
-                } catch let rollbackError {
-                    NSLog("DayCalendarViewModel: rollback after scheduled-prompt create failed: \(rollbackError)")
-                }
-                throw error
+        var original: PlannedWindow? = nil
+        do {
+            if let id = draft.existingID {
+                original = try await plannedRepository.fetch(id: id)
+                try await plannedRepository.update(window)
+                try await scheduledRepository.reschedulePendingPrompts(
+                    plannedWindowID: window.id,
+                    providerID: window.providerID,
+                    projectPath: window.projectPath,
+                    runAt: window.startAt
+                )
+            } else {
+                original = nil
+                try await plannedRepository.create(window)
             }
+            if let prompt = draft.toScheduledPrompt(plannedWindow: window) {
+                try await scheduledRepository.create(prompt)
+            }
+            lastError = nil
+            await loadLocalWindows()
+        } catch {
+            if draft.existingID == nil {
+                try? await plannedRepository.delete(id: window.id)
+            } else if let original {
+                try? await plannedRepository.update(original)
+                try? await scheduledRepository.reschedulePendingPrompts(
+                    plannedWindowID: original.id,
+                    providerID: original.providerID,
+                    projectPath: original.projectPath,
+                    runAt: original.startAt
+                )
+            }
+            lastError = errorMessage(error)
+            throw error
         }
-        await reload()
     }
 
     func delete(id: UUID) async throws {
-        try await plannedRepository.delete(id: id)
-        await reload()
+        do {
+            try await scheduledRepository.cancelPendingAndDetachPrompts(plannedWindowID: id)
+            try await plannedRepository.delete(id: id)
+            lastError = nil
+            await loadLocalWindows()
+        } catch {
+            lastError = errorMessage(error)
+            throw error
+        }
+    }
+
+    func move(window: PlannedWindow, to startAt: Date) async {
+        guard window.startAt != startAt else { return }
+        var moved = window
+        moved.startAt = startAt
+        do {
+            let original = try await plannedRepository.fetch(id: window.id) ?? window
+            try await plannedRepository.update(moved)
+            do {
+                try await scheduledRepository.reschedulePendingPrompts(
+                    plannedWindowID: moved.id,
+                    providerID: moved.providerID,
+                    projectPath: moved.projectPath,
+                    runAt: moved.startAt
+                )
+            } catch {
+                do {
+                    try await plannedRepository.update(original)
+                    try await scheduledRepository.reschedulePendingPrompts(
+                        plannedWindowID: original.id,
+                        providerID: original.providerID,
+                        projectPath: original.projectPath,
+                        runAt: original.startAt
+                    )
+                } catch let rollbackError {
+                    NSLog("DayCalendarViewModel: rollback after planned-window move failed: \(rollbackError)")
+                }
+                throw error
+            }
+            lastError = nil
+            await loadLocalWindows()
+        } catch {
+            lastError = errorMessage(error)
+            await loadLocalWindows()
+        }
     }
 
     /// One-click hover-to-plan: creates a fixed 5h `PlannedWindow` for `provider`
@@ -162,9 +231,9 @@ final class DayCalendarViewModel {
                 throw error
             }
             self.lastError = nil
-            await reload()
+            await loadLocalWindows()
         } catch {
-            self.lastError = String(describing: error)
+            self.lastError = errorMessage(error)
         }
     }
 
@@ -175,5 +244,13 @@ final class DayCalendarViewModel {
         let trimmed = stored?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmed, !trimmed.isEmpty { return trimmed }
         return AppSettingsKeys.defaultWakePromptFallback
+    }
+
+    private func errorMessage(_ error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+        return String(describing: error)
     }
 }

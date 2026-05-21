@@ -57,5 +57,7 @@ struct ModelsTests {
         #expect(ProviderID.claude.executableName == "claude")
         #expect(ProviderID.codex.displayName == "Codex")
         #expect(ProviderID.codex.executableName == "codex")
+        #expect(ProviderID.claude.plannedWindowSnapMinutes == 10)
+        #expect(ProviderID.codex.plannedWindowSnapMinutes == 5)
     }
 }

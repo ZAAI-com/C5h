@@ -37,8 +37,8 @@ struct DashboardView: View {
             }
         }
         .onAppear {
-            // Reload on every visit so Active Windows / Recent Runs / Provider Health
-            // pick up changes that happened while the user was on another tab.
+            // Reload on every visit so active windows and recent runs pick up
+            // changes that happened while the user was on another tab.
             if let viewModel {
                 Task { await viewModel.reload() }
             }
@@ -71,7 +71,7 @@ struct DashboardView: View {
                 ) {
                     activeWindowsCard(viewModel: viewModel)
                     weeklyLimitsCard(viewModel: viewModel)
-                    providerHealthCard(viewModel: viewModel)
+                    providerHealthCard(viewModel: viewModel, statuses: appEnv.providerStatuses)
                     recentRunsCard(viewModel: viewModel)
                 }
             }
@@ -193,7 +193,10 @@ struct DashboardView: View {
         return date.formatted(date: .omitted, time: .shortened)
     }
 
-    private func providerHealthCard(viewModel: DashboardViewModel) -> some View {
+    private func providerHealthCard(
+        viewModel: DashboardViewModel,
+        statuses: [ProviderID: ProviderStatus]
+    ) -> some View {
         DashboardCard(title: "Provider health") {
             VStack(alignment: .leading, spacing: C5hSpacing.md) {
                 ForEach(ProviderID.allCases) { id in
@@ -202,7 +205,7 @@ struct DashboardView: View {
                             Circle().fill(brandColor(for: id)).frame(width: 10, height: 10)
                             Text(id.displayName)
                             Spacer()
-                            if let status = viewModel.providerStatuses[id] {
+                            if let status = statuses[id] {
                                 ProviderStatusBadge(state: ProviderHealthState(from: status))
                             } else {
                                 Text("unknown")

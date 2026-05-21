@@ -53,15 +53,18 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
     public func create(_ window: PlannedWindow) async throws {
         let record = PlannedWindowRecord(from: window)
         try await writer.write { db in
+            try Self.assertNoOverlap(window, db: db)
             try record.insert(db)
         }
     }
 
     public func update(_ window: PlannedWindow) async throws {
-        var updated = window
-        updated.updatedAt = .now
+        var next = window
+        next.updatedAt = .now
+        let updated = next
         let record = PlannedWindowRecord(from: updated)
         try await writer.write { db in
+            try Self.assertNoOverlap(updated, db: db)
             try record.update(db)
         }
     }
@@ -69,6 +72,28 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
     public func delete(id: UUID) async throws {
         try await writer.write { db in
             _ = try PlannedWindowRecord.deleteOne(db, key: id.uuidString)
+        }
+    }
+
+    private static func assertNoOverlap(
+        _ window: PlannedWindow,
+        db: GRDB.Database
+    ) throws {
+        let startStr = DateTimeService.formatUTC(window.startAt)
+        let endStr = DateTimeService.formatUTC(window.endAt)
+        let conflict = try PlannedWindowRecord
+            .filter(Column("provider_id") == window.providerID.rawValue)
+            .filter(Column("id") != window.id.uuidString)
+            .filter(sql: """
+                datetime(start_at) < datetime(?) AND
+                datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
+                """, arguments: [endStr, startStr])
+            .fetchOne(db)
+
+        if conflict != nil {
+            throw C5hError.schedulerError(
+                "\(window.providerID.displayName) planned windows cannot overlap"
+            )
         }
     }
 }

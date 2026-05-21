@@ -58,4 +58,63 @@ struct PlannedWindowRepositoryTests {
         #expect(onlyDay2.count == 1)
         #expect(onlyDay2.first?.providerID == .codex)
     }
+
+    @Test("Same-provider overlapping create is rejected")
+    func rejectsSameProviderOverlapOnCreate() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBPlannedWindowRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        try await repo.create(PlannedWindow(providerID: .claude, startAt: base))
+
+        do {
+            try await repo.create(PlannedWindow(
+                providerID: .claude,
+                startAt: base.addingTimeInterval(3600)
+            ))
+            Issue.record("Same-provider overlapping planned window should be rejected")
+        } catch {
+            #expect(String(describing: error).contains("cannot overlap"))
+        }
+    }
+
+    @Test("Same-provider overlapping update is rejected")
+    func rejectsSameProviderOverlapOnUpdate() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBPlannedWindowRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let first = PlannedWindow(providerID: .claude, startAt: base)
+        var second = PlannedWindow(providerID: .claude, startAt: base.addingTimeInterval(6 * 3600))
+        try await repo.create(first)
+        try await repo.create(second)
+
+        second.startAt = base.addingTimeInterval(3600)
+        do {
+            try await repo.update(second)
+            Issue.record("Same-provider overlapping planned-window update should be rejected")
+        } catch {
+            #expect(String(describing: error).contains("cannot overlap"))
+        }
+    }
+
+    @Test("Different-provider overlap and same-provider boundary touch are allowed")
+    func allowsDifferentProviderOverlapAndBoundaryTouch() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBPlannedWindowRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let first = PlannedWindow(providerID: .claude, startAt: base)
+        try await repo.create(first)
+        try await repo.create(PlannedWindow(providerID: .codex, startAt: base))
+        try await repo.create(PlannedWindow(providerID: .claude, startAt: first.endAt))
+
+        let windows = try await repo.fetchWindows(
+            for: DateInterval(start: base, end: first.endAt.addingTimeInterval(5 * 3600))
+        )
+        #expect(windows.count == 3)
+    }
 }

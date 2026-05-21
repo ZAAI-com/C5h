@@ -130,7 +130,7 @@ struct PlannedWindowEditorSheet: View {
                     Button(draft.existingID == nil ? "Create" : "Save") {
                         Task { await save() }
                     }
-                    .disabled(isSaving)
+                    .disabled(isSaving || conflictCount > 0)
                 }
             }
         }
@@ -158,6 +158,10 @@ struct PlannedWindowEditorSheet: View {
     }
 
     private func save() async {
+        guard conflictCount == 0 else {
+            lastError = "\(draft.providerID.displayName) planned windows cannot overlap"
+            return
+        }
         isSaving = true
         defer { isSaving = false }
         do {

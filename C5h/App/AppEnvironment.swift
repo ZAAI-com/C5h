@@ -32,6 +32,8 @@ final class AppEnvironment {
     private(set) var commandRunner: (any CommandRunning)?
     private(set) var providerRegistry: ProviderRegistry?
     private(set) var schedulerTicker: SchedulerTicker?
+    private(set) var providerStatuses: [ProviderID: ProviderStatus] = [:]
+    private(set) var providerStatusLoading: Set<ProviderID> = []
 
     init() {
         Task { await self.bootstrap() }
@@ -100,9 +102,93 @@ final class AppEnvironment {
             }
 
             self.loadState = .ready
+            Task { await self.refreshAllProviderStatuses() }
         } catch {
             self.loadState = .failed(String(describing: error))
             NSLog("AppEnvironment bootstrap failed: \(error)")
         }
+    }
+
+    func refreshAllProviderStatuses() async {
+        for id in ProviderID.allCases {
+            await refreshProviderStatus(id: id)
+        }
+    }
+
+    @discardableResult
+    func refreshProviderStatus(id: ProviderID) async -> ProviderStatus {
+        providerStatusLoading.insert(id)
+        defer { providerStatusLoading.remove(id) }
+
+        let versionStatus = await runProviderVersionStatus(id: id, managesLoading: false)
+        guard versionStatus.isInstalled, versionStatus.errorMessage == nil else {
+            return versionStatus
+        }
+        return await runProviderAuthStatus(id: id, managesLoading: false)
+    }
+
+    @discardableResult
+    func runProviderVersionStatus(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
+        if managesLoading { providerStatusLoading.insert(id) }
+        defer { if managesLoading { providerStatusLoading.remove(id) } }
+
+        do {
+            let adapter = try providerAdapter(for: id)
+            var status = await adapter.runVersionCommand()
+            if status.isInstalled {
+                status.isAuthenticated = providerStatuses[id]?.isAuthenticated
+            }
+            providerStatuses[id] = status
+            return status
+        } catch {
+            let status = ProviderStatus(
+                providerID: id,
+                isInstalled: false,
+                errorMessage: String(describing: error)
+            )
+            providerStatuses[id] = status
+            return status
+        }
+    }
+
+    @discardableResult
+    func runProviderAuthStatus(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
+        if managesLoading { providerStatusLoading.insert(id) }
+        defer { if managesLoading { providerStatusLoading.remove(id) } }
+
+        do {
+            let adapter = try providerAdapter(for: id)
+            let authStatus = await adapter.runAuthStatusCommand()
+            let existing = providerStatuses[id]
+            let status = ProviderStatus(
+                providerID: id,
+                isInstalled: existing?.isInstalled ?? authStatus.isInstalled,
+                cliPath: authStatus.cliPath ?? existing?.cliPath,
+                version: existing?.version,
+                isAuthenticated: authStatus.isAuthenticated,
+                lastCheckedAt: authStatus.lastCheckedAt,
+                errorMessage: authStatus.errorMessage
+            )
+            providerStatuses[id] = status
+            return status
+        } catch {
+            let status = ProviderStatus(
+                providerID: id,
+                isInstalled: providerStatuses[id]?.isInstalled ?? false,
+                cliPath: providerStatuses[id]?.cliPath,
+                version: providerStatuses[id]?.version,
+                isAuthenticated: providerStatuses[id]?.isAuthenticated,
+                errorMessage: String(describing: error)
+            )
+            providerStatuses[id] = status
+            return status
+        }
+    }
+
+    private func providerAdapter(for id: ProviderID) throws -> any ProviderAdapter {
+        guard let providerRegistry else {
+            throw C5hError.providerNotConfigured(id.rawValue)
+        }
+        return try providerRegistry.adapter(for: id)
     }
 }

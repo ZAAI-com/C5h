@@ -34,7 +34,7 @@ struct ClaudeProviderAdapter: ProviderAdapter {
             throw C5hError.cliNotFound(backing.executableName)
         }
 
-        return try await ClaudeUsageCollector(executableURL: cliURL).collect()
+        return try await UsageCommand(providerID: .claude, executableURL: cliURL).collect()
     }
 
     func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {

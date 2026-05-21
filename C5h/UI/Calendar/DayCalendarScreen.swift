@@ -88,6 +88,9 @@ struct DayCalendarScreen: View {
                 withAnimation(C5hAnimation.morph) {
                     viewModel.selection = .actual(window)
                 }
+            },
+            onMovePlanned: { window, start in
+                Task { await viewModel.move(window: window, to: start) }
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {

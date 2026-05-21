@@ -158,12 +158,7 @@ actor HelperUsageRefresher {
                 return
             }
             let snapshot: UsageSnapshot
-            switch providerID {
-            case .claude:
-                snapshot = try await ClaudeUsageCollector(executableURL: cliURL).collect()
-            case .codex:
-                snapshot = try await CodexUsageCollector(executableURL: cliURL).collect()
-            }
+            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect()
             try await fetcher.persistSnapshot(snapshot)
             if let window = try fetcher.derived5h(from: snapshot, now: now) {
                 try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
@@ -233,12 +228,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
                     settingsRepo: settingsRepo,
                     resolver: cliResolver
                 )
-                switch providerID {
-                case .claude:
-                    return try await ClaudeUsageCollector(executableURL: cliURL).collect()
-                case .codex:
-                    return try await CodexUsageCollector(executableURL: cliURL).collect()
-                }
+                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect()
             },
             activeWindowFetch: { providerID, now in
                 let interval = DateInterval(start: now, duration: 1)
