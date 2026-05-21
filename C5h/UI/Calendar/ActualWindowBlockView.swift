@@ -30,6 +30,7 @@ struct ActualWindowBlockView: View {
             RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
                 .fill(brandColor)
         )
+        .clipped()
     }
 
     private var brandColor: Color {

@@ -35,6 +35,7 @@ struct PlannedWindowBlockView: View {
             RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
                 .strokeBorder(brandColor.opacity(0.7), lineWidth: 1)
         }
+        .clipped()
     }
 
     private var brandColor: Color {
