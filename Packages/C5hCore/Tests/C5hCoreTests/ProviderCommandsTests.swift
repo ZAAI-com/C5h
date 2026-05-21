@@ -52,6 +52,19 @@ struct ProviderCommandsTests {
             stdout: "Not logged in",
             exitCode: 0
         ))
+        // codex 0.132 prints the status to stderr with empty stdout.
+        #expect(AuthStatusCommand.isAuthenticated(
+            providerID: .codex,
+            stdout: "",
+            stderr: "Logged in using ChatGPT",
+            exitCode: 0
+        ))
+        #expect(!AuthStatusCommand.isAuthenticated(
+            providerID: .codex,
+            stdout: "",
+            stderr: "Not logged in",
+            exitCode: 0
+        ))
     }
 
     @Test("UsageCommand builds Claude usage launch arguments")

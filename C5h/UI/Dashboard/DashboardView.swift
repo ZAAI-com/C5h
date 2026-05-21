@@ -35,7 +35,8 @@ struct DashboardView: View {
                 if coordinator == nil {
                     coordinator = ManualTriggerCoordinator(
                         registry: registry,
-                        actualWindowRepository: actualRepo
+                        actualWindowRepository: actualRepo,
+                        usageSnapshotRepository: usageRepo
                     )
                 }
                 await vm.reload()

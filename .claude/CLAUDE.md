@@ -133,8 +133,6 @@ swift test --package-path Packages/C5hCore
 swift test --package-path Packages/C5hStore
 ```
 
-- Debug-only fixture loaders (`LogsFixtureLoader`, `CalendarFixtureLoader`) are guarded by `#if DEBUG`.
-
 ## Conventions
 
 - No SwiftLint / SwiftFormat config currently — match surrounding style.

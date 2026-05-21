@@ -31,6 +31,8 @@ struct DayCalendarScreen: View {
                     plannedRepository: plannedRepo,
                     actualRepository: actualRepo,
                     scheduledRepository: scheduledRepo,
+                    usageSnapshotRepository: appEnv.usageSnapshotRepository,
+                    providerRegistry: appEnv.providerRegistry,
                     appSettings: appEnv.appSettingsRepository
                 )
                 viewModel = vm
@@ -42,10 +44,12 @@ struct DayCalendarScreen: View {
             }
             if coordinator == nil,
                let registry = appEnv.providerRegistry,
-               let actualRepo = appEnv.actualWindowRepository {
+               let actualRepo = appEnv.actualWindowRepository,
+               let usageRepo = appEnv.usageSnapshotRepository {
                 coordinator = ManualTriggerCoordinator(
                     registry: registry,
-                    actualWindowRepository: actualRepo
+                    actualWindowRepository: actualRepo,
+                    usageSnapshotRepository: usageRepo
                 )
             }
         }

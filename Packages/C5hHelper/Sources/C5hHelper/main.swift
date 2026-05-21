@@ -73,21 +73,22 @@ struct HelperMain {
         let resolver = DefaultCLIPathResolver()
         let settingsRepo = GRDBAppSettingsRepository(database: database)
 
-        let driver = HelperSchedulerDriver(
-            scheduledRepo: scheduledRepo,
-            actualRepo: actualRepo,
-            runner: runner,
-            resolver: resolver,
-            settingsRepo: settingsRepo
-        )
-        let scheduler = SchedulerService(driver: driver)
-
         let usageFetcher = UsageFetcher(
             persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
             upsertActualWindow: { window, tolerance in
                 try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
+        let driver = HelperSchedulerDriver(
+            scheduledRepo: scheduledRepo,
+            actualRepo: actualRepo,
+            runner: runner,
+            resolver: resolver,
+            settingsRepo: settingsRepo,
+            usageFetcher: usageFetcher
+        )
+        let scheduler = SchedulerService(driver: driver)
+
         let usageRefresher = HelperUsageRefresher(
             resolver: resolver,
             settingsRepo: settingsRepo,
@@ -175,6 +176,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
     let runner: any CommandRunning
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
+    let usageFetcher: UsageFetcher
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
         try await scheduledRepo.fetchDuePrompts(now: now)
@@ -196,19 +198,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
         try await scheduledRepo.markMissed(id: id)
     }
 
-    func registerActualWindow(_ window: ActualWindow) async throws {
-        try await actualRepo.create(window)
-    }
-
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
-        let key = "providers.\(prompt.providerID.rawValue).cliPath"
-        let configured = try await settingsRepo.get(key, as: String.self)
-        guard let cliURL = await resolver.resolveCLI(
-            named: prompt.providerID.executableName,
-            configuredPath: configured
-        ) else {
-            throw C5hError.cliNotFound(prompt.providerID.executableName)
-        }
+        let cliURL = try await resolveCLI(for: prompt.providerID)
         return try await runner.run(PromptCommand(
             providerID: prompt.providerID,
             executableURL: cliURL,
@@ -218,5 +209,66 @@ struct HelperSchedulerDriver: SchedulerDriver {
                 mode: .newSession
             )
         ).spec())
+    }
+
+    func resolveActualWindow(
+        for providerID: ProviderID,
+        commandRun: CommandRun
+    ) async throws -> ActualWindow? {
+        let actualRepo = actualRepo
+        let settingsRepo = settingsRepo
+        let cliResolver = resolver
+        let resolver = ActiveWindowResolver(
+            fetcher: usageFetcher,
+            snapshotFetch: { providerID in
+                let cliURL = try await Self.resolveCLIStandalone(
+                    for: providerID,
+                    settingsRepo: settingsRepo,
+                    resolver: cliResolver
+                )
+                switch providerID {
+                case .claude:
+                    return try await ClaudeUsageCollector(executableURL: cliURL).collect()
+                case .codex:
+                    return try await CodexUsageCollector(executableURL: cliURL).collect()
+                }
+            },
+            activeWindowFetch: { providerID, now in
+                let interval = DateInterval(start: now, duration: 1)
+                let windows = try await actualRepo.fetchWindows(for: interval)
+                return windows.first { $0.providerID == providerID }
+            },
+            updateActualWindow: { window in
+                try await actualRepo.update(window)
+            }
+        )
+        return await resolver.resolveTriggeredWindow(
+            providerID: providerID,
+            commandRunID: commandRun.id
+        )
+    }
+
+    private func resolveCLI(for providerID: ProviderID) async throws -> URL {
+        try await Self.resolveCLIStandalone(
+            for: providerID,
+            settingsRepo: settingsRepo,
+            resolver: resolver
+        )
+    }
+
+    private static func resolveCLIStandalone(
+        for providerID: ProviderID,
+        settingsRepo: any AppSettingsRepository,
+        resolver: any CLIPathResolving
+    ) async throws -> URL {
+        let key = "providers.\(providerID.rawValue).cliPath"
+        let configured = try await settingsRepo.get(key, as: String.self)
+        guard let cliURL = await resolver.resolveCLI(
+            named: providerID.executableName,
+            configuredPath: configured
+        ) else {
+            throw C5hError.cliNotFound(providerID.executableName)
+        }
+        return cliURL
     }
 }

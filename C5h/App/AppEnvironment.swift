@@ -81,10 +81,12 @@ final class AppEnvironment {
             self.providerRegistry = registry
 
             if let scheduledRepo = self.scheduledPromptRepository,
-               let actualRepo = self.actualWindowRepository {
+               let actualRepo = self.actualWindowRepository,
+               let usageRepo = self.usageSnapshotRepository {
                 let driver = AppSchedulerDriver(
                     scheduledRepository: scheduledRepo,
                     actualRepository: actualRepo,
+                    usageSnapshotRepository: usageRepo,
                     registry: registry
                 )
                 let scheduler = SchedulerService(driver: driver)
@@ -92,14 +94,6 @@ final class AppEnvironment {
                 self.schedulerTicker = ticker
                 ticker.start()
             }
-
-            #if DEBUG
-            await LogsFixtureLoader.loadIfNeeded(repository: cmdRepo, appPaths: paths)
-            await CalendarFixtureLoader.loadIfNeeded(
-                plannedRepository: GRDBPlannedWindowRepository(database: db),
-                actualRepository: GRDBActualWindowRepository(database: db)
-            )
-            #endif
 
             self.loadState = .ready
         } catch {

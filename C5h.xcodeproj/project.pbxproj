@@ -14,7 +14,6 @@
 		0A0012020401000000000003 /* CommandRunTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000003 /* CommandRunTable.swift */; };
 		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
 		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
-		0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000001 /* LogsFixtureLoader.swift */; };
 		0A0012050000000000000001 /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000001 /* ProviderRegistry.swift */; };
 		0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */; };
 		0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000003 /* ClaudeProviderAdapter.swift */; };
@@ -31,7 +30,6 @@
 		0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000007 /* ActualWindowBlockView.swift */; };
 		0A0012020301000000000008 /* WindowInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000008 /* WindowInspectorView.swift */; };
 		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
-		0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000002 /* CalendarFixtureLoader.swift */; };
 		0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000011 /* StartProviderNowSheet.swift */; };
 		0A0012020301000000000012 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000012 /* WeekCalendarView.swift */; };
 		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
@@ -88,7 +86,6 @@
 		0A0011020401000000000003 /* CommandRunTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunTable.swift; sourceTree = "<group>"; };
 		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
-		0A0011040000000000000001 /* LogsFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsFixtureLoader.swift; sourceTree = "<group>"; };
 		0A0011050000000000000001 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
 		0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIBackedProviderAdapter.swift; sourceTree = "<group>"; };
 		0A0011050000000000000003 /* ClaudeProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProviderAdapter.swift; sourceTree = "<group>"; };
@@ -105,7 +102,6 @@
 		0A0011020301000000000007 /* ActualWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualWindowBlockView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000008 /* WindowInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInspectorView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
-		0A0011040000000000000002 /* CalendarFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFixtureLoader.swift; sourceTree = "<group>"; };
 		0A0011020301000000000011 /* StartProviderNowSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartProviderNowSheet.swift; sourceTree = "<group>"; };
 		0A0011020301000000000012 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000013 /* WeekCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarViewModel.swift; sourceTree = "<group>"; };
@@ -191,7 +187,6 @@
 			isa = PBXGroup;
 			children = (
 				0A0010040100000000000001 /* Paths */,
-				0A0010040200000000000001 /* DevSeed */,
 				0A0010040300000000000001 /* Providers */,
 				0A0010040400000000000001 /* Services */,
 				0A0010040500000000000001 /* Helper */,
@@ -324,15 +319,6 @@
 				0A0011020401000000000005 /* OutputLogView.swift */,
 			);
 			path = Logs;
-			sourceTree = "<group>";
-		};
-		0A0010040200000000000001 /* DevSeed */ = {
-			isa = PBXGroup;
-			children = (
-				0A0011040000000000000001 /* LogsFixtureLoader.swift */,
-				0A0011040000000000000002 /* CalendarFixtureLoader.swift */,
-			);
-			path = DevSeed;
 			sourceTree = "<group>";
 		};
 		0A0010020500000000000001 /* Providers */ = {
@@ -504,7 +490,6 @@
 				0A0012020401000000000003 /* CommandRunTable.swift in Sources */,
 				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
 				0A0012020401000000000005 /* OutputLogView.swift in Sources */,
-				0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */,
 				0A0012050000000000000001 /* ProviderRegistry.swift in Sources */,
 				0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */,
 				0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */,
@@ -521,7 +506,6 @@
 				0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */,
 				0A0012020301000000000008 /* WindowInspectorView.swift in Sources */,
 				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
-				0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */,
 				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
 				0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */,
 				0A0012020301000000000012 /* WeekCalendarView.swift in Sources */,

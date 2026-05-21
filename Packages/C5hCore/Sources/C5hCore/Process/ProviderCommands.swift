@@ -68,7 +68,12 @@ public struct AuthStatusCommand: Sendable {
         )
     }
 
-    public static func isAuthenticated(providerID: ProviderID, stdout: String, exitCode: Int32?) -> Bool {
+    public static func isAuthenticated(
+        providerID: ProviderID,
+        stdout: String,
+        stderr: String = "",
+        exitCode: Int32?
+    ) -> Bool {
         guard exitCode == 0 else { return false }
         switch providerID {
         case .claude:
@@ -79,7 +84,9 @@ public struct AuthStatusCommand: Sendable {
             }
             return loggedIn
         case .codex:
-            let lowercased = stdout.lowercased()
+            // codex 0.132 writes "Logged in ..." to stderr with empty stdout,
+            // so inspect both streams.
+            let lowercased = (stdout + "\n" + stderr).lowercased()
             return lowercased.contains("logged in") && !lowercased.contains("not logged in")
         }
     }

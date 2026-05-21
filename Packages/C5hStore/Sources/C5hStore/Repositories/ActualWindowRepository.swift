@@ -67,9 +67,11 @@ public struct GRDBActualWindowRepository: ActualWindowRepository {
         let providerValue = window.providerID.rawValue
         let lowerStr = DateTimeService.formatUTC(targetEndAt.addingTimeInterval(-tolerance))
         let upperStr = DateTimeService.formatUTC(targetEndAt.addingTimeInterval(tolerance))
+        let newStartStr = DateTimeService.formatUTC(window.startAt)
+        let newEndStr = DateTimeService.formatUTC(window.endAt)
 
         try await writer.write { db in
-            let existing = try ActualWindowRecord
+            let endAtMatch = try ActualWindowRecord
                 .filter(Column("provider_id") == providerValue)
                 .filter(sql: """
                     datetime(start_at, '+' || duration_seconds || ' seconds') BETWEEN datetime(?) AND datetime(?)
@@ -77,12 +79,40 @@ public struct GRDBActualWindowRepository: ActualWindowRepository {
                 .order(Column("start_at").desc)
                 .fetchOne(db)
 
+            // Fallback: when no row matches by endAt±tolerance, look for any
+            // same-provider window whose interval overlaps the incoming one.
+            // This collapses stale `[now, +5h, c5hTriggered]` placeholder rows
+            // (written before we knew the real `resetsAt`) onto the corrected
+            // window detected from upstream usage, instead of letting both
+            // coexist.
+            let existing: ActualWindowRecord?
+            if let endAtMatch {
+                existing = endAtMatch
+            } else {
+                existing = try ActualWindowRecord
+                    .filter(Column("provider_id") == providerValue)
+                    .filter(sql: """
+                        datetime(start_at) < datetime(?) AND
+                        datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
+                        """, arguments: [newEndStr, newStartStr])
+                    .order(Column("start_at").desc)
+                    .fetchOne(db)
+            }
+
             if let existing {
                 var updated = try existing.toActualWindow()
                 updated.startAt = window.startAt
                 updated.durationSeconds = window.durationSeconds
-                updated.source = window.source
-                updated.confidence = window.confidence
+                // Preserve a stronger user-visible tag: if the row was already
+                // promoted to `c5hTriggered`/`exact` (e.g. by a manual Start
+                // Now), a routine `detectedFromUsage`/`estimated` refresh
+                // shouldn't downgrade the labels — only correct the times.
+                if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
+                    // keep updated.source / updated.confidence / updated.commandRunID
+                } else {
+                    updated.source = window.source
+                    updated.confidence = window.confidence
+                }
                 updated.usageEndSnapshotID = window.usageEndSnapshotID ?? updated.usageEndSnapshotID
                 if updated.usageStartSnapshotID == nil {
                     updated.usageStartSnapshotID = window.usageStartSnapshotID

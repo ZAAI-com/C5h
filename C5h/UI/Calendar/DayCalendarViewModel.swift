@@ -19,6 +19,8 @@ final class DayCalendarViewModel {
     private let plannedRepository: any PlannedWindowRepository
     private let actualRepository: any ActualWindowRepository
     private let scheduledRepository: any ScheduledPromptRepository
+    private let usageSnapshotRepository: (any UsageSnapshotRepository)?
+    private let providerRegistry: ProviderRegistry?
     private let appSettings: (any AppSettingsRepository)?
 
     init(
@@ -26,16 +28,21 @@ final class DayCalendarViewModel {
         plannedRepository: any PlannedWindowRepository,
         actualRepository: any ActualWindowRepository,
         scheduledRepository: any ScheduledPromptRepository,
+        usageSnapshotRepository: (any UsageSnapshotRepository)? = nil,
+        providerRegistry: ProviderRegistry? = nil,
         appSettings: (any AppSettingsRepository)? = nil
     ) {
         self.date = date
         self.plannedRepository = plannedRepository
         self.actualRepository = actualRepository
         self.scheduledRepository = scheduledRepository
+        self.usageSnapshotRepository = usageSnapshotRepository
+        self.providerRegistry = providerRegistry
         self.appSettings = appSettings
     }
 
     func reload() async {
+        await refreshUsageWindows()
         let interval = CalendarPositioning.dayInterval(for: date)
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
@@ -45,6 +52,31 @@ final class DayCalendarViewModel {
             self.lastError = nil
         } catch {
             self.lastError = String(describing: error)
+        }
+    }
+
+    /// Best-effort: fetch fresh usage from each provider so stale
+    /// `[wrong-start, +5h]` ActualWindow rows (from older trigger code that
+    /// didn't reconcile against upstream `resetsAt`) get corrected before the
+    /// calendar reads them. Failures are silent — the calendar still shows
+    /// whatever's already in the repo.
+    private func refreshUsageWindows() async {
+        guard let usageRepo = usageSnapshotRepository,
+              let registry = providerRegistry else { return }
+        let actualRepo = actualRepository
+        let fetcher = UsageFetcher(
+            persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
+            upsertActualWindow: { window, tolerance in
+                try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
+        for providerID in ProviderID.allCases {
+            do {
+                let adapter = try registry.adapter(for: providerID)
+                _ = try await fetcher.fetchAndPersist(adapter: adapter)
+            } catch {
+                NSLog("DayCalendarViewModel: usage refresh failed for \(providerID.rawValue): \(error)")
+            }
         }
     }
 
