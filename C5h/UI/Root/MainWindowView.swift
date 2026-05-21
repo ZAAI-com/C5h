@@ -39,12 +39,22 @@ struct MainWindowView: View {
                 .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
-                    SidebarView(selection: $selectedTab) {
-                        reloadToken += 1
-                    }
+                    SidebarView(selection: $selectedTab)
                         .toolbar(removing: .sidebarToggle)
                 } detail: {
                     detail
+                        .toolbar {
+                            if let help = selectedTab.navbarReloadHelp {
+                                ToolbarItem(placement: .navigation) {
+                                    Button {
+                                        reloadToken += 1
+                                    } label: {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                    .help(help)
+                                }
+                            }
+                        }
                 }
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: columnVisibility) { _, newValue in

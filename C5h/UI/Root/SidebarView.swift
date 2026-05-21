@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selection: AppTab
-    let onReload: () -> Void
 
     var body: some View {
         List(selection: $selection) {
@@ -18,23 +17,13 @@ struct SidebarView: View {
         }
         .navigationTitle("C5h")
         .navigationSplitViewColumnWidth(220)
-        .toolbar {
-            if let help = selection.navbarReloadHelp {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: onReload) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .help(help)
-                }
-            }
-        }
     }
 }
 
 #Preview {
     @Previewable @State var tab: AppTab = .today
     return NavigationSplitView {
-        SidebarView(selection: $tab) {}
+        SidebarView(selection: $tab)
     } detail: {
         Text("Detail").frame(maxWidth: .infinity, maxHeight: .infinity)
     }
