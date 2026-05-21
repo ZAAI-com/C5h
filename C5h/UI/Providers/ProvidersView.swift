@@ -37,22 +37,23 @@ struct ProvidersView: View {
                 }
                 // LEVEL 2 — Material content cards; action buttons inside each
                 // card stay glass.
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: C5hSpacing.lg), GridItem(.flexible(), spacing: C5hSpacing.lg)],
-                    spacing: C5hSpacing.lg
-                ) {
+                LazyVStack(spacing: C5hSpacing.lg) {
                     ForEach(ProviderID.allCases) { id in
                         ProviderCardView(
                             id: id,
                             status: viewModel.statuses[id],
                             configuredPath: viewModel.configuredPaths[id] ?? "",
+                            wakePrompt: viewModel.wakePrompts[id] ?? "",
                             isLoading: viewModel.loadingProviders.contains(id),
                             onVersion: { Task { await viewModel.runVersion(id: id) } },
                             onAuthStatus: { Task { await viewModel.runAuthStatus(id: id) } },
                             onSetPath: { newPath in
                                 Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
                             },
-                            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } }
+                            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } },
+                            onSetWakePrompt: { newValue in
+                                Task { await viewModel.setWakePrompt(id: id, newValue) }
+                            }
                         )
                     }
                 }

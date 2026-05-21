@@ -2,22 +2,31 @@ import SwiftUI
 import C5hCore
 
 struct ProviderCardView: View {
+    /// Hardcoded — bumped only when a new app release changes the window length.
+    private static let windowLengthDisplay = "5 hours"
+
     let id: ProviderID
     let status: ProviderStatus?
     let configuredPath: String
+    let wakePrompt: String
     let isLoading: Bool
     let onVersion: () -> Void
     let onAuthStatus: () -> Void
     let onSetPath: (String) -> Void
     let onClearPath: () -> Void
+    let onSetWakePrompt: (String) -> Void
 
     @State private var pathDraft: String = ""
+    @State private var wakePromptDraft: String = ""
+    @FocusState private var wakePromptFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: C5hSpacing.md) {
             header
             Divider()
             statusGrid
+            Divider()
+            settings
             Divider()
             actions
         }
@@ -29,8 +38,44 @@ struct ProviderCardView: View {
             C5hShape.rect(C5hRadius.l)
                 .strokeBorder(brandColor.opacity(0.15), lineWidth: 1)
         }
-        .onAppear { pathDraft = configuredPath }
+        .onAppear {
+            pathDraft = configuredPath
+            wakePromptDraft = wakePrompt
+        }
         .onChange(of: configuredPath) { _, newValue in pathDraft = newValue }
+        .onChange(of: wakePrompt) { _, newValue in
+            if !wakePromptFocused { wakePromptDraft = newValue }
+        }
+        .onChange(of: wakePromptFocused) { _, isFocused in
+            if !isFocused, wakePromptDraft != wakePrompt {
+                onSetWakePrompt(wakePromptDraft)
+            }
+        }
+    }
+
+    private var settings: some View {
+        Grid(alignment: .leading, horizontalSpacing: C5hSpacing.lg, verticalSpacing: 6) {
+            GridRow {
+                Text("Wake prompt")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                TextField(
+                    AppSettingsKeys.defaultWakePromptFallback,
+                    text: $wakePromptDraft,
+                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
+                )
+                .textFieldStyle(.roundedBorder)
+                .focused($wakePromptFocused)
+                .onSubmit { onSetWakePrompt(wakePromptDraft) }
+            }
+            GridRow {
+                Text("Window length")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                Text(Self.windowLengthDisplay)
+                    .font(C5hTypography.captionFont)
+            }
+        }
     }
 
     private var header: some View {

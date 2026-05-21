@@ -9,6 +9,7 @@ final class ProvidersViewModel {
     var statuses: [ProviderID: ProviderStatus] = [:]
     var loadingProviders: Set<ProviderID> = []
     var configuredPaths: [ProviderID: String] = [:]
+    var wakePrompts: [ProviderID: String] = [:]
     var lastError: String?
 
     private let registry: ProviderRegistry
@@ -22,6 +23,7 @@ final class ProvidersViewModel {
     func bootstrap() async {
         for id in ProviderID.allCases {
             await loadConfiguredPath(for: id)
+            await loadWakePrompt(for: id)
             await refreshProvider(id: id)
         }
     }
@@ -37,6 +39,12 @@ final class ProvidersViewModel {
         } catch {
             configuredPaths[id] = ""
         }
+    }
+
+    private func loadWakePrompt(for id: ProviderID) async {
+        let key = AppSettingsKeys.defaultWakePrompt(for: id)
+        let value = (try? await appSettings.get(key, as: String.self)) ?? nil
+        wakePrompts[id] = value ?? ""
     }
 
     func refreshProvider(id: ProviderID) async {
@@ -101,6 +109,22 @@ final class ProvidersViewModel {
             )
             statuses[id] = status
             return status
+        }
+    }
+
+    func setWakePrompt(id: ProviderID, _ value: String) async {
+        let key = AppSettingsKeys.defaultWakePrompt(for: id)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if trimmed.isEmpty {
+                try await appSettings.remove(key)
+                wakePrompts[id] = ""
+            } else {
+                try await appSettings.set(key, value: trimmed)
+                wakePrompts[id] = trimmed
+            }
+        } catch {
+            lastError = String(describing: error)
         }
     }
 

@@ -6,17 +6,12 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var heartbeat: HelperHeartbeat?
     @State private var registration = HelperRegistrationService()
-    @State private var claudeWakePrompt: String = AppSettingsKeys.defaultWakePromptFallback
-    @State private var codexWakePrompt: String = AppSettingsKeys.defaultWakePromptFallback
     #if DEBUG
     @State private var devRunner = HelperDevModeRunner()
     #endif
 
     var body: some View {
         Form {
-            Section("General") {
-                LabeledContent("Default window length", value: "5 hours")
-            }
             Section("Paths") {
                 pathRow("Application Support", url: appEnv.paths?.appSupportDirectory) { url in
                     openFolder(url)
@@ -30,23 +25,6 @@ struct SettingsView: View {
                 pathRow("Database", url: appEnv.paths?.databaseURL, actionTitle: "Reveal in Finder") { url in
                     revealInFinder(url)
                 }
-            }
-            Section("Default wake prompts") {
-                Text("Sent automatically when a planned window's start time arrives, to open the actual 5h limit window.")
-                    .font(C5hTypography.captionFont)
-                    .foregroundStyle(C5hColors.fgSecondary)
-                TextField(
-                    "Claude",
-                    text: $claudeWakePrompt,
-                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
-                )
-                .onSubmit { Task { await saveWakePrompt(.claude, value: claudeWakePrompt) } }
-                TextField(
-                    "Codex",
-                    text: $codexWakePrompt,
-                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
-                )
-                .onSubmit { Task { await saveWakePrompt(.codex, value: codexWakePrompt) } }
             }
             Section("LaunchAgent") {
                 LabeledContent("Status", value: registration.status.label)
@@ -135,7 +113,6 @@ struct SettingsView: View {
         }
         .task {
             await reloadHeartbeat()
-            await reloadWakePrompts()
         }
     }
 
@@ -207,24 +184,4 @@ struct SettingsView: View {
         heartbeat = try? await repo.latest()
     }
 
-    private func reloadWakePrompts() async {
-        guard let settings = appEnv.appSettingsRepository else { return }
-        let claudeKey = AppSettingsKeys.defaultWakePrompt(for: .claude)
-        let codexKey = AppSettingsKeys.defaultWakePrompt(for: .codex)
-        let claudeValue = (try? await settings.get(claudeKey, as: String.self)) ?? nil
-        let codexValue = (try? await settings.get(codexKey, as: String.self)) ?? nil
-        claudeWakePrompt = claudeValue ?? AppSettingsKeys.defaultWakePromptFallback
-        codexWakePrompt = codexValue ?? AppSettingsKeys.defaultWakePromptFallback
-    }
-
-    private func saveWakePrompt(_ providerID: ProviderID, value: String) async {
-        guard let settings = appEnv.appSettingsRepository else { return }
-        let key = AppSettingsKeys.defaultWakePrompt(for: providerID)
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            try? await settings.remove(key)
-        } else {
-            try? await settings.set(key, value: trimmed)
-        }
-    }
 }
