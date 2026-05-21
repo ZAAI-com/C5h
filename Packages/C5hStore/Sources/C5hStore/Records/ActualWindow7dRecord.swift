@@ -9,6 +9,7 @@ struct ActualWindow7dRecord: Codable, FetchableRecord, PersistableRecord {
     var providerId: String
     var startAt: String
     var durationSeconds: Int
+    var timeZoneId: String
     var usedPercentage: Double
     var source: String
     var confidence: String
@@ -21,6 +22,7 @@ struct ActualWindow7dRecord: Codable, FetchableRecord, PersistableRecord {
         case providerId = "provider_id"
         case startAt = "start_at"
         case durationSeconds = "duration_seconds"
+        case timeZoneId = "time_zone_id"
         case usedPercentage = "used_percentage"
         case source
         case confidence
@@ -34,6 +36,7 @@ struct ActualWindow7dRecord: Codable, FetchableRecord, PersistableRecord {
         self.providerId = window.providerID.rawValue
         self.startAt = DateTimeService.formatUTC(window.startAt)
         self.durationSeconds = window.durationSeconds
+        self.timeZoneId = window.timeZoneIdentifier
         self.usedPercentage = window.usedPercentage
         self.source = window.source.rawValue
         self.confidence = window.confidence.rawValue
@@ -57,6 +60,7 @@ struct ActualWindow7dRecord: Codable, FetchableRecord, PersistableRecord {
             providerID: pid,
             startAt: start,
             durationSeconds: durationSeconds,
+            timeZoneIdentifier: timeZoneId,
             usedPercentage: usedPercentage,
             source: src,
             confidence: conf,

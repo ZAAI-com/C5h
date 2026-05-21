@@ -71,6 +71,7 @@ public struct GRDBActualWindow7dRepository: ActualWindow7dRepository {
                 var updated = try existing.toActualWindow7d()
                 updated.startAt = window.startAt
                 updated.durationSeconds = window.durationSeconds
+                updated.timeZoneIdentifier = window.timeZoneIdentifier
                 updated.usedPercentage = window.usedPercentage
                 updated.source = window.source
                 updated.confidence = window.confidence

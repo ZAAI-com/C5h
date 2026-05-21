@@ -9,6 +9,8 @@ struct ActualWindow5hRecord: Codable, FetchableRecord, PersistableRecord {
     var providerId: String
     var startAt: String
     var durationSeconds: Int
+    var timeZoneId: String
+    var localDate: String
     var source: String
     var confidence: String
     var commandRunId: String?
@@ -22,6 +24,8 @@ struct ActualWindow5hRecord: Codable, FetchableRecord, PersistableRecord {
         case providerId = "provider_id"
         case startAt = "start_at"
         case durationSeconds = "duration_seconds"
+        case timeZoneId = "time_zone_id"
+        case localDate = "local_date"
         case source
         case confidence
         case commandRunId = "command_run_id"
@@ -36,6 +40,8 @@ struct ActualWindow5hRecord: Codable, FetchableRecord, PersistableRecord {
         self.providerId = window.providerID.rawValue
         self.startAt = DateTimeService.formatUTC(window.startAt)
         self.durationSeconds = window.durationSeconds
+        self.timeZoneId = window.timeZoneIdentifier
+        self.localDate = window.localDate
         self.source = window.source.rawValue
         self.confidence = window.confidence.rawValue
         self.commandRunId = window.commandRunID?.uuidString
@@ -60,6 +66,8 @@ struct ActualWindow5hRecord: Codable, FetchableRecord, PersistableRecord {
             providerID: pid,
             startAt: start,
             durationSeconds: durationSeconds,
+            timeZoneIdentifier: timeZoneId,
+            localDate: localDate,
             source: src,
             confidence: conf,
             commandRunID: commandRunId.flatMap { UUID(uuidString: $0) },

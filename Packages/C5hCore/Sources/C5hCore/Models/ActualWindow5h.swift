@@ -5,6 +5,8 @@ public struct ActualWindow5h: Identifiable, Codable, Sendable, Hashable {
     public var providerID: ProviderID
     public var startAt: Date
     public var durationSeconds: Int
+    public var timeZoneIdentifier: String
+    public var localDate: String
     public var source: ActualWindowSource
     public var confidence: WindowConfidence
     public var commandRunID: UUID?
@@ -18,6 +20,8 @@ public struct ActualWindow5h: Identifiable, Codable, Sendable, Hashable {
         providerID: ProviderID,
         startAt: Date,
         durationSeconds: Int = 5 * 60 * 60,
+        timeZoneIdentifier: String = TimeZone.current.identifier,
+        localDate: String? = nil,
         source: ActualWindowSource,
         confidence: WindowConfidence,
         commandRunID: UUID? = nil,
@@ -30,6 +34,9 @@ public struct ActualWindow5h: Identifiable, Codable, Sendable, Hashable {
         self.providerID = providerID
         self.startAt = startAt
         self.durationSeconds = durationSeconds
+        self.timeZoneIdentifier = timeZoneIdentifier
+        let tz = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        self.localDate = localDate ?? DateTimeService.localDate(for: startAt, in: tz)
         self.source = source
         self.confidence = confidence
         self.commandRunID = commandRunID

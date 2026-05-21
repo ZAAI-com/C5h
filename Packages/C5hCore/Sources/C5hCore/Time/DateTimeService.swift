@@ -28,4 +28,18 @@ public enum DateTimeService {
     public static func add(seconds: Int, to date: Date) -> Date {
         date.addingTimeInterval(TimeInterval(seconds))
     }
+
+    /// Returns `YYYY-MM-DD` for `date` evaluated in `timeZone`. Used to tag a
+    /// window with the calendar date it belongs to in the user's local zone.
+    public static func localDate(for date: Date, in timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .iso8601)
+        cal.timeZone = timeZone
+        let comps = cal.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            comps.year ?? 0,
+            comps.month ?? 0,
+            comps.day ?? 0
+        )
+    }
 }

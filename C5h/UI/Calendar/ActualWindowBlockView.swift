@@ -5,11 +5,23 @@ struct ActualWindowBlockView: View {
     let window: ActualWindow5h
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
+    var visibleDurationSeconds: Int? = nil
+    var clipsTop: Bool = false
+    var clipsBottom: Bool = false
 
     var body: some View {
+        let duration = visibleDurationSeconds ?? window.durationSeconds
         let height = CalendarPositioning.blockHeight(
-            durationSeconds: window.durationSeconds,
+            durationSeconds: duration,
             pixelsPerMinute: layout.pixelsPerMinute
+        )
+        let radius = layout.blockCornerRadius
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: clipsTop ? 0 : radius,
+            bottomLeadingRadius: clipsBottom ? 0 : radius,
+            bottomTrailingRadius: clipsBottom ? 0 : radius,
+            topTrailingRadius: clipsTop ? 0 : radius,
+            style: .continuous
         )
         VStack(alignment: .leading, spacing: 2) {
             Text(timeRange)
@@ -26,11 +38,8 @@ struct ActualWindowBlockView: View {
         }
         .padding(6)
         .frame(width: columnWidth * layout.actualBlockWidthRatio, height: height, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .fill(brandColor)
-        )
-        .clipped()
+        .background(shape.fill(brandColor))
+        .clipShape(shape)
     }
 
     private var brandColor: Color {

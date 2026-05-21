@@ -5,11 +5,23 @@ struct PlannedWindowBlockView: View {
     let window: PlannedWindow
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
+    var visibleDurationSeconds: Int? = nil
+    var clipsTop: Bool = false
+    var clipsBottom: Bool = false
 
     var body: some View {
+        let duration = visibleDurationSeconds ?? window.durationSeconds
         let height = CalendarPositioning.blockHeight(
-            durationSeconds: window.durationSeconds,
+            durationSeconds: duration,
             pixelsPerMinute: layout.pixelsPerMinute
+        )
+        let radius = layout.blockCornerRadius
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: clipsTop ? 0 : radius,
+            bottomLeadingRadius: clipsBottom ? 0 : radius,
+            bottomTrailingRadius: clipsBottom ? 0 : radius,
+            topTrailingRadius: clipsTop ? 0 : radius,
+            style: .continuous
         )
         VStack(alignment: .leading, spacing: 2) {
             Text(timeRange).font(.system(size: 10, weight: .semibold))
@@ -27,15 +39,9 @@ struct PlannedWindowBlockView: View {
         }
         .padding(6)
         .frame(width: columnWidth * layout.plannedBlockWidthRatio, height: height, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .fill(brandColor.opacity(0.22))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .strokeBorder(brandColor.opacity(0.7), lineWidth: 1)
-        }
-        .clipped()
+        .background(shape.fill(brandColor.opacity(0.22)))
+        .overlay(shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1))
+        .clipShape(shape)
     }
 
     private var brandColor: Color {

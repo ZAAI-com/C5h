@@ -5,6 +5,8 @@ public struct PlannedWindow: Identifiable, Codable, Sendable, Hashable {
     public var providerID: ProviderID
     public var startAt: Date
     public var durationSeconds: Int
+    public var timeZoneIdentifier: String
+    public var localDate: String
     public var promptTemplateID: UUID?
     public var projectPath: String?
     public var status: PlannedWindowStatus
@@ -16,6 +18,8 @@ public struct PlannedWindow: Identifiable, Codable, Sendable, Hashable {
         providerID: ProviderID,
         startAt: Date,
         durationSeconds: Int = 5 * 60 * 60,
+        timeZoneIdentifier: String = TimeZone.current.identifier,
+        localDate: String? = nil,
         promptTemplateID: UUID? = nil,
         projectPath: String? = nil,
         status: PlannedWindowStatus = .draft,
@@ -26,6 +30,9 @@ public struct PlannedWindow: Identifiable, Codable, Sendable, Hashable {
         self.providerID = providerID
         self.startAt = startAt
         self.durationSeconds = durationSeconds
+        self.timeZoneIdentifier = timeZoneIdentifier
+        let tz = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        self.localDate = localDate ?? DateTimeService.localDate(for: startAt, in: tz)
         self.promptTemplateID = promptTemplateID
         self.projectPath = projectPath
         self.status = status

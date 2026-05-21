@@ -28,10 +28,18 @@ struct ProviderColumnView: View {
             ForEach(plannedWindows) { window in
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
-                Button {
-                    onSelectPlanned(window)
-                } label: {
-                    PlannedWindowBlockView(window: window, columnWidth: columnWidth, layout: layout)
+                if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
+                    Button {
+                        onSelectPlanned(window)
+                    } label: {
+                        PlannedWindowBlockView(
+                            window: window,
+                            columnWidth: columnWidth,
+                            layout: layout,
+                            visibleDurationSeconds: segment.durationSeconds,
+                            clipsTop: segment.clippedStart,
+                            clipsBottom: segment.clippedEnd
+                        )
                         .overlay(alignment: .topTrailing) {
                             if isActive {
                                 Image(systemName: "arrow.up.and.down")
@@ -41,58 +49,64 @@ struct ProviderColumnView: View {
                                     .allowsHitTesting(false)
                             }
                         }
-                }
-                .buttonStyle(.plain)
-                .offset(y: yOffset(for: displayStart))
-                .padding(.leading, 2)
-                .opacity(draggingPlannedID == window.id ? 0.85 : 1)
-                .zIndex(draggingPlannedID == window.id ? 3 : 1)
-                .onHover { hovering in
-                    if hovering {
-                        hoveredPlannedID = window.id
-                    } else if hoveredPlannedID == window.id {
-                        hoveredPlannedID = nil
                     }
-                }
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 4)
-                        .onChanged { value in
-                            draggingPlannedID = window.id
-                            hoverY = nil
-                            dragPreviewStart = draggedStart(
-                                for: window,
-                                translationY: value.translation.height
-                            )
+                    .buttonStyle(.plain)
+                    .offset(y: yOffset(for: segment.start))
+                    .padding(.leading, 2)
+                    .opacity(draggingPlannedID == window.id ? 0.85 : 1)
+                    .zIndex(draggingPlannedID == window.id ? 3 : 1)
+                    .onHover { hovering in
+                        if hovering {
+                            hoveredPlannedID = window.id
+                        } else if hoveredPlannedID == window.id {
+                            hoveredPlannedID = nil
                         }
-                        .onEnded { value in
-                            let start = draggedStart(
-                                for: window,
-                                translationY: value.translation.height
-                            )
-                            draggingPlannedID = nil
-                            dragPreviewStart = nil
-                            if start != window.startAt {
-                                onMovePlanned(window, start)
+                    }
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { value in
+                                draggingPlannedID = window.id
+                                hoverY = nil
+                                dragPreviewStart = draggedStart(
+                                    for: window,
+                                    translationY: value.translation.height
+                                )
                             }
-                        }
-                )
-            }
-            ForEach(actualWindows) { window in
-                Button {
-                    onSelectActual(window)
-                } label: {
-                    ActualWindowBlockView(
-                        window: window,
-                        columnWidth: columnWidth,
-                        layout: layout
+                            .onEnded { value in
+                                let start = draggedStart(
+                                    for: window,
+                                    translationY: value.translation.height
+                                )
+                                draggingPlannedID = nil
+                                dragPreviewStart = nil
+                                if start != window.startAt {
+                                    onMovePlanned(window, start)
+                                }
+                            }
                     )
                 }
-                .buttonStyle(.plain)
-                .offset(
-                    x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
-                    y: yOffset(for: window.startAt)
-                )
-                .zIndex(2)
+            }
+            ForEach(actualWindows) { window in
+                if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
+                    Button {
+                        onSelectActual(window)
+                    } label: {
+                        ActualWindowBlockView(
+                            window: window,
+                            columnWidth: columnWidth,
+                            layout: layout,
+                            visibleDurationSeconds: segment.durationSeconds,
+                            clipsTop: segment.clippedStart,
+                            clipsBottom: segment.clippedEnd
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .offset(
+                        x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(2)
+                }
             }
         }
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
@@ -215,6 +229,17 @@ struct ProviderColumnView: View {
 
     private func yOffset(for date: Date) -> CGFloat {
         CalendarPositioning.yOffset(for: date, pixelsPerMinute: layout.pixelsPerMinute)
+    }
+
+    private func visibleSegment(
+        start: Date,
+        durationSeconds: Int
+    ) -> (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool)? {
+        let end = start.addingTimeInterval(TimeInterval(durationSeconds))
+        return CalendarPositioning.visibleSegment(
+            of: DateInterval(start: start, end: end),
+            on: date
+        )
     }
 
     private var timeFormatter: DateFormatter {

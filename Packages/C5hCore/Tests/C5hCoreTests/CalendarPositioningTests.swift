@@ -56,4 +56,58 @@ struct CalendarPositioningTests {
         let interval = CalendarPositioning.dayInterval(for: date, calendar: cal)
         #expect(interval.duration == 86_400)
     }
+
+    @Test("visibleSegment fully inside day")
+    func visibleSegmentInside() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 9))!
+        let window = DateInterval(start: start, duration: 3 * 3600)
+        let seg = CalendarPositioning.visibleSegment(of: window, on: day, calendar: cal)
+        #expect(seg?.start == start)
+        #expect(seg?.durationSeconds == 3 * 3600)
+        #expect(seg?.clippedStart == false)
+        #expect(seg?.clippedEnd == false)
+    }
+
+    @Test("visibleSegment clipped at start (window from previous day)")
+    func visibleSegmentClippedStart() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 22))!
+        let window = DateInterval(start: start, duration: 5 * 3600)
+        let seg = CalendarPositioning.visibleSegment(of: window, on: day, calendar: cal)
+        let expectedStart = cal.startOfDay(for: day)
+        #expect(seg?.start == expectedStart)
+        #expect(seg?.durationSeconds == 3 * 3600)
+        #expect(seg?.clippedStart == true)
+        #expect(seg?.clippedEnd == false)
+    }
+
+    @Test("visibleSegment clipped at end (window spills into next day)")
+    func visibleSegmentClippedEnd() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 22))!
+        let window = DateInterval(start: start, duration: 5 * 3600)
+        let seg = CalendarPositioning.visibleSegment(of: window, on: day, calendar: cal)
+        #expect(seg?.start == start)
+        #expect(seg?.durationSeconds == 2 * 3600)
+        #expect(seg?.clippedStart == false)
+        #expect(seg?.clippedEnd == true)
+    }
+
+    @Test("visibleSegment returns nil when window doesn't overlap day")
+    func visibleSegmentNoOverlap() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 10, hour: 6))!
+        let window = DateInterval(start: start, duration: 3 * 3600)
+        let seg = CalendarPositioning.visibleSegment(of: window, on: day, calendar: cal)
+        #expect(seg == nil)
+    }
 }

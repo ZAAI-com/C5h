@@ -103,6 +103,8 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 var updated = try existing.toActualWindow()
                 updated.startAt = window.startAt
                 updated.durationSeconds = window.durationSeconds
+                updated.timeZoneIdentifier = window.timeZoneIdentifier
+                updated.localDate = window.localDate
                 // Preserve a stronger user-visible tag: if the row was already
                 // promoted to `c5hTriggered`/`exact` by a triggered command, a
                 // routine `detectedFromUsage`/`estimated` refresh shouldn't
