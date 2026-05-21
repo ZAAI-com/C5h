@@ -3,6 +3,7 @@ import C5hCore
 import C5hStore
 
 struct ProvidersView: View {
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: ProvidersViewModel?
 
@@ -22,6 +23,11 @@ struct ProvidersView: View {
                 let vm = ProvidersViewModel(registry: registry, appSettings: settings)
                 viewModel = vm
                 await vm.bootstrap()
+            }
+        }
+        .onChange(of: reloadToken) { _, _ in
+            if let viewModel {
+                Task { await refreshAllProviders(viewModel) }
             }
         }
     }
@@ -66,19 +72,12 @@ struct ProvidersView: View {
                     .font(.title3.weight(.semibold))
                     .padding(.horizontal, C5hSpacing.sm)
             }
+        }
+    }
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task {
-                        for id in ProviderID.allCases {
-                            await viewModel.refreshProvider(id: id)
-                        }
-                    }
-                } label: {
-                    Label("Refresh all", systemImage: "arrow.clockwise")
-                }
-                .help("Refresh provider version and authentication status")
-            }
+    private func refreshAllProviders(_ viewModel: ProvidersViewModel) async {
+        for id in ProviderID.allCases {
+            await viewModel.refreshProvider(id: id)
         }
     }
 }

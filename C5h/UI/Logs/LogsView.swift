@@ -3,6 +3,7 @@ import C5hCore
 import C5hStore
 
 struct LogsView: View {
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: LogsViewModel?
 
@@ -23,6 +24,11 @@ struct LogsView: View {
             }
         }
         .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
+        .onChange(of: reloadToken) { _, _ in
             if let viewModel {
                 Task { await viewModel.reload() }
             }
@@ -83,15 +89,6 @@ struct LogsView: View {
                         Text(r.label).tag(r)
                     }
                 }
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await viewModel.reload() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Reload")
             }
         }
     }

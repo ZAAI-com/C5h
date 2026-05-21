@@ -35,6 +35,18 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         }
     }
 
+    var navbarReloadHelp: String? {
+        switch self {
+        case .dashboard: "Reload dashboard"
+        case .today: "Reload today"
+        case .tomorrow: "Reload tomorrow"
+        case .calendar: "Reload calendar"
+        case .logs: "Reload logs"
+        case .providers: "Refresh provider version and authentication status"
+        case .settings: nil
+        }
+    }
+
     /// Tabs shown in the in-window navigation surface.
     /// `.settings` is reachable from both the sidebar (this list) and the macOS Settings scene (⌘,).
     static let navTabs: [AppTab] = [.dashboard, .today, .tomorrow, .calendar, .logs, .providers, .settings]

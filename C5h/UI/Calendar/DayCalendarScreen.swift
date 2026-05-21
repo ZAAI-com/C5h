@@ -5,6 +5,7 @@ import C5hStore
 struct DayCalendarScreen: View {
     let date: Date
     var title: String = ""
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DayCalendarViewModel?
     @State private var now: Date = .now
@@ -50,6 +51,11 @@ struct DayCalendarScreen: View {
             }
         }
         .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
+        .onChange(of: reloadToken) { _, _ in
             if let viewModel {
                 Task { await viewModel.reload() }
             }
@@ -136,15 +142,6 @@ struct DayCalendarScreen: View {
 
     @ToolbarContentBuilder
     private func actionToolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Reload")
-        }
-
         ToolbarItem(placement: .primaryAction) {
             Button {
                 withAnimation(C5hAnimation.morph) {

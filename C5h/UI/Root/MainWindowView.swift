@@ -5,6 +5,7 @@ struct MainWindowView: View {
     @State private var showOnboarding: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var dayAnchor: Date = .now
+    @State private var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @Environment(\.scenePhase) private var scenePhase
 
@@ -38,7 +39,9 @@ struct MainWindowView: View {
                 .transition(.opacity.combined(with: .scale(scale: 1.02)))
             } else {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
-                    SidebarView(selection: $selectedTab)
+                    SidebarView(selection: $selectedTab) {
+                        reloadToken += 1
+                    }
                         .toolbar(removing: .sidebarToggle)
                 } detail: {
                     detail
@@ -109,20 +112,21 @@ struct MainWindowView: View {
     private var detail: some View {
         switch selectedTab {
         case .dashboard:
-            DashboardView()
+            DashboardView(reloadToken: reloadToken)
         case .today:
-            DayCalendarScreen(date: dayAnchor, title: "Today")
+            DayCalendarScreen(date: dayAnchor, title: "Today", reloadToken: reloadToken)
         case .tomorrow:
             DayCalendarScreen(
                 date: Calendar.current.date(byAdding: .day, value: 1, to: dayAnchor) ?? dayAnchor,
-                title: "Tomorrow"
+                title: "Tomorrow",
+                reloadToken: reloadToken
             )
         case .calendar:
-            WeekCalendarScreen()
+            WeekCalendarScreen(reloadToken: reloadToken)
         case .logs:
-            LogsView()
+            LogsView(reloadToken: reloadToken)
         case .providers:
-            ProvidersView()
+            ProvidersView(reloadToken: reloadToken)
         case .settings:
             SettingsView()
         }

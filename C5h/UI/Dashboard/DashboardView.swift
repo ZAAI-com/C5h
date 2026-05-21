@@ -3,6 +3,7 @@ import C5hCore
 import C5hStore
 
 struct DashboardView: View {
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DashboardViewModel?
 
@@ -42,6 +43,11 @@ struct DashboardView: View {
                 Task { await viewModel.reload() }
             }
         }
+        .onChange(of: reloadToken) { _, _ in
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder
@@ -76,15 +82,6 @@ struct DashboardView: View {
                 Text("Dashboard")
                     .font(.title3.weight(.semibold))
                     .padding(.horizontal, C5hSpacing.sm)
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await viewModel.reload() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Reload dashboard")
             }
         }
     }
