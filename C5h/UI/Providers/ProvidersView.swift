@@ -55,25 +55,7 @@ struct ProvidersView: View {
                 // card stay glass.
                 LazyVStack(spacing: C5hSpacing.lg) {
                     ForEach(ProviderID.allCases) { id in
-                        ProviderCardView(
-                            id: id,
-                            status: appEnv.providerStatuses[id],
-                            configuredPath: viewModel.configuredPaths[id] ?? "",
-                            wakePrompt: viewModel.wakePrompts[id] ?? "",
-                            usageCheck: viewModel.usageChecks[id],
-                            isStatusLoading: appEnv.providerStatusLoading.contains(id),
-                            isUsageLoading: viewModel.loadingUsageProviders.contains(id),
-                            onVersion: { Task { await appEnv.runProviderVersionStatus(id: id) } },
-                            onAuthStatus: { Task { await appEnv.runProviderAuthStatus(id: id) } },
-                            onUsage: { Task { await viewModel.runUsage(id: id) } },
-                            onSetPath: { newPath in
-                                Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
-                            },
-                            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } },
-                            onSetWakePrompt: { newValue in
-                                Task { await viewModel.setWakePrompt(id: id, newValue) }
-                            }
-                        )
+                        card(for: id, viewModel: viewModel)
                     }
                 }
             }
@@ -95,5 +77,28 @@ struct ProvidersView: View {
                 .help("Refresh provider version and authentication status")
             }
         }
+    }
+
+    @ViewBuilder
+    private func card(for id: ProviderID, viewModel: ProvidersViewModel) -> some View {
+        ProviderCardView(
+            id: id,
+            status: appEnv.providerStatuses[id],
+            configuredPath: viewModel.configuredPaths[id] ?? "",
+            wakePrompt: viewModel.wakePrompts[id] ?? "",
+            usageCheck: viewModel.usageChecks[id],
+            isStatusLoading: appEnv.providerStatusLoading.contains(id),
+            isUsageLoading: viewModel.loadingUsageProviders.contains(id),
+            onVersion: { Task { await appEnv.runProviderVersionStatus(id: id) } },
+            onAuthStatus: { Task { await appEnv.runProviderAuthStatus(id: id) } },
+            onUsage: { Task { await viewModel.runUsage(id: id) } },
+            onSetPath: { newPath in
+                Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
+            },
+            onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } },
+            onSetWakePrompt: { newValue in
+                Task { await viewModel.setWakePrompt(id: id, newValue) }
+            }
+        )
     }
 }
