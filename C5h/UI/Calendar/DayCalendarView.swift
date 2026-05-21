@@ -79,6 +79,7 @@ struct DayCalendarView: View {
                 .allowsHitTesting(false)
             }
         }
+        .background(.background, ignoresSafeAreaEdges: .all)
     }
 
     private func providerHeader(providerID: ProviderID) -> some View {
