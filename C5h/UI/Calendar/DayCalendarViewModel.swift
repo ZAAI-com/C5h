@@ -10,7 +10,6 @@ final class DayCalendarViewModel {
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow] = []
     var selection: CalendarSelection?
-    var editingDraftPresented: Bool = false
     var editingExisting: PlannedWindow?
     var startNowPresented: Bool = false
     var startNowDefaultProvider: ProviderID = .claude
@@ -93,11 +92,6 @@ final class DayCalendarViewModel {
         date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
     }
 
-    func presentNewDraft() {
-        editingExisting = nil
-        editingDraftPresented = true
-    }
-
     func presentStartNow(provider: ProviderID) {
         startNowDefaultProvider = provider
         startNowPresented = true
@@ -105,7 +99,6 @@ final class DayCalendarViewModel {
 
     func presentEdit(for window: PlannedWindow) {
         editingExisting = window
-        editingDraftPresented = true
     }
 
     func save(draft: PlannedWindowDraft) async throws {

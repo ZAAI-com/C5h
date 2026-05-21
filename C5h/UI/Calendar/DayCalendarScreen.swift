@@ -132,9 +132,9 @@ struct DayCalendarScreen: View {
                 EmptyView()
             }
         }
-        .sheet(isPresented: $bound.editingDraftPresented) {
+        .sheet(item: $bound.editingExisting) { editingWindow in
             PlannedWindowEditorSheet(
-                editing: viewModel.editingExisting,
+                editing: editingWindow,
                 defaultStart: viewModel.date.atHour(9),
                 allWindows: viewModel.planned,
                 onSave: { draft in try await viewModel.save(draft: draft) },
@@ -160,15 +160,6 @@ struct DayCalendarScreen: View {
 
     @ToolbarContentBuilder
     private func actionToolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                viewModel.presentNewDraft()
-            } label: {
-                Label("Add planned", systemImage: "plus.circle")
-            }
-            .help("Create planned window")
-        }
-
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 ForEach(ProviderID.allCases) { id in
