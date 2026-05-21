@@ -104,9 +104,9 @@ public struct GRDBActualWindowRepository: ActualWindowRepository {
                 updated.startAt = window.startAt
                 updated.durationSeconds = window.durationSeconds
                 // Preserve a stronger user-visible tag: if the row was already
-                // promoted to `c5hTriggered`/`exact` (e.g. by a manual Start
-                // Now), a routine `detectedFromUsage`/`estimated` refresh
-                // shouldn't downgrade the labels — only correct the times.
+                // promoted to `c5hTriggered`/`exact` by a triggered command, a
+                // routine `detectedFromUsage`/`estimated` refresh shouldn't
+                // downgrade the labels — only correct the times.
                 if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
                     // keep updated.source / updated.confidence / updated.commandRunID
                 } else {

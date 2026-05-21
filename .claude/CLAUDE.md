@@ -83,7 +83,7 @@ LaunchAgent plist in the app bundle.
 ## Architecture
 
 - **Entry point**: `C5h/App/C5hApp.swift` (SwiftUI `@main`, main `WindowGroup` + `Settings` scene).
-- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, `AppSchedulerDriver`, and `ManualTriggerCoordinator`, and seeds fixture data in Debug.
+- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, and `AppSchedulerDriver`, and seeds fixture data in Debug.
 - **Navigation**: `C5h/UI/Root/MainWindowView.swift` uses `NavigationSplitView(.balanced)` with an `AppTab` enum; sidebar pinned to `.all` visibility. Tabs are grouped into named sections: **Overview** (dashboard, today, tomorrow), **Calendar** (calendar), **Activity** (logs), **App** (providers, settings). Each screen owns its own `principal` toolbar item; `MainWindowView` is toolbar-agnostic.
 - **Onboarding**: `OnboardingView` is shown on first launch (keyed by `hasCompletedOnboarding` flag in `AppSettingsRepository`) before the main `NavigationSplitView`.
 - **State**: SwiftUI Observation (`@Observable`), `@MainActor` ViewModels, constructor-injected dependencies. No Combine, no global singletons.
@@ -105,7 +105,7 @@ LaunchAgent plist in the app bundle.
 - **C5hHelper** (`Packages/C5hHelper`) — executable background helper (see Debug helper section above).
 - **C5h/Core/** (app target, not a package) — app-side adapters and drivers:
   - `Providers/`: `ProviderAdapter` protocol implementations (`ClaudeProviderAdapter`, `CodexProviderAdapter`, `CLIBackedProviderAdapter`), `ProviderRegistry`
-  - `Services/`: `AppSchedulerDriver`, `ManualTriggerCoordinator`, `SchedulerTicker`
+  - `Services/`: `AppSchedulerDriver`, `SchedulerTicker`
   - `Helper/`: `HelperDevModeRunner`, `HelperRegistrationService`
   - `DebugBundle/`: `DebugBundleExporter`
   - `Paths/`: `AppPaths`
