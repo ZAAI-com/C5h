@@ -8,63 +8,35 @@ struct CommandRunTable: View {
     var body: some View {
         Table(runs, selection: $selection) {
             TableColumn("Started") { run in
-                Text(run.startedAt.formatted(date: .abbreviated, time: .standard))
+                Text(run.startedAt.c5hLogTimestamp)
                     .font(C5hTypography.monoFont)
                     .lineLimit(1)
             }
-            .width(min: 140, ideal: 160)
+            .width(min: 180, ideal: 195)
 
             TableColumn("Provider") { run in
                 providerLabel(run.providerID)
             }
-            .width(min: 110, ideal: 120)
+            .width(min: 70, ideal: 80)
 
             TableColumn("Command") { run in
                 Text(run.commandName.rawValue)
                     .font(C5hTypography.captionFont)
                     .lineLimit(1)
             }
-            .width(min: 100, ideal: 120)
+            .width(min: 115, ideal: 135)
 
             TableColumn("Status") { run in
                 StatusBadge(status: run.status)
             }
-            .width(min: 90, ideal: 100)
+            .width(min: 85, ideal: 95)
 
             TableColumn("Duration") { run in
                 Text(durationText(run))
                     .font(C5hTypography.captionFont)
                     .lineLimit(1)
             }
-            .width(min: 70, ideal: 80)
-
-            TableColumn("Exit") { run in
-                if let code = run.exitCode {
-                    Text("\(code)")
-                        .font(C5hTypography.captionFont)
-                        .foregroundStyle(code == 0 ? C5hColors.fgSecondary : .red)
-                } else {
-                    Text("—").font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgTertiary)
-                }
-            }
-            .width(min: 50, ideal: 60)
-
-            TableColumn("CWD / Command") { run in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(run.command)
-                        .font(C5hTypography.captionFont)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if let cwd = run.workingDirectory {
-                        Text(cwd)
-                            .font(C5hTypography.captionFont)
-                            .foregroundStyle(C5hColors.fgTertiary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-            }
-            .width(min: 200, ideal: 320)
+            .width(min: 75, ideal: 85)
         }
     }
 
