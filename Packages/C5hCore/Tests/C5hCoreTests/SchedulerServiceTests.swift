@@ -20,7 +20,7 @@ actor RecordingSchedulerDriver: SchedulerDriver {
         case skip
     }
 
-    var resolvedWindows: [ActualWindow] = []
+    var resolvedWindows: [ActualWindow5h] = []
     var marks: [(id: UUID, status: ScheduledPromptStatus, error: String?)] = []
     var claims: [UUID] = []
     var triggers: [UUID] = []
@@ -87,11 +87,11 @@ actor RecordingSchedulerDriver: SchedulerDriver {
     func resolveActualWindow(
         for providerID: ProviderID,
         commandRun: CommandRun
-    ) async throws -> ActualWindow? {
+    ) async throws -> ActualWindow5h? {
         resolves.append(commandRun.id)
         switch resolveOutcome {
         case .succeed:
-            let window = ActualWindow(
+            let window = ActualWindow5h(
                 providerID: providerID,
                 startAt: commandRun.startedAt,
                 durationSeconds: 5 * 3600,

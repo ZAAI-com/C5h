@@ -2,7 +2,7 @@ import SwiftUI
 import C5hCore
 
 struct ActualWindowBlockView: View {
-    let window: ActualWindow
+    let window: ActualWindow5h
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
 

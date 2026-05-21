@@ -25,11 +25,11 @@ struct WeekCalendarScreen: View {
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actualRepo = appEnv.actualWindowRepository {
+               let actual5hRepo = appEnv.actualWindow5hRepository {
                 let vm = WeekCalendarViewModel(
                     weekStart: .now,
                     plannedRepository: plannedRepo,
-                    actualRepository: actualRepo
+                    actual5hRepository: actual5hRepo
                 )
                 viewModel = vm
                 await vm.reload()

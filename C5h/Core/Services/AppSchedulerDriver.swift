@@ -4,7 +4,8 @@ import C5hStore
 
 struct AppSchedulerDriver: SchedulerDriver {
     let scheduledRepository: any ScheduledPromptRepository
-    let actualRepository: any ActualWindowRepository
+    let actual5hRepository: any ActualWindow5hRepository
+    let actual7dRepository: any ActualWindow7dRepository
     let usageSnapshotRepository: any UsageSnapshotRepository
     let registry: ProviderRegistry
 
@@ -42,16 +43,20 @@ struct AppSchedulerDriver: SchedulerDriver {
     func resolveActualWindow(
         for providerID: ProviderID,
         commandRun: CommandRun
-    ) async throws -> ActualWindow? {
-        let actualRepo = actualRepository
+    ) async throws -> ActualWindow5h? {
+        let actual5hRepo = actual5hRepository
+        let actual7dRepo = actual7dRepository
         let usageRepo = usageSnapshotRepository
         let registry = registry
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
                 try await usageRepo.create(snapshot)
             },
-            upsertActualWindow: { window, tolerance in
-                try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepo.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
         let resolver = ActiveWindowResolver(
@@ -62,11 +67,11 @@ struct AppSchedulerDriver: SchedulerDriver {
             },
             activeWindowFetch: { providerID, now in
                 let interval = DateInterval(start: now, duration: 1)
-                let windows = try await actualRepo.fetchWindows(for: interval)
+                let windows = try await actual5hRepo.fetchWindows(for: interval)
                 return windows.first { $0.providerID == providerID }
             },
             updateActualWindow: { window in
-                try await actualRepo.update(window)
+                try await actual5hRepo.update(window)
             }
         )
         return await resolver.resolveTriggeredWindow(

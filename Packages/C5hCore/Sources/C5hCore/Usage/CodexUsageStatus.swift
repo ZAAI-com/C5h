@@ -62,8 +62,8 @@ public struct CodexUsageStatus: Sendable, Hashable {
     public func actualWindow(
         providerID: ProviderID = .codex,
         createdAt: Date = .now
-    ) -> ActualWindow {
-        ActualWindow(
+    ) -> ActualWindow5h {
+        ActualWindow5h(
             providerID: providerID,
             startAt: fiveHourStartAt,
             durationSeconds: primaryDurationSeconds,
@@ -76,17 +76,20 @@ public struct CodexUsageStatus: Sendable, Hashable {
 
     public func secondaryActualWindow(
         providerID: ProviderID = .codex,
+        usageSnapshotID: UUID? = nil,
         createdAt: Date = .now
-    ) -> ActualWindow? {
+    ) -> ActualWindow7d? {
         guard let secondary else { return nil }
         let duration = secondaryDurationSeconds
         let start = secondary.resetsAt.addingTimeInterval(-TimeInterval(duration))
-        return ActualWindow(
+        return ActualWindow7d(
             providerID: providerID,
             startAt: start,
             durationSeconds: duration,
+            usedPercentage: secondary.usedPercentage,
             source: .detectedFromUsage,
             confidence: .estimated,
+            usageSnapshotID: usageSnapshotID,
             createdAt: createdAt,
             updatedAt: createdAt
         )

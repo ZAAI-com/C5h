@@ -2,27 +2,27 @@ import Foundation
 
 /// Resolves the provider's *real* current rolling 5h window at trigger time by
 /// fetching usage from the upstream CLI, persists the derived snapshot, and
-/// promotes the resulting `ActualWindow` row to `c5hTriggered` / `exact`,
+/// promotes the resulting `ActualWindow5h` row to `c5hTriggered` / `exact`,
 /// stamping `commandRunID` so the calendar shows a single, accurate row.
 ///
 /// Returns `nil` when the provider isn't authenticated, the CLI call fails, or
 /// no active window is reported — in which case the caller writes no
-/// `ActualWindow`. This avoids the legacy behavior of persisting a fictitious
+/// `ActualWindow5h`. This avoids the legacy behavior of persisting a fictitious
 /// `[now, +5h]` block that doesn't match the upstream `resetsAt`.
 public struct ActiveWindowResolver: Sendable {
     public typealias FetchSnapshot = @Sendable (ProviderID) async throws -> UsageSnapshot
-    public typealias FetchActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow?
+    public typealias FetchActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
 
     public let fetcher: UsageFetcher
     public let snapshotFetch: FetchSnapshot
     public let activeWindowFetch: FetchActiveWindow
-    public let updateActualWindow: @Sendable (ActualWindow) async throws -> Void
+    public let updateActualWindow: @Sendable (ActualWindow5h) async throws -> Void
 
     public init(
         fetcher: UsageFetcher,
         snapshotFetch: @escaping FetchSnapshot,
         activeWindowFetch: @escaping FetchActiveWindow,
-        updateActualWindow: @escaping @Sendable (ActualWindow) async throws -> Void
+        updateActualWindow: @escaping @Sendable (ActualWindow5h) async throws -> Void
     ) {
         self.fetcher = fetcher
         self.snapshotFetch = snapshotFetch
@@ -38,7 +38,7 @@ public struct ActiveWindowResolver: Sendable {
         providerID: ProviderID,
         commandRunID: UUID,
         now: Date = .now
-    ) async -> ActualWindow? {
+    ) async -> ActualWindow5h? {
         let snapshot: UsageSnapshot
         do {
             snapshot = try await snapshotFetch(providerID)
@@ -48,9 +48,11 @@ public struct ActiveWindowResolver: Sendable {
 
         do {
             try await fetcher.persistSnapshot(snapshot)
-            let derived = try fetcher.derivedActualWindows(from: snapshot, now: now)
-            for window in derived {
-                try await fetcher.upsertActualWindow(window, UsageFetcher.dedupTolerance)
+            if let window = try fetcher.derived5h(from: snapshot, now: now) {
+                try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
+            }
+            if let window = try fetcher.derived7d(from: snapshot) {
+                try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
             }
             guard var active = try await activeWindowFetch(providerID, now) else {
                 return nil

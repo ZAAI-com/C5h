@@ -2,18 +2,17 @@ import Foundation
 import GRDB
 import C5hCore
 
-struct ActualWindowRecord: Codable, FetchableRecord, PersistableRecord {
-    static let databaseTableName = "actual_windows"
+struct ActualWindow7dRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "actual_windows_7d"
 
     var id: String
     var providerId: String
     var startAt: String
     var durationSeconds: Int
+    var usedPercentage: Double
     var source: String
     var confidence: String
-    var commandRunId: String?
-    var usageStartSnapshotId: String?
-    var usageEndSnapshotId: String?
+    var usageSnapshotId: String?
     var createdAt: String
     var updatedAt: String
 
@@ -22,30 +21,28 @@ struct ActualWindowRecord: Codable, FetchableRecord, PersistableRecord {
         case providerId = "provider_id"
         case startAt = "start_at"
         case durationSeconds = "duration_seconds"
+        case usedPercentage = "used_percentage"
         case source
         case confidence
-        case commandRunId = "command_run_id"
-        case usageStartSnapshotId = "usage_start_snapshot_id"
-        case usageEndSnapshotId = "usage_end_snapshot_id"
+        case usageSnapshotId = "usage_snapshot_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
 
-    init(from window: ActualWindow) {
+    init(from window: ActualWindow7d) {
         self.id = window.id.uuidString
         self.providerId = window.providerID.rawValue
         self.startAt = DateTimeService.formatUTC(window.startAt)
         self.durationSeconds = window.durationSeconds
+        self.usedPercentage = window.usedPercentage
         self.source = window.source.rawValue
         self.confidence = window.confidence.rawValue
-        self.commandRunId = window.commandRunID?.uuidString
-        self.usageStartSnapshotId = window.usageStartSnapshotID?.uuidString
-        self.usageEndSnapshotId = window.usageEndSnapshotID?.uuidString
+        self.usageSnapshotId = window.usageSnapshotID?.uuidString
         self.createdAt = DateTimeService.formatUTC(window.createdAt)
         self.updatedAt = DateTimeService.formatUTC(window.updatedAt)
     }
 
-    func toActualWindow() throws -> ActualWindow {
+    func toActualWindow7d() throws -> ActualWindow7d {
         guard
             let uuid = UUID(uuidString: id),
             let pid = ProviderID(rawValue: providerId),
@@ -53,18 +50,17 @@ struct ActualWindowRecord: Codable, FetchableRecord, PersistableRecord {
             let src = ActualWindowSource(rawValue: source),
             let conf = WindowConfidence(rawValue: confidence)
         else {
-            throw C5hError.databaseError("Invalid ActualWindowRecord: \(id)")
+            throw C5hError.databaseError("Invalid ActualWindow7dRecord: \(id)")
         }
-        return ActualWindow(
+        return ActualWindow7d(
             id: uuid,
             providerID: pid,
             startAt: start,
             durationSeconds: durationSeconds,
+            usedPercentage: usedPercentage,
             source: src,
             confidence: conf,
-            commandRunID: commandRunId.flatMap { UUID(uuidString: $0) },
-            usageStartSnapshotID: usageStartSnapshotId.flatMap { UUID(uuidString: $0) },
-            usageEndSnapshotID: usageEndSnapshotId.flatMap { UUID(uuidString: $0) },
+            usageSnapshotID: usageSnapshotId.flatMap { UUID(uuidString: $0) },
             createdAt: DateTimeService.parseUTC(createdAt) ?? start,
             updatedAt: DateTimeService.parseUTC(updatedAt) ?? .distantPast
         )

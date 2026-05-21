@@ -3,16 +3,16 @@ import Testing
 @testable import C5hStore
 @testable import C5hCore
 
-@Suite("ActualWindowRepository.upsertByEndAt")
-struct ActualWindowRepositoryUpsertTests {
+@Suite("ActualWindow5hRepository.upsertByEndAt")
+struct ActualWindow5hRepositoryUpsertTests {
     @Test("Matching endAt within tolerance updates existing row in place")
     func endAtMatchUpserts() async throws {
         let db = try Database.inMemory()
         try await Seed.runIfNeeded(database: db)
-        let repo = GRDBActualWindowRepository(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
 
         let start = Date(timeIntervalSince1970: 1_730_000_000)
-        let first = ActualWindow(
+        let first = ActualWindow5h(
             providerID: .codex,
             startAt: start,
             durationSeconds: 5 * 3600,
@@ -21,7 +21,7 @@ struct ActualWindowRepositoryUpsertTests {
         )
         try await repo.upsertByEndAt(first, tolerance: 60)
 
-        let nearby = ActualWindow(
+        let nearby = ActualWindow5h(
             providerID: .codex,
             startAt: start.addingTimeInterval(10),
             durationSeconds: 5 * 3600,
@@ -39,13 +39,13 @@ struct ActualWindowRepositoryUpsertTests {
     func overlappingFallbackReplacesStaleTriggered() async throws {
         let db = try Database.inMemory()
         try await Seed.runIfNeeded(database: db)
-        let repo = GRDBActualWindowRepository(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
 
         // Stale placeholder written by legacy trigger code: window claims to
         // start at 13:00 and end at 18:00, but the upstream's true rolling
         // window is 09:07–14:07.
         let staleStart = Date(timeIntervalSince1970: 1_730_000_000)
-        let stale = ActualWindow(
+        let stale = ActualWindow5h(
             providerID: .codex,
             startAt: staleStart,
             durationSeconds: 5 * 3600,
@@ -57,7 +57,7 @@ struct ActualWindowRepositoryUpsertTests {
 
         // Real window from a usage refresh: starts ~4h earlier, same duration.
         let realStart = staleStart.addingTimeInterval(-4 * 3600 - 7 * 60)
-        let real = ActualWindow(
+        let real = ActualWindow5h(
             providerID: .codex,
             startAt: realStart,
             durationSeconds: 5 * 3600,
@@ -80,10 +80,10 @@ struct ActualWindowRepositoryUpsertTests {
     func nonOverlappingInserts() async throws {
         let db = try Database.inMemory()
         try await Seed.runIfNeeded(database: db)
-        let repo = GRDBActualWindowRepository(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
 
         let base = Date(timeIntervalSince1970: 1_730_000_000)
-        let earlier = ActualWindow(
+        let earlier = ActualWindow5h(
             providerID: .claude,
             startAt: base,
             durationSeconds: 5 * 3600,
@@ -93,7 +93,7 @@ struct ActualWindowRepositoryUpsertTests {
         try await repo.upsertByEndAt(earlier, tolerance: 60)
 
         // 6 hours later, no overlap with the first window.
-        let later = ActualWindow(
+        let later = ActualWindow5h(
             providerID: .claude,
             startAt: base.addingTimeInterval(6 * 3600),
             durationSeconds: 5 * 3600,

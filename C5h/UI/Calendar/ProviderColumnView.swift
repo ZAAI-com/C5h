@@ -4,13 +4,13 @@ import C5hCore
 struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
-    let actualWindows: [ActualWindow]
+    let actualWindows: [ActualWindow5h]
     let date: Date
     let now: Date
     let layout: CalendarLayoutConfig
     let columnWidth: CGFloat
     let onSelectPlanned: (PlannedWindow) -> Void
-    let onSelectActual: (ActualWindow) -> Void
+    let onSelectActual: (ActualWindow5h) -> Void
     var onQuickPlan: ((Date) -> Void)? = nil
 
     @State private var hoverY: CGFloat?

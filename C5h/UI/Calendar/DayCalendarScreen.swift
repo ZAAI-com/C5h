@@ -23,12 +23,14 @@ struct DayCalendarScreen: View {
         .task(id: BootstrapKey(env: ObjectIdentifier(appEnv), day: Calendar.current.startOfDay(for: date))) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actualRepo = appEnv.actualWindowRepository,
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let actual7dRepo = appEnv.actualWindow7dRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository {
                 let vm = DayCalendarViewModel(
                     date: date,
                     plannedRepository: plannedRepo,
-                    actualRepository: actualRepo,
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
                     scheduledRepository: scheduledRepo,
                     usageSnapshotRepository: appEnv.usageSnapshotRepository,
                     providerRegistry: appEnv.providerRegistry,

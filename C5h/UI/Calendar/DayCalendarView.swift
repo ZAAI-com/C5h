@@ -6,7 +6,7 @@ struct DayCalendarView: View {
     let layout: CalendarLayoutConfig
     let now: Date
     let onSelectPlanned: (PlannedWindow) -> Void
-    let onSelectActual: (ActualWindow) -> Void
+    let onSelectActual: (ActualWindow5h) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16

@@ -6,7 +6,8 @@ import C5hStore
 @Observable
 @MainActor
 final class DashboardViewModel {
-    var activeWindows: [ActualWindow] = []
+    var activeWindows: [ActualWindow5h] = []
+    var weeklyWindows: [ActualWindow7d] = []
     var activeWindowUsagePercentages: [UUID: Double] = [:]
     var upcomingPrompts: [ScheduledPrompt] = []
     var recentRuns: [CommandRun] = []
@@ -16,7 +17,8 @@ final class DashboardViewModel {
     var lastError: String?
     var isLoading: Bool = false
 
-    private let actualRepo: any ActualWindowRepository
+    private let actual5hRepo: any ActualWindow5hRepository
+    private let actual7dRepo: any ActualWindow7dRepository
     private let scheduledRepo: any ScheduledPromptRepository
     private let commandRepo: any CommandRunRepository
     private let usageRepo: any UsageSnapshotRepository
@@ -24,13 +26,15 @@ final class DashboardViewModel {
     private let fetcher: UsageFetcher
 
     init(
-        actualRepository: any ActualWindowRepository,
+        actual5hRepository: any ActualWindow5hRepository,
+        actual7dRepository: any ActualWindow7dRepository,
         scheduledRepository: any ScheduledPromptRepository,
         commandRunRepository: any CommandRunRepository,
         usageSnapshotRepository: any UsageSnapshotRepository,
         registry: ProviderRegistry
     ) {
-        self.actualRepo = actualRepository
+        self.actual5hRepo = actual5hRepository
+        self.actual7dRepo = actual7dRepository
         self.scheduledRepo = scheduledRepository
         self.commandRepo = commandRunRepository
         self.usageRepo = usageSnapshotRepository
@@ -39,8 +43,11 @@ final class DashboardViewModel {
             persistSnapshot: { snapshot in
                 try await usageSnapshotRepository.create(snapshot)
             },
-            upsertActualWindow: { window, tolerance in
-                try await actualRepository.upsertByEndAt(window, tolerance: tolerance)
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepository.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepository.upsertByEndAt(window, tolerance: tolerance)
             }
         )
     }
@@ -54,8 +61,9 @@ final class DashboardViewModel {
                 await refreshUsageWindow(providerID: providerID, now: now)
             }
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
-            let actuals = try await actualRepo.fetchWindows(for: interval)
+            let actuals = try await actual5hRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await refreshUsagePercentages()
             self.recentRuns = try await commandRepo.fetchRecent(
                 limit: 5,
@@ -77,7 +85,7 @@ final class DashboardViewModel {
         let weekStart = cal.date(byAdding: .day, value: -days, to: cal.startOfDay(for: now)) ?? now
         let interval = DateInterval(start: weekStart, end: endOfToday)
         do {
-            let actuals = try await actualRepo.fetchWindows(for: interval)
+            let actuals = try await actual5hRepo.fetchWindows(for: interval)
             var bucket: [Date: [ProviderID: Int]] = [:]
             for d in 0..<days {
                 if let date = cal.date(byAdding: .day, value: d, to: weekStart) {
@@ -116,6 +124,17 @@ final class DashboardViewModel {
         } catch {
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
+    }
+
+    private func loadLatestWeeklyWindows(now: Date) async throws -> [ActualWindow7d] {
+        var windows: [ActualWindow7d] = []
+        for providerID in ProviderID.allCases {
+            if let window = try await actual7dRepo.fetchLatest(providerID: providerID),
+               window.endAt >= now {
+                windows.append(window)
+            }
+        }
+        return windows
     }
 
     private func refreshProviderStatus(id: ProviderID) async {

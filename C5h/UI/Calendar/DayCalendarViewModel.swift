@@ -8,13 +8,14 @@ import C5hStore
 final class DayCalendarViewModel {
     var date: Date
     var planned: [PlannedWindow] = []
-    var actual: [ActualWindow] = []
+    var actual: [ActualWindow5h] = []
     var selection: CalendarSelection?
     var editingExisting: PlannedWindow?
     var lastError: String?
 
     private let plannedRepository: any PlannedWindowRepository
-    private let actualRepository: any ActualWindowRepository
+    private let actual5hRepository: any ActualWindow5hRepository
+    private let actual7dRepository: (any ActualWindow7dRepository)?
     private let scheduledRepository: any ScheduledPromptRepository
     private let usageSnapshotRepository: (any UsageSnapshotRepository)?
     private let providerRegistry: ProviderRegistry?
@@ -23,7 +24,8 @@ final class DayCalendarViewModel {
     init(
         date: Date,
         plannedRepository: any PlannedWindowRepository,
-        actualRepository: any ActualWindowRepository,
+        actual5hRepository: any ActualWindow5hRepository,
+        actual7dRepository: (any ActualWindow7dRepository)? = nil,
         scheduledRepository: any ScheduledPromptRepository,
         usageSnapshotRepository: (any UsageSnapshotRepository)? = nil,
         providerRegistry: ProviderRegistry? = nil,
@@ -31,7 +33,8 @@ final class DayCalendarViewModel {
     ) {
         self.date = date
         self.plannedRepository = plannedRepository
-        self.actualRepository = actualRepository
+        self.actual5hRepository = actual5hRepository
+        self.actual7dRepository = actual7dRepository
         self.scheduledRepository = scheduledRepository
         self.usageSnapshotRepository = usageSnapshotRepository
         self.providerRegistry = providerRegistry
@@ -43,7 +46,7 @@ final class DayCalendarViewModel {
         let interval = CalendarPositioning.dayInterval(for: date)
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
-            async let actual = actualRepository.fetchWindows(for: interval)
+            async let actual = actual5hRepository.fetchWindows(for: interval)
             self.planned = try await planned
             self.actual = try await actual
             self.lastError = nil
@@ -53,18 +56,22 @@ final class DayCalendarViewModel {
     }
 
     /// Best-effort: fetch fresh usage from each provider so stale
-    /// `[wrong-start, +5h]` ActualWindow rows (from older trigger code that
+    /// `[wrong-start, +5h]` ActualWindow5h rows (from older trigger code that
     /// didn't reconcile against upstream `resetsAt`) get corrected before the
     /// calendar reads them. Failures are silent — the calendar still shows
     /// whatever's already in the repo.
     private func refreshUsageWindows() async {
         guard let usageRepo = usageSnapshotRepository,
-              let registry = providerRegistry else { return }
-        let actualRepo = actualRepository
+              let registry = providerRegistry,
+              let actual7dRepo = actual7dRepository else { return }
+        let actual5hRepo = actual5hRepository
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
-            upsertActualWindow: { window, tolerance in
-                try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepo.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
         for providerID in ProviderID.allCases {
@@ -77,7 +84,7 @@ final class DayCalendarViewModel {
         }
     }
 
-    func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow]) {
+    func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5h]) {
         (planned.filter { $0.providerID == providerID },
          actual.filter { $0.providerID == providerID })
     }

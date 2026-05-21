@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ActualWindow: Identifiable, Codable, Sendable, Hashable {
+public struct ActualWindow5h: Identifiable, Codable, Sendable, Hashable {
     public var id: UUID
     public var providerID: ProviderID
     public var startAt: Date

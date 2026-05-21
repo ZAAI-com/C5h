@@ -10,14 +10,14 @@ public protocol SchedulerDriver: Sendable {
 
     /// Resolves and persists the provider's *real* current rolling 5h window
     /// after a prompt has fired, by reading upstream usage data. Returning
-    /// `nil` signals that no `ActualWindow` should be written for this trigger
+    /// `nil` signals that no `ActualWindow5h` should be written for this trigger
     /// — preferred over persisting a fictitious `[now, +5h]` placeholder when
     /// the upstream `resetsAt` is unknown. The returned row (when non-nil) is
     /// purely informational; the driver has already written it.
     func resolveActualWindow(
         for providerID: ProviderID,
         commandRun: CommandRun
-    ) async throws -> ActualWindow?
+    ) async throws -> ActualWindow5h?
 }
 
 public struct SchedulerTickReport: Sendable {

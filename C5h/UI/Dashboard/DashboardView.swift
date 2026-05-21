@@ -17,13 +17,15 @@ struct DashboardView: View {
         }
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
-               let actualRepo = appEnv.actualWindowRepository,
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let actual7dRepo = appEnv.actualWindow7dRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository,
                let cmdRepo = appEnv.commandRunRepository,
                let usageRepo = appEnv.usageSnapshotRepository,
                let registry = appEnv.providerRegistry {
                 let vm = DashboardViewModel(
-                    actualRepository: actualRepo,
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
                     scheduledRepository: scheduledRepo,
                     commandRunRepository: cmdRepo,
                     usageSnapshotRepository: usageRepo,
@@ -62,6 +64,7 @@ struct DashboardView: View {
                     spacing: C5hSpacing.lg
                 ) {
                     activeWindowsCard(viewModel: viewModel)
+                    weeklyLimitsCard(viewModel: viewModel)
                     providerHealthCard(viewModel: viewModel)
                     recentRunsCard(viewModel: viewModel)
                 }
@@ -87,7 +90,7 @@ struct DashboardView: View {
     }
 
     private func activeWindowsCard(viewModel: DashboardViewModel) -> some View {
-        DashboardCard(title: "Active windows") {
+        DashboardCard(title: "Active 5h windows") {
             if viewModel.activeWindows.isEmpty {
                 Text("No active windows right now.").foregroundStyle(C5hColors.fgSecondary)
             } else {
@@ -125,7 +128,52 @@ struct DashboardView: View {
         }
     }
 
-    private func dataSourceLabel(for window: ActualWindow) -> String {
+    private func weeklyLimitsCard(viewModel: DashboardViewModel) -> some View {
+        DashboardCard(title: "Weekly limits") {
+            if viewModel.weeklyWindows.isEmpty {
+                Text("No weekly limit data yet.").foregroundStyle(C5hColors.fgSecondary)
+            } else {
+                VStack(alignment: .leading, spacing: C5hSpacing.md) {
+                    ForEach(ProviderID.allCases) { providerID in
+                        if let window = viewModel.weeklyWindows.first(where: { $0.providerID == providerID }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: C5hSpacing.sm) {
+                                    Circle().fill(brandColor(for: providerID)).frame(width: 10, height: 10)
+                                    Text(providerID.displayName).font(C5hTypography.bodyFont)
+                                    Text("7d")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgTertiary)
+                                    let clamped = min(max(window.usedPercentage, 0), 100)
+                                    ProgressView(value: clamped, total: 100)
+                                        .progressViewStyle(.linear)
+                                        .tint(brandColor(for: providerID))
+                                        .frame(width: 60)
+                                    Text("\(Int(clamped.rounded()))%")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                    Spacer()
+                                    Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                }
+                                Text(dataSourceLabel(for: window))
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgTertiary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func dataSourceLabel(for window: ActualWindow5h) -> String {
+        let source = "from \(window.providerID.displayName) CLI"
+        let confidence = window.confidence == .estimated ? "start: estimated" : "start: exact"
+        return "\(source) · \(confidence)"
+    }
+
+    private func dataSourceLabel(for window: ActualWindow7d) -> String {
         let source = "from \(window.providerID.displayName) CLI"
         let confidence = window.confidence == .estimated ? "start: estimated" : "start: exact"
         return "\(source) · \(confidence)"

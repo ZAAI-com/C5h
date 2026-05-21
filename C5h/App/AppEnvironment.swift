@@ -19,7 +19,8 @@ final class AppEnvironment {
 
     private(set) var providerRepository: (any ProviderRepository)?
     private(set) var plannedWindowRepository: (any PlannedWindowRepository)?
-    private(set) var actualWindowRepository: (any ActualWindowRepository)?
+    private(set) var actualWindow5hRepository: (any ActualWindow5hRepository)?
+    private(set) var actualWindow7dRepository: (any ActualWindow7dRepository)?
     private(set) var scheduledPromptRepository: (any ScheduledPromptRepository)?
     private(set) var commandRunRepository: (any CommandRunRepository)?
     private(set) var usageSnapshotRepository: (any UsageSnapshotRepository)?
@@ -55,7 +56,8 @@ final class AppEnvironment {
 
             self.providerRepository = providerRepo
             self.plannedWindowRepository = GRDBPlannedWindowRepository(database: db)
-            self.actualWindowRepository = GRDBActualWindowRepository(database: db)
+            self.actualWindow5hRepository = GRDBActualWindow5hRepository(database: db)
+            self.actualWindow7dRepository = GRDBActualWindow7dRepository(database: db)
             self.scheduledPromptRepository = GRDBScheduledPromptRepository(database: db)
             self.commandRunRepository = cmdRepo
             self.usageSnapshotRepository = GRDBUsageSnapshotRepository(database: db)
@@ -81,11 +83,13 @@ final class AppEnvironment {
             self.providerRegistry = registry
 
             if let scheduledRepo = self.scheduledPromptRepository,
-               let actualRepo = self.actualWindowRepository,
+               let actual5hRepo = self.actualWindow5hRepository,
+               let actual7dRepo = self.actualWindow7dRepository,
                let usageRepo = self.usageSnapshotRepository {
                 let driver = AppSchedulerDriver(
                     scheduledRepository: scheduledRepo,
-                    actualRepository: actualRepo,
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
                     usageSnapshotRepository: usageRepo,
                     registry: registry
                 )

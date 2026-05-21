@@ -8,20 +8,20 @@ import C5hStore
 final class WeekCalendarViewModel {
     var weekStart: Date
     var planned: [PlannedWindow] = []
-    var actual: [ActualWindow] = []
+    var actual: [ActualWindow5h] = []
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
-    private let actualRepo: any ActualWindowRepository
+    private let actual5hRepo: any ActualWindow5hRepository
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
-        actualRepository: any ActualWindowRepository
+        actual5hRepository: any ActualWindow5hRepository
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
-        self.actualRepo = actualRepository
+        self.actual5hRepo = actual5hRepository
     }
 
     static func startOfWeek(for date: Date) -> Date {
@@ -43,7 +43,7 @@ final class WeekCalendarViewModel {
         )
         do {
             async let p = plannedRepo.fetchWindows(for: interval)
-            async let a = actualRepo.fetchWindows(for: interval)
+            async let a = actual5hRepo.fetchWindows(for: interval)
             self.planned = try await p
             self.actual = try await a
             self.lastError = nil
@@ -52,7 +52,7 @@ final class WeekCalendarViewModel {
         }
     }
 
-    func windows(forDay day: Date, providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow]) {
+    func windows(forDay day: Date, providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5h]) {
         let dayInterval = CalendarPositioning.dayInterval(for: day)
         let p = planned.filter {
             $0.providerID == providerID && dayInterval.contains($0.startAt)

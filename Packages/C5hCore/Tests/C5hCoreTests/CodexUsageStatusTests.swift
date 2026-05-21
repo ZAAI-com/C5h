@@ -27,7 +27,7 @@ struct CodexUsageStatusTests {
         #expect(status.primaryWindowMinutes == 299)
     }
 
-    @Test("Builds estimated ActualWindow from primary reset timestamp")
+    @Test("Builds estimated ActualWindow5h from primary reset timestamp")
     func buildsActualWindow() throws {
         let status = try CodexUsageStatus.parsePayload("""
         {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750}}}
@@ -55,22 +55,28 @@ struct CodexUsageStatusTests {
         #expect(normalized.usedPercentage == 82)
     }
 
-    @Test("Builds secondary ActualWindow honoring window_minutes")
+    @Test("Builds secondary ActualWindow7d honoring window_minutes")
     func buildsSecondaryActualWindow() throws {
         let status = try CodexUsageStatus.parsePayload("""
         {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750},"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
         """)
-        let window = try #require(status.secondaryActualWindow(createdAt: Date(timeIntervalSince1970: 100)))
+        let snapshotID = UUID()
+        let window = try #require(status.secondaryActualWindow(
+            usageSnapshotID: snapshotID,
+            createdAt: Date(timeIntervalSince1970: 100)
+        ))
 
         #expect(window.providerID == .codex)
         #expect(window.source == .detectedFromUsage)
         #expect(window.confidence == .estimated)
         #expect(window.durationSeconds == 10080 * 60)
+        #expect(window.usedPercentage == 45)
+        #expect(window.usageSnapshotID == snapshotID)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_968_800)
         #expect(window.startAt.timeIntervalSince1970 == 1_778_968_800 - Double(10080 * 60))
     }
 
-    @Test("Secondary ActualWindow defaults to seven days when window_minutes missing")
+    @Test("Secondary ActualWindow7d defaults to seven days when window_minutes missing")
     func secondaryActualWindowDefaultsToSevenDays() throws {
         let status = try CodexUsageStatus.parsePayload("""
         {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750},"secondary":{"used_percent":45,"resets_at":1778968800}}}

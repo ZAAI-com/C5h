@@ -3,7 +3,7 @@ import C5hCore
 
 enum CalendarSelection: Hashable, Identifiable {
     case planned(PlannedWindow)
-    case actual(ActualWindow)
+    case actual(ActualWindow5h)
 
     var id: String {
         switch self {
@@ -75,7 +75,7 @@ struct WindowInspectorView: View {
     }
 
     @ViewBuilder
-    private func actualContent(_ window: ActualWindow) -> some View {
+    private func actualContent(_ window: ActualWindow5h) -> some View {
         Text("Actual window").font(C5hTypography.titleFont)
         labelled("Provider", window.providerID.displayName)
         labelled("When", "\(format(window.startAt)) → \(format(window.endAt))")

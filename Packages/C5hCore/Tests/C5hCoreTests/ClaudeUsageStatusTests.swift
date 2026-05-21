@@ -15,7 +15,7 @@ struct ClaudeUsageStatusTests {
         #expect(status.fiveHourStartAt.timeIntervalSince1970 == 1_778_355_600)
     }
 
-    @Test("Builds estimated ActualWindow from reset timestamp")
+    @Test("Builds estimated ActualWindow5h from reset timestamp")
     func buildsActualWindow() throws {
         let status = try ClaudeUsageStatus.parsePayload("""
         {"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":1778373600}}}
@@ -68,22 +68,28 @@ struct ClaudeUsageStatusTests {
         #expect(status.sevenDayStartAt?.timeIntervalSince1970 == 1_778_288_400)
     }
 
-    @Test("Builds seven day ActualWindow with 7d duration")
+    @Test("Builds seven day ActualWindow7d with usage")
     func buildsSevenDayActualWindow() throws {
         let status = try ClaudeUsageStatus.parsePayload("""
         {"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":1778373600},"seven_day":{"used_percentage":57,"resets_at":1778893200}}}
         """)
-        let window = try #require(status.sevenDayActualWindow(createdAt: Date(timeIntervalSince1970: 100)))
+        let snapshotID = UUID()
+        let window = try #require(status.sevenDayActualWindow(
+            usageSnapshotID: snapshotID,
+            createdAt: Date(timeIntervalSince1970: 100)
+        ))
 
         #expect(window.providerID == .claude)
         #expect(window.source == .detectedFromUsage)
         #expect(window.confidence == .estimated)
         #expect(window.durationSeconds == 7 * 24 * 3600)
+        #expect(window.usedPercentage == 57)
+        #expect(window.usageSnapshotID == snapshotID)
         #expect(window.startAt.timeIntervalSince1970 == 1_778_288_400)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_893_200)
     }
 
-    @Test("Seven day ActualWindow returns nil when seven_day absent")
+    @Test("Seven day ActualWindow7d returns nil when seven_day absent")
     func sevenDayActualWindowReturnsNilWhenAbsent() throws {
         let status = try ClaudeUsageStatus.parsePayload("""
         {"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":1778373600}}}

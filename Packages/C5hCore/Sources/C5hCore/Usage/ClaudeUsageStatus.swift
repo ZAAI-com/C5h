@@ -38,8 +38,8 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
     public func actualWindow(
         providerID: ProviderID = .claude,
         createdAt: Date = .now
-    ) -> ActualWindow {
-        ActualWindow(
+    ) -> ActualWindow5h {
+        ActualWindow5h(
             providerID: providerID,
             startAt: fiveHourStartAt,
             durationSeconds: Self.fiveHourDurationSeconds,
@@ -52,15 +52,18 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
 
     public func sevenDayActualWindow(
         providerID: ProviderID = .claude,
+        usageSnapshotID: UUID? = nil,
         createdAt: Date = .now
-    ) -> ActualWindow? {
-        guard let start = sevenDayStartAt else { return nil }
-        return ActualWindow(
+    ) -> ActualWindow7d? {
+        guard let sevenDay, let start = sevenDayStartAt else { return nil }
+        return ActualWindow7d(
             providerID: providerID,
             startAt: start,
             durationSeconds: Self.sevenDayDurationSeconds,
+            usedPercentage: sevenDay.usedPercentage,
             source: .detectedFromUsage,
             confidence: .estimated,
+            usageSnapshotID: usageSnapshotID,
             createdAt: createdAt,
             updatedAt: createdAt
         )

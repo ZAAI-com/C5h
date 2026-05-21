@@ -55,7 +55,8 @@ struct HelperMain {
 
         let heartbeatRepo = GRDBHelperHeartbeatRepository(database: database)
         let scheduledRepo = GRDBScheduledPromptRepository(database: database)
-        let actualRepo = GRDBActualWindowRepository(database: database)
+        let actual5hRepo = GRDBActualWindow5hRepository(database: database)
+        let actual7dRepo = GRDBActualWindow7dRepository(database: database)
         let cmdRepo = GRDBCommandRunRepository(database: database)
         let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
@@ -75,13 +76,16 @@ struct HelperMain {
 
         let usageFetcher = UsageFetcher(
             persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
-            upsertActualWindow: { window, tolerance in
-                try await actualRepo.upsertByEndAt(window, tolerance: tolerance)
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepo.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
         let driver = HelperSchedulerDriver(
             scheduledRepo: scheduledRepo,
-            actualRepo: actualRepo,
+            actual5hRepo: actual5hRepo,
             runner: runner,
             resolver: resolver,
             settingsRepo: settingsRepo,
@@ -161,8 +165,11 @@ actor HelperUsageRefresher {
                 snapshot = try await CodexUsageCollector(executableURL: cliURL).collect()
             }
             try await fetcher.persistSnapshot(snapshot)
-            for window in try fetcher.derivedActualWindows(from: snapshot, now: now) {
-                try await fetcher.upsertActualWindow(window, UsageFetcher.dedupTolerance)
+            if let window = try fetcher.derived5h(from: snapshot, now: now) {
+                try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
+            }
+            if let window = try fetcher.derived7d(from: snapshot) {
+                try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
             }
         } catch {
             NSLog("C5hHelper: usage refresh failed for \(providerID.rawValue): \(error)")
@@ -172,7 +179,7 @@ actor HelperUsageRefresher {
 
 struct HelperSchedulerDriver: SchedulerDriver {
     let scheduledRepo: any ScheduledPromptRepository
-    let actualRepo: any ActualWindowRepository
+    let actual5hRepo: any ActualWindow5hRepository
     let runner: any CommandRunning
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
@@ -214,8 +221,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
     func resolveActualWindow(
         for providerID: ProviderID,
         commandRun: CommandRun
-    ) async throws -> ActualWindow? {
-        let actualRepo = actualRepo
+    ) async throws -> ActualWindow5h? {
+        let actual5hRepo = actual5hRepo
         let settingsRepo = settingsRepo
         let cliResolver = resolver
         let resolver = ActiveWindowResolver(
@@ -235,11 +242,11 @@ struct HelperSchedulerDriver: SchedulerDriver {
             },
             activeWindowFetch: { providerID, now in
                 let interval = DateInterval(start: now, duration: 1)
-                let windows = try await actualRepo.fetchWindows(for: interval)
+                let windows = try await actual5hRepo.fetchWindows(for: interval)
                 return windows.first { $0.providerID == providerID }
             },
             updateActualWindow: { window in
-                try await actualRepo.update(window)
+                try await actual5hRepo.update(window)
             }
         )
         return await resolver.resolveTriggeredWindow(
