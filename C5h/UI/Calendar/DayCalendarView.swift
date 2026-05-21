@@ -8,18 +8,31 @@ struct DayCalendarView: View {
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow) -> Void
 
+    private static let minPixelsPerMinute: CGFloat = 0.3
+
     var body: some View {
         GeometryReader { proxy in
             let providers = ProviderID.allCases
-            let columnWidth = max(
-                layout.providerMinWidth,
-                (proxy.size.width - 2 * layout.timeRulerWidth) / CGFloat(providers.count)
+            let usableHeight = max(
+                0,
+                proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom
             )
+            let fitPpm = usableHeight / (24 * 60)
+            let dynamicLayout: CalendarLayoutConfig = {
+                var l = layout
+                l.pixelsPerMinute = max(Self.minPixelsPerMinute, fitPpm)
+                return l
+            }()
+            let columnWidth = max(
+                dynamicLayout.providerMinWidth,
+                (proxy.size.width - 2 * dynamicLayout.timeRulerWidth) / CGFloat(providers.count)
+            )
+            let overflowsViewport = dynamicLayout.dayHeight > usableHeight
             ZStack(alignment: .topLeading) {
                 ScrollViewReader { scroller in
                     ScrollView {
                         HStack(alignment: .top, spacing: 0) {
-                            TimeRulerView(layout: layout)
+                            TimeRulerView(layout: dynamicLayout)
                                 .id("ruler")
                             ForEach(providers) { providerID in
                                 let cw = viewModel.windows(for: providerID)
@@ -29,26 +42,25 @@ struct DayCalendarView: View {
                                     actualWindows: cw.actual,
                                     date: viewModel.date,
                                     now: now,
-                                    layout: layout,
+                                    layout: dynamicLayout,
                                     columnWidth: columnWidth,
                                     onSelectPlanned: onSelectPlanned,
                                     onSelectActual: onSelectActual
                                 )
                             }
-                            TimeRulerView(layout: layout, labelAlignment: .leading)
+                            TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                         }
                     }
                     .onAppear {
-                        // Aim to position "now" ~200pt below the floating toolbar (which adds ~50pt
-                        // of top safe-area inset on macOS 26). yOffset is in pixels relative to the
-                        // top of the day; we convert to a 0–1 anchor fraction across the ruler.
-                        guard layout.dayHeight > 0 else { return }
+                        // Only auto-scroll to "now" when the day actually overflows the viewport;
+                        // when the whole day fits, start at midnight.
+                        guard overflowsViewport, dynamicLayout.dayHeight > 0 else { return }
                         let topInset = proxy.safeAreaInsets.top
                         let target = CalendarPositioning.yOffset(
                             for: now,
-                            pixelsPerMinute: layout.pixelsPerMinute
+                            pixelsPerMinute: dynamicLayout.pixelsPerMinute
                         ) - 200 - topInset
-                        scroller.scrollTo("ruler", anchor: UnitPoint(x: 0, y: max(0, target / layout.dayHeight)))
+                        scroller.scrollTo("ruler", anchor: UnitPoint(x: 0, y: max(0, target / dynamicLayout.dayHeight)))
                     }
                 }
 
@@ -58,7 +70,7 @@ struct DayCalendarView: View {
                             .frame(width: columnWidth)
                     }
                 }
-                .padding(.leading, layout.timeRulerWidth)
+                .padding(.leading, dynamicLayout.timeRulerWidth)
                 .padding(.top, 4)
                 .allowsHitTesting(false)
             }
