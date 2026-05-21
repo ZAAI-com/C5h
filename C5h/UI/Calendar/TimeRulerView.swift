@@ -25,13 +25,7 @@ struct TimeRulerView: View {
     }
 
     private func yOffset(for hour: Int) -> CGFloat {
-        // Keep the 00:00 and 24:00 labels inside the ruler frame; centre the rest on their line.
-        let lineY = CGFloat(hour) * 60 * layout.pixelsPerMinute
-        switch hour {
-        case 0: return lineY
-        case 24: return lineY - 14
-        default: return lineY - 6
-        }
+        CGFloat(hour) * 60 * layout.pixelsPerMinute - 6
     }
 
     private func label(for hour: Int) -> String {

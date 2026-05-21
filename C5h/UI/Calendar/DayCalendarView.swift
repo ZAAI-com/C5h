@@ -9,6 +9,7 @@ struct DayCalendarView: View {
     let onSelectActual: (ActualWindow) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
+    private static let gridVerticalPadding: CGFloat = 16
 
     var body: some View {
         GeometryReader { proxy in
@@ -17,7 +18,8 @@ struct DayCalendarView: View {
                 0,
                 proxy.size.height - proxy.safeAreaInsets.top - proxy.safeAreaInsets.bottom
             )
-            let fitPpm = usableHeight / (24 * 60)
+            let availableForGrid = max(0, usableHeight - 2 * Self.gridVerticalPadding)
+            let fitPpm = availableForGrid / (24 * 60)
             let dynamicLayout: CalendarLayoutConfig = {
                 var l = layout
                 l.pixelsPerMinute = max(Self.minPixelsPerMinute, fitPpm)
@@ -27,7 +29,7 @@ struct DayCalendarView: View {
                 dynamicLayout.providerMinWidth,
                 (proxy.size.width - 2 * dynamicLayout.timeRulerWidth) / CGFloat(providers.count)
             )
-            let overflowsViewport = dynamicLayout.dayHeight > usableHeight
+            let overflowsViewport = dynamicLayout.dayHeight + 2 * Self.gridVerticalPadding > usableHeight
             ZStack(alignment: .topLeading) {
                 ScrollViewReader { scroller in
                     ScrollView {
@@ -50,6 +52,8 @@ struct DayCalendarView: View {
                             }
                             TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                         }
+                        .padding(.vertical, Self.gridVerticalPadding)
+                        .background(.background)
                     }
                     .onAppear {
                         // Only auto-scroll to "now" when the day actually overflows the viewport;

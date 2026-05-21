@@ -52,6 +52,7 @@ struct ProviderColumnView: View {
             }
         }
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
+        .clipped()
     }
 
     private var background: some View {
