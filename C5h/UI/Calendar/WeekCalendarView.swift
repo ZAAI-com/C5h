@@ -7,6 +7,9 @@ struct WeekCalendarScreen: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: WeekCalendarViewModel?
     @State private var now: Date = .now
+    @State private var visibleProviders: Set<ProviderID> = Set(ProviderID.allCases)
+    @State private var showPlanned: Bool = true
+    @State private var showActual: Bool = true
 
     var body: some View {
         Group {
@@ -17,7 +20,7 @@ struct WeekCalendarScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .toolbar {
                         ToolbarItem(placement: .principal) {
-                            Text("Calendar")
+                            Text("Week")
                                 .font(.title3.weight(.semibold))
                                 .padding(.horizontal, C5hSpacing.sm)
                         }
@@ -57,7 +60,13 @@ struct WeekCalendarScreen: View {
 
     @ViewBuilder
     private func content(_ viewModel: WeekCalendarViewModel) -> some View {
-        WeekCalendarView(viewModel: viewModel, now: now)
+        WeekCalendarView(
+            viewModel: viewModel,
+            now: now,
+            visibleProviders: visibleProviders,
+            showPlanned: showPlanned,
+            showActual: showActual
+        )
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let err = viewModel.lastError {
                     Label(err, systemImage: "exclamationmark.triangle")
@@ -93,6 +102,33 @@ struct WeekCalendarScreen: View {
                     }
                     .padding(.horizontal, C5hSpacing.sm)
                 }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        ForEach(ProviderID.allCases) { provider in
+                            Toggle(provider.displayName, isOn: Binding(
+                                get: { visibleProviders.contains(provider) },
+                                set: { isOn in
+                                    if isOn { visibleProviders.insert(provider) }
+                                    else { visibleProviders.remove(provider) }
+                                }
+                            ))
+                        }
+                    } label: {
+                        Label("Providers", systemImage: "person.2")
+                    }
+                    .help("Show/hide providers")
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Toggle("Planned windows", isOn: $showPlanned)
+                        Toggle("Actual windows", isOn: $showActual)
+                    } label: {
+                        Label("Windows", systemImage: "rectangle.on.rectangle")
+                    }
+                    .help("Show/hide window types")
+                }
             }
     }
 }
@@ -100,24 +136,83 @@ struct WeekCalendarScreen: View {
 struct WeekCalendarView: View {
     let viewModel: WeekCalendarViewModel
     let now: Date
+    let visibleProviders: Set<ProviderID>
+    let showPlanned: Bool
+    let showActual: Bool
+
+    private static let minPixelsPerMinute: CGFloat = 0.3
+    private static let gridVerticalPadding: CGFloat = 16
+    private static let headerHeight: CGFloat = 44
+    private let baseLayout = CalendarLayoutConfig()
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerRow
-            Divider()
-            ForEach(ProviderID.allCases) { provider in
-                row(for: provider)
+        GeometryReader { proxy in
+            let usableHeight = max(
+                0,
+                proxy.size.height - proxy.safeAreaInsets.top - Self.headerHeight
+            )
+            let availableForGrid = max(0, usableHeight - 2 * Self.gridVerticalPadding)
+            let fitPpm = availableForGrid / (24 * 60)
+            let dynamicLayout: CalendarLayoutConfig = {
+                var l = baseLayout
+                l.pixelsPerMinute = max(Self.minPixelsPerMinute, fitPpm)
+                return l
+            }()
+            let columnWidth = max(
+                120,
+                (proxy.size.width - 2 * dynamicLayout.timeRulerWidth) / CGFloat(viewModel.days.count)
+            )
+
+            VStack(spacing: 0) {
+                headerRow(columnWidth: columnWidth, layout: dynamicLayout)
+                    .frame(height: Self.headerHeight)
                 Divider()
+                ScrollView {
+                    HStack(alignment: .top, spacing: 0) {
+                        TimeRulerView(layout: dynamicLayout)
+                        ForEach(viewModel.days, id: \.self) { day in
+                            WeekDayColumnView(
+                                day: day,
+                                planned: filteredPlanned(forDay: day),
+                                actual: filteredActual(forDay: day),
+                                histories: viewModel.usageHistories,
+                                now: now,
+                                layout: dynamicLayout,
+                                columnWidth: columnWidth,
+                                showPlanned: showPlanned,
+                                showActual: showActual
+                            )
+                        }
+                        TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
+                    }
+                    .padding(.vertical, Self.gridVerticalPadding)
+                    .background(.background)
+                }
             }
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
+        .background(.background, ignoresSafeAreaEdges: .all)
+    }
+
+    private func filteredPlanned(forDay day: Date) -> [PlannedWindow] {
+        guard showPlanned else { return [] }
+        let dayInterval = CalendarPositioning.dayInterval(for: day)
+        return viewModel.planned.filter {
+            visibleProviders.contains($0.providerID) && dayInterval.contains($0.startAt)
         }
     }
 
-    private var headerRow: some View {
+    private func filteredActual(forDay day: Date) -> [ActualWindow5h] {
+        guard showActual else { return [] }
+        let dayInterval = CalendarPositioning.dayInterval(for: day)
+        return viewModel.actual.filter {
+            visibleProviders.contains($0.providerID) && dayInterval.contains($0.startAt)
+        }
+    }
+
+    private func headerRow(columnWidth: CGFloat, layout: CalendarLayoutConfig) -> some View {
         HStack(spacing: 0) {
-            Text("Provider")
-                .font(C5hTypography.captionFont)
-                .frame(width: 110, alignment: .leading)
-                .padding(.horizontal, C5hSpacing.md)
+            Color.clear.frame(width: layout.timeRulerWidth)
             ForEach(viewModel.days, id: \.self) { day in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(day.formatted(.dateTime.weekday(.abbreviated)))
@@ -126,87 +221,136 @@ struct WeekCalendarView: View {
                     Text(day.formatted(.dateTime.day()))
                         .font(C5hTypography.bodyFont)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: columnWidth, alignment: .leading)
                 .padding(.horizontal, C5hSpacing.sm)
                 .padding(.vertical, 6)
-                // LEVEL 2 — "you are here" cue uses tinted glass for today's column.
                 .modifier(TodayHeaderBackground(isToday: Calendar.current.isDateInToday(day)))
             }
+            Color.clear.frame(width: layout.timeRulerWidth)
         }
     }
+}
 
-    private func row(for provider: ProviderID) -> some View {
-        HStack(spacing: 0) {
-            // LEVEL 2 — provider chip is a floating identity affordance; glass capsule.
-            HStack(spacing: 6) {
-                Circle().fill(brandColor(for: provider)).frame(width: 8, height: 8)
-                Text(provider.displayName).font(C5hTypography.captionFont)
-            }
-            .padding(.horizontal, C5hSpacing.sm)
-            .padding(.vertical, 4)
-            .glassEffect(C5hGlass.toolbar, in: .capsule)
-            .frame(width: 110, alignment: .leading)
-            .padding(.horizontal, C5hSpacing.md)
+private struct WeekDayColumnView: View {
+    let day: Date
+    let planned: [PlannedWindow]
+    let actual: [ActualWindow5h]
+    let histories: [ProviderID: UsageHistorySeries]
+    let now: Date
+    let layout: CalendarLayoutConfig
+    let columnWidth: CGFloat
+    let showPlanned: Bool
+    let showActual: Bool
 
-            ForEach(viewModel.days, id: \.self) { day in
-                cellFor(day: day, provider: provider)
-            }
-        }
-        .frame(minHeight: 80)
-    }
-
-    private func cellFor(day: Date, provider: ProviderID) -> some View {
-        let cw = viewModel.windows(forDay: day, providerID: provider)
-        let history = viewModel.history(for: provider)
-        // Compact layout pretends each row has a fixed height matching ~70px
-        // via this synthetic pixelsPerMinute. The block view uses `compact: true`,
-        // so density already collapses to corners + (optional) center.
-        let compactLayout: CalendarLayoutConfig = {
-            var l = CalendarLayoutConfig()
-            l.pixelsPerMinute = 70.0 / (5 * 60)
-            l.blockCornerRadius = 4
-            return l
-        }()
-        return GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: 4) {
-                    ForEach(cw.planned) { window in
-                        PlannedWindowBlockView(
-                            window: window,
-                            history: history,
-                            columnWidth: proxy.size.width - 8,
-                            layout: compactLayout,
-                            compact: true
-                        )
-                    }
-                    ForEach(cw.actual) { window in
-                        ActualWindowBlockView(
-                            window: window,
-                            history: history,
-                            columnWidth: proxy.size.width - 8,
-                            layout: compactLayout,
-                            compact: true
-                        )
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(4)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                if Calendar.current.isDateInToday(day) {
-                    let frac = CGFloat(CalendarPositioning.minutesSinceStartOfDay(now)) / (24.0 * 60.0)
-                    Rectangle()
-                        .fill(Color.red)
-                        .frame(height: 1)
-                        .offset(y: proxy.size.height * frac)
-                        .allowsHitTesting(false)
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            background
+            ForEach(planned) { window in
+                if let segment = visibleSegment(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds
+                ) {
+                    PlannedWindowBlockView(
+                        window: window,
+                        history: histories[window.providerID],
+                        now: now,
+                        columnWidth: halfColumnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd
+                    )
+                    .offset(
+                        x: providerXOffset(for: window.providerID),
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(1)
                 }
             }
+            ForEach(actual) { window in
+                if let segment = visibleSegment(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds
+                ) {
+                    ActualWindowBlockView(
+                        window: window,
+                        history: histories[window.providerID],
+                        now: now,
+                        columnWidth: halfColumnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd
+                    )
+                    .offset(
+                        x: actualXOffset(for: window.providerID),
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(2)
+                }
+            }
+            if Calendar.current.isDateInToday(day) {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(width: columnWidth, height: 1)
+                    .offset(y: yOffset(for: now))
+                    .allowsHitTesting(false)
+                    .zIndex(3)
+            }
+        }
+        .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
+        .clipped()
+    }
+
+    private var halfColumnWidth: CGFloat {
+        max(0, (columnWidth - 4) / 2)
+    }
+
+    /// Claude blocks render in the left half, Codex in the right half — keeps
+    /// both providers visible at the same time of day without overlap.
+    private func providerXOffset(for providerID: ProviderID) -> CGFloat {
+        switch providerID {
+        case .claude: return 2
+        case .codex: return 2 + halfColumnWidth
         }
     }
 
-    private func brandColor(for id: ProviderID) -> Color {
-        C5hColors.tintForProvider(id)
+    private func actualXOffset(for providerID: ProviderID) -> CGFloat {
+        // Right-justify actual blocks within each provider's half, matching
+        // the day view's convention where actual blocks sit on the right edge.
+        let baseX = providerXOffset(for: providerID)
+        let actualWidth = halfColumnWidth * layout.actualBlockWidthRatio
+        return baseX + (halfColumnWidth - actualWidth)
+    }
+
+    private var background: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(.background)
+            ForEach(0..<25, id: \.self) { hour in
+                Rectangle()
+                    .fill(C5hColors.fgTertiary.opacity(layout.hourLineOpacity))
+                    .frame(height: 1)
+                    .offset(y: min(
+                        layout.dayHeight - 1,
+                        CGFloat(hour) * 60 * layout.pixelsPerMinute
+                    ))
+            }
+        }
+    }
+
+    private func yOffset(for date: Date) -> CGFloat {
+        CalendarPositioning.yOffset(for: date, pixelsPerMinute: layout.pixelsPerMinute)
+    }
+
+    private func visibleSegment(
+        start: Date,
+        durationSeconds: Int
+    ) -> (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool)? {
+        let end = start.addingTimeInterval(TimeInterval(durationSeconds))
+        return CalendarPositioning.visibleSegment(
+            of: DateInterval(start: start, end: end),
+            on: day
+        )
     }
 }
 

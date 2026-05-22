@@ -16,7 +16,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .dashboard: "Dashboard"
         case .today: "Today"
         case .tomorrow: "Tomorrow"
-        case .calendar: "Calendar"
+        case .calendar: "Week"
         case .logs: "Logs"
         case .providers: "Providers"
         case .settings: "Settings"
