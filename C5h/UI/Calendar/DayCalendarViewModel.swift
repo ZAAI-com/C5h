@@ -11,7 +11,6 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var selection: CalendarSelection?
-    var editingExisting: PlannedWindow?
     var lastError: String?
 
     private let plannedRepository: any PlannedWindowRepository
@@ -141,49 +140,6 @@ final class DayCalendarViewModel {
 
     func goToNextDay() {
         date = Calendar.current.date(byAdding: .day, value: 1, to: date) ?? date
-    }
-
-    func presentEdit(for window: PlannedWindow) {
-        editingExisting = window
-    }
-
-    func save(draft: PlannedWindowDraft) async throws {
-        let window = draft.toPlannedWindow()
-        var original: PlannedWindow? = nil
-        do {
-            if let id = draft.existingID {
-                original = try await plannedRepository.fetch(id: id)
-                try await plannedRepository.update(window)
-                try await scheduledRepository.reschedulePendingPrompts(
-                    plannedWindowID: window.id,
-                    providerID: window.providerID,
-                    projectPath: window.projectPath,
-                    runAt: window.startAt
-                )
-            } else {
-                original = nil
-                try await plannedRepository.create(window)
-            }
-            if let prompt = draft.toScheduledPrompt(plannedWindow: window) {
-                try await scheduledRepository.create(prompt)
-            }
-            lastError = nil
-            await loadLocalWindows()
-        } catch {
-            if draft.existingID == nil {
-                try? await plannedRepository.delete(id: window.id)
-            } else if let original {
-                try? await plannedRepository.update(original)
-                try? await scheduledRepository.reschedulePendingPrompts(
-                    plannedWindowID: original.id,
-                    providerID: original.providerID,
-                    projectPath: original.projectPath,
-                    runAt: original.startAt
-                )
-            }
-            lastError = errorMessage(error)
-            throw error
-        }
     }
 
     func delete(id: UUID) async throws {

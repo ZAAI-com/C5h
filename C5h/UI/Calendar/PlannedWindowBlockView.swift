@@ -11,6 +11,7 @@ struct PlannedWindowBlockView: View {
     var clipsTop: Bool = false
     var clipsBottom: Bool = false
     var compact: Bool = false
+    var displayStart: Date? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -29,22 +30,26 @@ struct PlannedWindowBlockView: View {
         )
         let width = compact ? columnWidth : columnWidth * layout.plannedBlockWidthRatio
 
-        let startSevenD: Double? = window.startAt > now
+        let shownStart = displayStart ?? window.startAt
+        let shownEnd = shownStart.addingTimeInterval(TimeInterval(window.durationSeconds))
+        let startSevenD: Double? = shownStart > now
             ? nil
-            : history?.sevenDayPercent(at: window.startAt)?.value
-        let endSevenD: Double? = window.endAt > now
+            : history?.sevenDayPercent(at: shownStart)?.value
+        let endSevenD: Double? = shownEnd > now
             ? nil
-            : history?.sevenDayPercent(at: window.endAt)?.value
-        let latest5h = history?.latestFiveHourPoint()
+            : history?.sevenDayPercent(at: shownEnd)?.value
 
         ZStack {
             cornersOverlay(
+                shownStart: shownStart,
+                shownEnd: shownEnd,
                 startSevenD: startSevenD,
                 endSevenD: endSevenD,
                 density: density
             )
-            if density.showsCenter {
-                centerOverlay(latest5h: latest5h, density: density)
+            if density.showsCenter, density.showsDetailLine,
+               let path = window.projectPath, !path.isEmpty {
+                projectPathOverlay(path: path)
             }
         }
         .padding(compact ? 3 : 6)
@@ -55,25 +60,27 @@ struct PlannedWindowBlockView: View {
     }
 
     private func cornersOverlay(
+        shownStart: Date,
+        shownEnd: Date,
         startSevenD: Double?,
         endSevenD: Double?,
         density: BlockDensity
     ) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
-                cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
+                cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                 Spacer(minLength: 0)
                 if let v = startSevenD {
-                    cornerText(BlockFormatters.formatPercent(v), alignment: .trailing)
+                    cornerText("7d \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                 }
             }
             Spacer(minLength: 0)
             if density.showsBottomCorners {
                 HStack(alignment: .bottom) {
-                    cornerText(BlockFormatters.formatTime(window.endAt))
+                    cornerText(BlockFormatters.formatTime(shownEnd))
                     Spacer(minLength: 0)
                     if let v = endSevenD {
-                        cornerText(BlockFormatters.formatPercent(v), alignment: .trailing)
+                        cornerText("7d \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                     }
                 }
             }
@@ -81,31 +88,13 @@ struct PlannedWindowBlockView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func centerOverlay(
-        latest5h: (value: Double, asOf: Date)?,
-        density: BlockDensity
-    ) -> some View {
-        VStack(spacing: 1) {
-            if let p = latest5h {
-                Text("5h: \(BlockFormatters.formatPercent(p.value))")
-                    .font(.system(size: compact ? 9 : 10, weight: .semibold))
-                Text("@ \(BlockFormatters.formatTime(p.asOf))")
-                    .font(.system(size: compact ? 8 : 9))
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("—")
-                    .font(.system(size: compact ? 9 : 10))
-                    .foregroundStyle(.secondary)
-            }
-            if density.showsDetailLine, let path = window.projectPath, !path.isEmpty {
-                Text(path)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    private func projectPathOverlay(path: String) -> some View {
+        Text(path)
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func cornerText(

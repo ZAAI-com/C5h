@@ -15,17 +15,14 @@ enum CalendarSelection: Hashable, Identifiable {
 
 struct WindowInspectorView: View {
     let selection: CalendarSelection
-    let onEdit: ((PlannedWindow) -> Void)?
     let onDelete: ((UUID) -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     init(
         selection: CalendarSelection,
-        onEdit: ((PlannedWindow) -> Void)? = nil,
         onDelete: ((UUID) -> Void)? = nil
     ) {
         self.selection = selection
-        self.onEdit = onEdit
         self.onDelete = onDelete
     }
 
@@ -47,18 +44,13 @@ struct WindowInspectorView: View {
 
     @ViewBuilder
     private func actions(for window: PlannedWindow) -> some View {
-        HStack {
-            if let onDelete {
+        if let onDelete {
+            HStack {
                 Button(role: .destructive) { onDelete(window.id) } label: {
                     Label("Delete", systemImage: "trash")
                 }
                 .buttonStyle(.glass)
-            }
-            Spacer()
-            if let onEdit {
-                Button("Edit…") { onEdit(window) }
-                    .buttonStyle(.glassProminent)
-                    .keyboardShortcut(.defaultAction)
+                Spacer()
             }
         }
     }

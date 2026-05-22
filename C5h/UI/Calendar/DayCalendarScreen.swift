@@ -74,7 +74,6 @@ struct DayCalendarScreen: View {
 
     @ViewBuilder
     private func content(_ viewModel: DayCalendarViewModel) -> some View {
-        @Bindable var bound = viewModel
         DayCalendarView(
             viewModel: viewModel,
             layout: layout,
@@ -118,10 +117,6 @@ struct DayCalendarScreen: View {
             if let sel = viewModel.selection {
                 WindowInspectorView(
                     selection: sel,
-                    onEdit: { window in
-                        viewModel.selection = nil
-                        viewModel.presentEdit(for: window)
-                    },
                     onDelete: { id in
                         viewModel.selection = nil
                         Task { try? await viewModel.delete(id: id) }
@@ -131,15 +126,6 @@ struct DayCalendarScreen: View {
             } else {
                 EmptyView()
             }
-        }
-        .sheet(item: $bound.editingExisting) { editingWindow in
-            PlannedWindowEditorSheet(
-                editing: editingWindow,
-                defaultStart: viewModel.date.atHour(9),
-                allWindows: viewModel.planned,
-                onSave: { draft in try await viewModel.save(draft: draft) },
-                onDelete: { id in try await viewModel.delete(id: id) }
-            )
         }
     }
 
@@ -163,12 +149,6 @@ struct DayCalendarScreen: View {
             }
             .help("Toggle inspector")
         }
-    }
-}
-
-private extension Date {
-    func atHour(_ hour: Int) -> Date {
-        Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: self) ?? self
     }
 }
 
