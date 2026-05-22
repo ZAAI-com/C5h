@@ -101,17 +101,11 @@ struct DayCalendarView: View {
 
     @ViewBuilder
     private func nowLine(layout: CalendarLayoutConfig) -> some View {
-        ZStack(alignment: .leading) {
-            Rectangle()
-                .fill(Color.red)
-                .frame(height: 1)
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .offset(x: -4)
-        }
-        .padding(.leading, layout.timeRulerWidth)
-        .padding(.trailing, layout.timeRulerWidth)
+        Rectangle()
+            .fill(Color.red)
+            .frame(height: 1)
+            .padding(.leading, layout.timeRulerWidth)
+            .padding(.trailing, layout.timeRulerWidth)
     }
 
     private func providerHeader(providerID: ProviderID) -> some View {
