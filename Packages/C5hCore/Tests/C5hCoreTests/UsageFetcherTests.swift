@@ -28,6 +28,52 @@ struct UsageFetcherTests {
         #expect(weekly.usageSnapshotID == snapshot.id)
     }
 
+    @Test("Skips Codex 5h row when primary window is synthetic (no real window started)")
+    func skipsCodexSyntheticPrimaryWindow() throws {
+        // `codex app-server` returns `resetsAt = capturedAt + 18000` when no
+        // real 5h window has anchored. Treating that as an active window would
+        // produce a phantom row whose end slides with the clock on every poll.
+        let capturedAt = Date(timeIntervalSince1970: 1_779_408_036)
+        let syntheticResetsAt = capturedAt.addingTimeInterval(18_000).timeIntervalSince1970
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":1,"windowDurationMins":300,"resetsAt":\(Int(syntheticResetsAt))},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1779838110},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(from: snapshot, now: capturedAt)
+        #expect(derived5h == nil)
+
+        // Weekly (secondary) is always anchored — should still derive.
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+        #expect(weekly.usedPercentage == 30)
+    }
+
+    @Test("Derives Codex 5h row when primary window is anchored")
+    func derivesCodexAnchoredPrimaryWindow() throws {
+        // A real anchored window: resetsAt is fixed at first-usage + 5h, so
+        // `resetsAt - capturedAt` is < primaryDuration as the window ages.
+        let capturedAt = Date(timeIntervalSince1970: 1_779_438_857)
+        let anchoredResetsAt = 1_779_455_535 // 16678s ahead of capturedAt
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":1,"windowDurationMins":300,"resetsAt":\(anchoredResetsAt)},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1779838110},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let derived5h = try #require(try fetcher.derived5h(from: snapshot, now: capturedAt))
+        #expect(derived5h.durationSeconds == 5 * 3600)
+        #expect(derived5h.endAt.timeIntervalSince1970 == TimeInterval(anchoredResetsAt))
+    }
+
     @Test("Derives Codex secondary row as weekly data")
     func derivesCodexWeeklyWindow() throws {
         let snapshot = UsageSnapshot(

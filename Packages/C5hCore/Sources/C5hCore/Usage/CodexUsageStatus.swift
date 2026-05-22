@@ -45,6 +45,19 @@ public struct CodexUsageStatus: Sendable, Hashable {
         primary.resetsAt.addingTimeInterval(-TimeInterval(primaryDurationSeconds))
     }
 
+    /// True when Codex appears to be reporting a real, anchored 5h window;
+    /// false when the reported `resetsAt` is the synthetic "fresh slot" value
+    /// (`eventTimestamp + primaryDuration`) that Codex returns before any usage
+    /// has anchored the current window. Without this gate every poll would
+    /// write a phantom `ActualWindow5h` whose end slides with the clock.
+    public var hasActivePrimaryWindow: Bool {
+        let expectedSyntheticReset = eventTimestamp.addingTimeInterval(
+            TimeInterval(primaryDurationSeconds)
+        )
+        let drift = abs(primary.resetsAt.timeIntervalSince(expectedSyntheticReset))
+        return drift >= 60
+    }
+
     public func normalizedUsage(
         providerID: ProviderID = .codex,
         capturedAt: Date = .now
