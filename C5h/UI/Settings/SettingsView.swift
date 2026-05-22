@@ -40,6 +40,8 @@ struct SettingsView: View {
                         .buttonStyle(.glass)
                     Button("Unregister") { Task { await registration.unregister() } }
                         .buttonStyle(.glass)
+                    Button("Open Login Items…") { openLoginItemsSettings() }
+                        .buttonStyle(.glass)
                 }
             }
             Section("Heartbeat") {
@@ -164,6 +166,12 @@ struct SettingsView: View {
 
     private func openFolder(_ url: URL) {
         NSWorkspace.shared.open(url)
+    }
+
+    private func openLoginItemsSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func revealInFinder(_ url: URL) {
