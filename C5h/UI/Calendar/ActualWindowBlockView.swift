@@ -64,7 +64,7 @@ struct ActualWindowBlockView: View {
                 cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
                 Spacer(minLength: 0)
                 if let v = startSevenD {
-                    cornerText(BlockFormatters.formatPercent(v), alignment: .trailing)
+                    cornerText("7d \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                 }
             }
             Spacer(minLength: 0)
@@ -73,7 +73,7 @@ struct ActualWindowBlockView: View {
                     cornerText(BlockFormatters.formatTime(window.endAt))
                     Spacer(minLength: 0)
                     if let v = endSevenD {
-                        cornerText(BlockFormatters.formatPercent(v), alignment: .trailing)
+                        cornerText("7d \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                     }
                 }
             }
