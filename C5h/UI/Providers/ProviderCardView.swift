@@ -12,9 +12,12 @@ struct ProviderCardView: View {
     let usageCheck: ProviderUsageCheck?
     let isStatusLoading: Bool
     let isUsageLoading: Bool
+    let isPromptFiring: Bool
+    let promptFireDetail: String?
     let onVersion: () -> Void
     let onAuthStatus: () -> Void
     let onUsage: () -> Void
+    let onFirePrompt: () -> Void
     let onSetPath: (String) -> Void
     let onClearPath: () -> Void
     let onSetWakePrompt: (String) -> Void
@@ -174,7 +177,9 @@ struct ProviderCardView: View {
                 title: "Prompt template",
                 preview: PromptCommand.displayCommand(providerID: id, prompt: promptPreview),
                 systemImage: "text.bubble",
-                detail: "preview only"
+                detail: promptFireDetail,
+                isRunning: isPromptFiring,
+                action: onFirePrompt
             )
         }
     }

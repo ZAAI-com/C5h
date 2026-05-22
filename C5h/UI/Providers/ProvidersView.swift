@@ -89,9 +89,12 @@ struct ProvidersView: View {
             usageCheck: viewModel.usageChecks[id],
             isStatusLoading: appEnv.providerStatusLoading.contains(id),
             isUsageLoading: viewModel.loadingUsageProviders.contains(id),
+            isPromptFiring: appEnv.providerPromptFiring.contains(id),
+            promptFireDetail: promptFireDetail(for: id),
             onVersion: { Task { await appEnv.runProviderVersionStatus(id: id) } },
             onAuthStatus: { Task { await appEnv.runProviderAuthStatus(id: id) } },
             onUsage: { Task { await viewModel.runUsage(id: id) } },
+            onFirePrompt: { Task { await appEnv.runProviderPromptCommand(id: id) } },
             onSetPath: { newPath in
                 Task { await viewModel.setCLIPath(id: id, newPath.isEmpty ? nil : newPath) }
             },
@@ -100,5 +103,15 @@ struct ProvidersView: View {
                 Task { await viewModel.setWakePrompt(id: id, newValue) }
             }
         )
+    }
+
+    private func promptFireDetail(for id: ProviderID) -> String? {
+        if let err = appEnv.providerPromptLastError[id], !err.isEmpty {
+            return "failed: \(err)"
+        }
+        if let at = appEnv.providerPromptLastFiredAt[id] {
+            return "fired \(at.formatted(date: .omitted, time: .standard))"
+        }
+        return nil
     }
 }
