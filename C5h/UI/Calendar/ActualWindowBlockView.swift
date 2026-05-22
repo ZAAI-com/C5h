@@ -41,7 +41,8 @@ struct ActualWindowBlockView: View {
             cornersOverlay(
                 startSevenD: startSevenD,
                 endSevenD: endSevenD,
-                density: density
+                density: density,
+                isNarrow: width < 130
             )
             if density.showsCenter {
                 centerOverlay(latest5h: latest5h, density: density)
@@ -57,23 +58,44 @@ struct ActualWindowBlockView: View {
     private func cornersOverlay(
         startSevenD: Double?,
         endSevenD: Double?,
-        density: BlockDensity
+        density: BlockDensity,
+        isNarrow: Bool
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top) {
-                cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
-                Spacer(minLength: 0)
-                if let v = startSevenD {
-                    cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+            if isNarrow {
+                VStack(alignment: .leading, spacing: 0) {
+                    cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
+                    if let v = startSevenD {
+                        cornerText("7d limit \(BlockFormatters.formatPercent(v))")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top) {
+                    cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
+                    Spacer(minLength: 0)
+                    if let v = startSevenD {
+                        cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+                    }
                 }
             }
             Spacer(minLength: 0)
             if density.showsBottomCorners {
-                HStack(alignment: .bottom) {
-                    cornerText(BlockFormatters.formatTime(window.endAt))
-                    Spacer(minLength: 0)
-                    if let v = endSevenD {
-                        cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+                if isNarrow {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let v = endSevenD {
+                            cornerText("7d limit \(BlockFormatters.formatPercent(v))")
+                        }
+                        cornerText(BlockFormatters.formatTime(window.endAt))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(alignment: .bottom) {
+                        cornerText(BlockFormatters.formatTime(window.endAt))
+                        Spacer(minLength: 0)
+                        if let v = endSevenD {
+                            cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+                        }
                     }
                 }
             }
