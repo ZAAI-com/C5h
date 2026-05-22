@@ -34,29 +34,39 @@ struct DayCalendarView: View {
             ZStack(alignment: .topLeading) {
                 ScrollViewReader { scroller in
                     ScrollView {
-                        HStack(alignment: .top, spacing: 0) {
-                            TimeRulerView(layout: dynamicLayout)
-                                .id("ruler")
-                            ForEach(providers) { providerID in
-                                let cw = viewModel.windows(for: providerID)
-                                ProviderColumnView(
-                                    providerID: providerID,
-                                    plannedWindows: cw.planned,
-                                    actualWindows: cw.actual,
-                                    history: viewModel.history(for: providerID),
-                                    date: viewModel.date,
-                                    now: now,
-                                    layout: dynamicLayout,
-                                    columnWidth: columnWidth,
-                                    onSelectPlanned: onSelectPlanned,
-                                    onSelectActual: onSelectActual,
-                                    onMovePlanned: onMovePlanned,
-                                    onQuickPlan: { start in
-                                        Task { await viewModel.quickPlan(provider: providerID, startAt: start) }
-                                    }
-                                )
+                        ZStack(alignment: .topLeading) {
+                            HStack(alignment: .top, spacing: 0) {
+                                TimeRulerView(layout: dynamicLayout)
+                                    .id("ruler")
+                                ForEach(providers) { providerID in
+                                    let cw = viewModel.windows(for: providerID)
+                                    ProviderColumnView(
+                                        providerID: providerID,
+                                        plannedWindows: cw.planned,
+                                        actualWindows: cw.actual,
+                                        history: viewModel.history(for: providerID),
+                                        date: viewModel.date,
+                                        now: now,
+                                        layout: dynamicLayout,
+                                        columnWidth: columnWidth,
+                                        onSelectPlanned: onSelectPlanned,
+                                        onSelectActual: onSelectActual,
+                                        onMovePlanned: onMovePlanned,
+                                        onQuickPlan: { start in
+                                            Task { await viewModel.quickPlan(provider: providerID, startAt: start) }
+                                        }
+                                    )
+                                }
+                                TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                             }
-                            TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
+                            if Calendar.current.isDate(viewModel.date, inSameDayAs: now) {
+                                nowLine(layout: dynamicLayout)
+                                    .offset(y: CalendarPositioning.yOffset(
+                                        for: now,
+                                        pixelsPerMinute: dynamicLayout.pixelsPerMinute
+                                    ))
+                                    .allowsHitTesting(false)
+                            }
                         }
                         .padding(.vertical, Self.gridVerticalPadding)
                         .background(.background)
@@ -87,6 +97,21 @@ struct DayCalendarView: View {
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .background(.background, ignoresSafeAreaEdges: .all)
+    }
+
+    @ViewBuilder
+    private func nowLine(layout: CalendarLayoutConfig) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle()
+                .fill(Color.red)
+                .frame(height: 1)
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .offset(x: -4)
+        }
+        .padding(.leading, layout.timeRulerWidth)
+        .padding(.trailing, layout.timeRulerWidth)
     }
 
     private func providerHeader(providerID: ProviderID) -> some View {

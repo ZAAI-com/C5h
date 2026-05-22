@@ -6,6 +6,7 @@ struct WeekCalendarScreen: View {
     var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: WeekCalendarViewModel?
+    @State private var now: Date = .now
 
     var body: some View {
         Group {
@@ -37,6 +38,11 @@ struct WeekCalendarScreen: View {
                 await vm.reload()
             }
         }
+        .task {
+            for await tick in Timer.publish(every: 30, on: .main, in: .common).autoconnect().values {
+                now = tick
+            }
+        }
         .onAppear {
             if let viewModel {
                 Task { await viewModel.reload() }
@@ -51,7 +57,7 @@ struct WeekCalendarScreen: View {
 
     @ViewBuilder
     private func content(_ viewModel: WeekCalendarViewModel) -> some View {
-        WeekCalendarView(viewModel: viewModel)
+        WeekCalendarView(viewModel: viewModel, now: now)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let err = viewModel.lastError {
                     Label(err, systemImage: "exclamationmark.triangle")
@@ -93,6 +99,7 @@ struct WeekCalendarScreen: View {
 
 struct WeekCalendarView: View {
     let viewModel: WeekCalendarViewModel
+    let now: Date
 
     var body: some View {
         VStack(spacing: 0) {
@@ -161,29 +168,40 @@ struct WeekCalendarView: View {
             return l
         }()
         return GeometryReader { proxy in
-            VStack(spacing: 4) {
-                ForEach(cw.planned) { window in
-                    PlannedWindowBlockView(
-                        window: window,
-                        history: history,
-                        columnWidth: proxy.size.width - 8,
-                        layout: compactLayout,
-                        compact: true
-                    )
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 4) {
+                    ForEach(cw.planned) { window in
+                        PlannedWindowBlockView(
+                            window: window,
+                            history: history,
+                            columnWidth: proxy.size.width - 8,
+                            layout: compactLayout,
+                            compact: true
+                        )
+                    }
+                    ForEach(cw.actual) { window in
+                        ActualWindowBlockView(
+                            window: window,
+                            history: history,
+                            columnWidth: proxy.size.width - 8,
+                            layout: compactLayout,
+                            compact: true
+                        )
+                    }
+                    Spacer(minLength: 0)
                 }
-                ForEach(cw.actual) { window in
-                    ActualWindowBlockView(
-                        window: window,
-                        history: history,
-                        columnWidth: proxy.size.width - 8,
-                        layout: compactLayout,
-                        compact: true
-                    )
+                .padding(4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                if Calendar.current.isDateInToday(day) {
+                    let frac = CGFloat(CalendarPositioning.minutesSinceStartOfDay(now)) / (24.0 * 60.0)
+                    Rectangle()
+                        .fill(Color.red)
+                        .frame(height: 1)
+                        .offset(y: proxy.size.height * frac)
+                        .allowsHitTesting(false)
                 }
-                Spacer(minLength: 0)
             }
-            .padding(4)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
