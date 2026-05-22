@@ -41,8 +41,6 @@ struct MainWindowView: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     SidebarView(selection: $selectedTab)
                         .toolbar(removing: .sidebarToggle)
-                } detail: {
-                    detail
                         .toolbar {
                             if let help = selectedTab.navbarReloadHelp {
                                 ToolbarItem(placement: .navigation) {
@@ -53,6 +51,17 @@ struct MainWindowView: View {
                                     }
                                     .help(help)
                                 }
+                            }
+                        }
+                } detail: {
+                    detail
+                        .toolbar {
+                            ToolbarItem(placement: .navigation) {
+                                Text("<C5h>")
+                                    .font(C5hTypography.logoFont)
+                                    .padding(.horizontal, C5hSpacing.sm)
+                                    .padding(.vertical, 4)
+                                    .glassEffect(C5hGlass.toolbar, in: .capsule)
                             }
                         }
                 }
