@@ -34,6 +34,9 @@ final class AppEnvironment {
     private(set) var schedulerTicker: SchedulerTicker?
     private(set) var providerStatuses: [ProviderID: ProviderStatus] = [:]
     private(set) var providerStatusLoading: Set<ProviderID> = []
+    private(set) var providerPromptFiring: Set<ProviderID> = []
+    private(set) var providerPromptLastError: [ProviderID: String] = [:]
+    private(set) var providerPromptLastFiredAt: [ProviderID: Date] = [:]
 
     init() {
         Task { await self.bootstrap() }
@@ -79,8 +82,20 @@ final class AppEnvironment {
             )
             self.commandRunner = runner
             let registry = ProviderRegistry(adapters: [
-                ClaudeProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo),
-                CodexProviderAdapter(runner: runner, resolver: resolver, appSettings: settingsRepo)
+                ClaudeProviderAdapter(
+                    runner: runner,
+                    resolver: resolver,
+                    appSettings: settingsRepo,
+                    cmdRepo: cmdRepo,
+                    logWriter: logWriter
+                ),
+                CodexProviderAdapter(
+                    runner: runner,
+                    resolver: resolver,
+                    appSettings: settingsRepo,
+                    cmdRepo: cmdRepo,
+                    logWriter: logWriter
+                )
             ])
             self.providerRegistry = registry
 
@@ -183,6 +198,32 @@ final class AppEnvironment {
             providerStatuses[id] = status
             return status
         }
+    }
+
+    func runProviderPromptCommand(id: ProviderID) async {
+        providerPromptFiring.insert(id)
+        defer { providerPromptFiring.remove(id) }
+
+        do {
+            let prompt = await currentWakePrompt(for: id)
+            let adapter = try providerAdapter(for: id)
+            let input = TriggerPromptInput(prompt: prompt, projectPath: nil, mode: .newSession)
+            _ = try await adapter.runPromptCommand(input)
+            providerPromptLastFiredAt[id] = .now
+            providerPromptLastError[id] = nil
+        } catch {
+            providerPromptLastError[id] = String(describing: error)
+        }
+    }
+
+    private func currentWakePrompt(for id: ProviderID) async -> String {
+        guard let appSettingsRepository else {
+            return AppSettingsKeys.defaultWakePromptFallback
+        }
+        let key = AppSettingsKeys.defaultWakePrompt(for: id)
+        let stored = (try? await appSettingsRepository.get(key, as: String.self)) ?? nil
+        let trimmed = (stored ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? AppSettingsKeys.defaultWakePromptFallback : trimmed
     }
 
     private func providerAdapter(for id: ProviderID) throws -> any ProviderAdapter {

@@ -89,7 +89,9 @@ struct HelperMain {
             runner: runner,
             resolver: resolver,
             settingsRepo: settingsRepo,
-            usageFetcher: usageFetcher
+            usageFetcher: usageFetcher,
+            cmdRepo: cmdRepo,
+            logWriter: logWriter
         )
         let scheduler = SchedulerService(driver: driver)
 
@@ -97,6 +99,8 @@ struct HelperMain {
             resolver: resolver,
             settingsRepo: settingsRepo,
             fetcher: usageFetcher,
+            cmdRepo: cmdRepo,
+            logWriter: logWriter,
             intervalSeconds: 5 * 60
         )
 
@@ -119,6 +123,8 @@ actor HelperUsageRefresher {
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
     let fetcher: UsageFetcher
+    let cmdRepo: any CommandRunRepository
+    let logWriter: any FileLogWriting
     let intervalSeconds: TimeInterval
 
     private var lastRefreshAt: Date?
@@ -127,11 +133,15 @@ actor HelperUsageRefresher {
         resolver: any CLIPathResolving,
         settingsRepo: any AppSettingsRepository,
         fetcher: UsageFetcher,
+        cmdRepo: any CommandRunRepository,
+        logWriter: any FileLogWriting,
         intervalSeconds: TimeInterval
     ) {
         self.resolver = resolver
         self.settingsRepo = settingsRepo
         self.fetcher = fetcher
+        self.cmdRepo = cmdRepo
+        self.logWriter = logWriter
         self.intervalSeconds = intervalSeconds
     }
 
@@ -158,7 +168,13 @@ actor HelperUsageRefresher {
                 return
             }
             let snapshot: UsageSnapshot
-            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect()
+            let repo = cmdRepo
+            let writer = logWriter
+            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                logWriter: writer,
+                onStart: { run in try await repo.create(run) },
+                onComplete: { run in try await repo.update(run) }
+            )
             try await fetcher.persistSnapshot(snapshot)
             if let window = try fetcher.derived5h(from: snapshot, now: now) {
                 try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
@@ -179,6 +195,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
     let usageFetcher: UsageFetcher
+    let cmdRepo: any CommandRunRepository
+    let logWriter: any FileLogWriting
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
         try await scheduledRepo.fetchDuePrompts(now: now)
@@ -220,6 +238,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
         let actual5hRepo = actual5hRepo
         let settingsRepo = settingsRepo
         let cliResolver = resolver
+        let cmdRepo = cmdRepo
+        let logWriter = logWriter
         let resolver = ActiveWindowResolver(
             fetcher: usageFetcher,
             snapshotFetch: { providerID in
@@ -228,7 +248,11 @@ struct HelperSchedulerDriver: SchedulerDriver {
                     settingsRepo: settingsRepo,
                     resolver: cliResolver
                 )
-                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect()
+                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                    logWriter: logWriter,
+                    onStart: { run in try await cmdRepo.create(run) },
+                    onComplete: { run in try await cmdRepo.update(run) }
+                )
             },
             activeWindowFetch: { providerID, now in
                 let interval = DateInterval(start: now, duration: 1)

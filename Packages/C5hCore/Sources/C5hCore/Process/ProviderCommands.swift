@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct VersionCommand: Sendable {
     public var providerID: ProviderID
@@ -118,6 +119,8 @@ public struct AuthStatusCommand: Sendable {
 }
 
 public struct UsageCommand: Sendable {
+    public typealias OnEvent = @Sendable (CommandRun) async throws -> Void
+
     public var providerID: ProviderID
     public var executableURL: URL
     public var environment: [String: String]
@@ -158,21 +161,82 @@ public struct UsageCommand: Sendable {
         }
     }
 
-    public func collect() async throws -> UsageSnapshot {
+    public func collect(
+        logWriter: (any FileLogWriting)? = nil,
+        onStart: OnEvent? = nil,
+        onComplete: OnEvent? = nil
+    ) async throws -> UsageSnapshot {
+        let runID = UUID()
+        let startedAt = Date()
+        let logPaths = try? logWriter?.makeLogPaths(for: runID, at: startedAt)
+
+        var run = CommandRun(
+            id: runID,
+            providerID: providerID,
+            commandName: .usageCommand,
+            command: executableURL.path,
+            argumentsJSON: Self.argumentsJSON(for: providerID),
+            startedAt: startedAt,
+            status: .running,
+            stdoutPath: logPaths?.stdoutURL.path,
+            stderrPath: logPaths?.stderrURL.path,
+            ownerPID: getpid()
+        )
+        if let onStart { try await onStart(run) }
+
+        do {
+            let snapshot: UsageSnapshot
+            switch providerID {
+            case .claude:
+                snapshot = try await ClaudeUsageCollector(
+                    executableURL: executableURL,
+                    environment: environment,
+                    timeoutSeconds: timeoutSeconds
+                ).collect()
+            case .codex:
+                snapshot = try await CodexUsageCollector(
+                    executableURL: executableURL,
+                    environment: environment,
+                    timeoutSeconds: timeoutSeconds
+                ).collect()
+            }
+            run.endedAt = Date()
+            run.status = .succeeded
+            run.exitCode = 0
+            if let url = logPaths?.stdoutURL {
+                try? snapshot.normalizedJSON.data(using: .utf8)?.write(to: url)
+            }
+            if let onComplete { try await onComplete(run) }
+            return snapshot
+        } catch {
+            run.endedAt = Date()
+            if case C5hError.processTimedOut = error {
+                run.status = .timedOut
+            } else {
+                run.status = .failed
+            }
+            run.errorMessage = String(describing: error)
+            if let url = logPaths?.stderrURL {
+                try? String(describing: error).data(using: .utf8)?.write(to: url)
+            }
+            if let onComplete { try await onComplete(run) }
+            throw error
+        }
+    }
+
+    private static func argumentsJSON(for providerID: ProviderID) -> String {
+        let args: [String]
         switch providerID {
         case .claude:
-            try await ClaudeUsageCollector(
-                executableURL: executableURL,
-                environment: environment,
-                timeoutSeconds: timeoutSeconds
-            ).collect()
+            args = ["--settings", "<C5h statusLine usage hook>"]
         case .codex:
-            try await CodexUsageCollector(
-                executableURL: executableURL,
-                environment: environment,
-                timeoutSeconds: timeoutSeconds
-            ).collect()
+            args = ["app-server", "->", CodexAppServerClient.methodRateLimits]
         }
+        if let data = try? JSONEncoder().encode(args),
+           let string = String(data: data, encoding: .utf8) {
+            return string
+        }
+        return "[]"
     }
 }
 
