@@ -266,7 +266,7 @@ public struct PromptCommand: Sendable {
         case .claude:
             ["-p", input.prompt]
         case .codex:
-            ["exec", input.prompt]
+            ["exec", "--skip-git-repo-check", input.prompt]
         }
     }
 
@@ -291,7 +291,7 @@ public struct PromptCommand: Sendable {
         case .claude:
             ProviderCommandPreview.format(providerID.executableName, arguments: ["-p", prompt])
         case .codex:
-            ProviderCommandPreview.format(providerID.executableName, arguments: ["exec", prompt])
+            ProviderCommandPreview.format(providerID.executableName, arguments: ["exec", "--skip-git-repo-check", prompt])
         }
     }
 }
