@@ -43,6 +43,7 @@ struct DayCalendarView: View {
                                     providerID: providerID,
                                     plannedWindows: cw.planned,
                                     actualWindows: cw.actual,
+                                    history: viewModel.history(for: providerID),
                                     date: viewModel.date,
                                     now: now,
                                     layout: dynamicLayout,

@@ -30,7 +30,8 @@ struct WeekCalendarScreen: View {
                 let vm = WeekCalendarViewModel(
                     weekStart: .now,
                     plannedRepository: plannedRepo,
-                    actual5hRepository: actual5hRepo
+                    actual5hRepository: actual5hRepo,
+                    usageSnapshotRepository: appEnv.usageSnapshotRepository
                 )
                 viewModel = vm
                 await vm.reload()
@@ -149,54 +150,41 @@ struct WeekCalendarView: View {
 
     private func cellFor(day: Date, provider: ProviderID) -> some View {
         let cw = viewModel.windows(forDay: day, providerID: provider)
-        return VStack(spacing: 4) {
-            ForEach(cw.planned) { window in
-                compactBlock(
-                    label: timeLabel(window.startAt),
-                    color: brandColor(for: provider).opacity(0.22),
-                    border: brandColor(for: provider)
-                )
-            }
-            ForEach(cw.actual) { window in
-                compactBlock(
-                    label: timeLabel(window.startAt),
-                    color: brandColor(for: provider),
-                    border: nil,
-                    foreground: .white
-                )
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private func compactBlock(
-        label: String,
-        color: Color,
-        border: Color?,
-        foreground: Color = .primary
-    ) -> some View {
-        Text(label)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(color)
-            )
-            .overlay {
-                if let border {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(border, lineWidth: 1)
+        let history = viewModel.history(for: provider)
+        // Compact layout pretends each row has a fixed height matching ~70px
+        // via this synthetic pixelsPerMinute. The block view uses `compact: true`,
+        // so density already collapses to corners + (optional) center.
+        let compactLayout: CalendarLayoutConfig = {
+            var l = CalendarLayoutConfig()
+            l.pixelsPerMinute = 70.0 / (5 * 60)
+            l.blockCornerRadius = 4
+            return l
+        }()
+        return GeometryReader { proxy in
+            VStack(spacing: 4) {
+                ForEach(cw.planned) { window in
+                    PlannedWindowBlockView(
+                        window: window,
+                        history: history,
+                        columnWidth: proxy.size.width - 8,
+                        layout: compactLayout,
+                        compact: true
+                    )
                 }
+                ForEach(cw.actual) { window in
+                    ActualWindowBlockView(
+                        window: window,
+                        history: history,
+                        columnWidth: proxy.size.width - 8,
+                        layout: compactLayout,
+                        compact: true
+                    )
+                }
+                Spacer(minLength: 0)
             }
-    }
-
-    private func timeLabel(_ date: Date) -> String {
-        date.formatted(date: .omitted, time: .shortened)
+            .padding(4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 
     private func brandColor(for id: ProviderID) -> Color {

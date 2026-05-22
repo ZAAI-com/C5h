@@ -5,6 +5,7 @@ struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
     let actualWindows: [ActualWindow5h]
+    let history: UsageHistorySeries?
     let date: Date
     let now: Date
     let layout: CalendarLayoutConfig
@@ -34,6 +35,8 @@ struct ProviderColumnView: View {
                     } label: {
                         PlannedWindowBlockView(
                             window: window,
+                            history: history,
+                            now: now,
                             columnWidth: columnWidth,
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,
@@ -93,6 +96,8 @@ struct ProviderColumnView: View {
                     } label: {
                         ActualWindowBlockView(
                             window: window,
+                            history: history,
+                            now: now,
                             columnWidth: columnWidth,
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,

@@ -9,6 +9,7 @@ final class DayCalendarViewModel {
     var date: Date
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow5h] = []
+    var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var selection: CalendarSelection?
     var editingExisting: PlannedWindow?
     var lastError: String?
@@ -58,6 +59,35 @@ final class DayCalendarViewModel {
         } catch {
             self.lastError = errorMessage(error)
         }
+        await loadUsageHistories()
+    }
+
+    private func loadUsageHistories() async {
+        guard let usageRepo = usageSnapshotRepository else { return }
+        let lookback = DateInterval(
+            start: date.addingTimeInterval(-7 * 24 * 60 * 60),
+            end: date.addingTimeInterval(24 * 60 * 60)
+        )
+        var built: [ProviderID: UsageHistorySeries] = [:]
+        for providerID in ProviderID.allCases {
+            do {
+                let snapshots = try await usageRepo.fetchInRange(
+                    providerID: providerID,
+                    interval: lookback
+                )
+                built[providerID] = UsageHistorySeries(
+                    providerID: providerID,
+                    snapshots: snapshots
+                )
+            } catch {
+                NSLog("DayCalendarViewModel: usage history load failed for \(providerID.rawValue): \(error)")
+            }
+        }
+        self.usageHistories = built
+    }
+
+    func history(for providerID: ProviderID) -> UsageHistorySeries? {
+        usageHistories[providerID]
     }
 
     /// Best-effort: fetch fresh usage from each provider so stale

@@ -28,6 +28,7 @@
 		0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000006 /* PlannedWindowBlockView.swift */; };
 		0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000007 /* ActualWindowBlockView.swift */; };
 		0A0012020301000000000008 /* WindowInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000008 /* WindowInspectorView.swift */; };
+		0A0012020301000000000014 /* BlockFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000014 /* BlockFormatters.swift */; };
 		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
 		0A0012020301000000000012 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000012 /* WeekCalendarView.swift */; };
 		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
@@ -95,6 +96,7 @@
 		0A0011020301000000000003 /* TimeRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeRulerView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000005 /* ProviderColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColumnView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000006 /* PlannedWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowBlockView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000014 /* BlockFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockFormatters.swift; sourceTree = "<group>"; };
 		0A0011020301000000000007 /* ActualWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualWindowBlockView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000008 /* WindowInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInspectorView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
@@ -291,6 +293,7 @@
 				0A0011020301000000000005 /* ProviderColumnView.swift */,
 				0A0011020301000000000006 /* PlannedWindowBlockView.swift */,
 				0A0011020301000000000007 /* ActualWindowBlockView.swift */,
+				0A0011020301000000000014 /* BlockFormatters.swift */,
 				0A0011020301000000000008 /* WindowInspectorView.swift */,
 				0A0011020301000000000009 /* CalendarLayoutConfig.swift */,
 				0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */,
@@ -520,6 +523,7 @@
 				0A0012020301000000000005 /* ProviderColumnView.swift in Sources */,
 				0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */,
 				0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */,
+				0A0012020301000000000014 /* BlockFormatters.swift in Sources */,
 				0A0012020301000000000008 /* WindowInspectorView.swift in Sources */,
 				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
 				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
