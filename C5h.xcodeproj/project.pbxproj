@@ -382,6 +382,7 @@
 				0A0030010000000000000001 /* Sources */,
 				0A0030020000000000000001 /* Resources */,
 				0A0030030000000000000001 /* Frameworks */,
+				0A0030040000000000000001 /* Embed C5hHelper + LaunchAgent */,
 			);
 			buildRules = (
 			);
@@ -433,6 +434,31 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0A0030040000000000000001 /* Embed C5hHelper + LaunchAgent */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Packages/C5hHelper/Package.swift",
+				"$(SRCROOT)/Packages/C5hHelper/Sources/C5hHelper/main.swift",
+				"$(SRCROOT)/Resources/com.zaai.c5h.helper.plist",
+			);
+			name = "Embed C5hHelper + LaunchAgent";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\n\nif [ \"${ACTION:-build}\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nCONFIG_LOWER=$(echo \"$CONFIGURATION\" | tr '[:upper:]' '[:lower:]')\nHELPER_PKG=\"$SRCROOT/Packages/C5hHelper\"\nARCH=$(uname -m)\n\necho \"Building C5hHelper ($CONFIG_LOWER, $ARCH)\"\ncd \"$HELPER_PKG\"\nxcrun swift build -c \"$CONFIG_LOWER\" --arch \"$ARCH\"\n\nBIN=\"$HELPER_PKG/.build/$ARCH-apple-macosx/$CONFIG_LOWER/C5hHelper\"\nif [ ! -x \"$BIN\" ]; then\n  echo \"error: helper binary not found at $BIN\"\n  exit 1\nfi\n\nHELPERS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Helpers\"\nLAUNCHAGENTS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Library/LaunchAgents\"\nmkdir -p \"$HELPERS_DIR\" \"$LAUNCHAGENTS_DIR\"\n\ncp -f \"$BIN\" \"$HELPERS_DIR/C5hHelper\"\ncp -f \"$SRCROOT/Resources/com.zaai.c5h.helper.plist\" \"$LAUNCHAGENTS_DIR/com.zaai.c5h.helper.plist\"\n\nIDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}\"\nif [ -z \"$IDENTITY\" ]; then IDENTITY=\"-\"; fi\necho \"Signing C5hHelper with identity: $IDENTITY\"\ncodesign --force --sign \"$IDENTITY\" --options=runtime --timestamp=none \"$HELPERS_DIR/C5hHelper\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0A0030020000000000000001 /* Resources */ = {
@@ -664,6 +690,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = C5h/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -693,6 +720,7 @@
 				DEVELOPMENT_TEAM = 57KL6Y7V32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = C5h/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
