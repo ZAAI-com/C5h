@@ -252,7 +252,6 @@ private struct WeekDayColumnView: View {
                 ) {
                     PlannedWindowBlockView(
                         window: window,
-                        history: histories[window.providerID],
                         now: now,
                         columnWidth: halfColumnWidth,
                         layout: layout,

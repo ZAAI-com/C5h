@@ -3,7 +3,6 @@ import C5hCore
 
 struct PlannedWindowBlockView: View {
     let window: PlannedWindow
-    let history: UsageHistorySeries?
     var now: Date = .now
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
@@ -32,21 +31,12 @@ struct PlannedWindowBlockView: View {
 
         let shownStart = displayStart ?? window.startAt
         let shownEnd = shownStart.addingTimeInterval(TimeInterval(window.durationSeconds))
-        let startSevenD: Double? = shownStart > now
-            ? nil
-            : history?.sevenDayPercent(at: shownStart)?.value
-        let endSevenD: Double? = shownEnd > now
-            ? nil
-            : history?.sevenDayPercent(at: shownEnd)?.value
 
         ZStack {
             cornersOverlay(
                 shownStart: shownStart,
                 shownEnd: shownEnd,
-                startSevenD: startSevenD,
-                endSevenD: endSevenD,
-                density: density,
-                isNarrow: width < 130
+                density: density
             )
             if density.showsCenter, density.showsDetailLine,
                let path = window.projectPath, !path.isEmpty {
@@ -63,48 +53,15 @@ struct PlannedWindowBlockView: View {
     private func cornersOverlay(
         shownStart: Date,
         shownEnd: Date,
-        startSevenD: Double?,
-        endSevenD: Double?,
-        density: BlockDensity,
-        isNarrow: Bool
+        density: BlockDensity
     ) -> some View {
         VStack(spacing: 0) {
-            if isNarrow {
-                VStack(alignment: .leading, spacing: 0) {
-                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-                    if let v = startSevenD {
-                        cornerText("7d limit \(BlockFormatters.formatPercent(v))")
-                    }
-                }
+            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(alignment: .top) {
-                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-                    Spacer(minLength: 0)
-                    if let v = startSevenD {
-                        cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
-                    }
-                }
-            }
             Spacer(minLength: 0)
             if density.showsBottomCorners {
-                if isNarrow {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let v = endSevenD {
-                            cornerText("7d limit \(BlockFormatters.formatPercent(v))")
-                        }
-                        cornerText(BlockFormatters.formatTime(shownEnd))
-                    }
+                cornerText(BlockFormatters.formatTime(shownEnd))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    HStack(alignment: .bottom) {
-                        cornerText(BlockFormatters.formatTime(shownEnd))
-                        Spacer(minLength: 0)
-                        if let v = endSevenD {
-                            cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
-                        }
-                    }
-                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

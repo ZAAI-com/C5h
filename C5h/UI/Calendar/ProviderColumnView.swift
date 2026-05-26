@@ -35,7 +35,6 @@ struct ProviderColumnView: View {
                     } label: {
                         PlannedWindowBlockView(
                             window: window,
-                            history: history,
                             now: now,
                             columnWidth: columnWidth,
                             layout: layout,
