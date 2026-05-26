@@ -6,10 +6,11 @@ struct C5hApp: App {
     @State private var environment = AppEnvironment()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("") {
             MainWindowView()
                 .environment(environment)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .commands { AppCommands() }
 

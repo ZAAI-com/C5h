@@ -47,6 +47,7 @@ struct MainWindowView: View {
                                     .font(C5hTypography.logoFont)
                                     .padding(.horizontal, C5hSpacing.sm)
                             }
+                            ToolbarSpacer(.fixed, placement: .navigation)
                             if let help = selectedTab.navbarReloadHelp {
                                 ToolbarItem(placement: .navigation) {
                                     Button {
@@ -61,6 +62,7 @@ struct MainWindowView: View {
                 } detail: {
                     detail
                 }
+                .navigationTitle("")
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: columnVisibility) { _, newValue in
                     // Sidebar must remain visible at all times; if SwiftUI auto-collapses
