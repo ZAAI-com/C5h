@@ -47,7 +47,7 @@ struct MainWindowView: View {
                                     .font(C5hTypography.logoFont)
                                     .padding(.horizontal, C5hSpacing.sm)
                             }
-                            ToolbarSpacer(.fixed, placement: .navigation)
+                            ToolbarSpacer(.flexible, placement: .navigation)
                             if let help = selectedTab.navbarReloadHelp {
                                 ToolbarItem(placement: .navigation) {
                                     Button {
