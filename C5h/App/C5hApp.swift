@@ -6,7 +6,7 @@ struct C5hApp: App {
     @State private var environment = AppEnvironment()
 
     var body: some Scene {
-        WindowGroup("C5h") {
+        WindowGroup {
             MainWindowView()
                 .environment(environment)
         }

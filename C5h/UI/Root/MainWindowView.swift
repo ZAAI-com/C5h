@@ -42,8 +42,19 @@ struct MainWindowView: View {
                     SidebarView(selection: $selectedTab)
                         .toolbar(removing: .sidebarToggle)
                         .toolbar {
+                            ToolbarItem(placement: .navigation) {
+                                Text("<C5h>")
+                                    .font(C5hTypography.logoFont)
+                                    .padding(.horizontal, C5hSpacing.sm)
+                                    .padding(.vertical, 4)
+                                    .glassEffect(C5hGlass.toolbar, in: .capsule)
+                            }
+                        }
+                } detail: {
+                    detail
+                        .toolbar {
                             if let help = selectedTab.navbarReloadHelp {
-                                ToolbarItem(placement: .navigation) {
+                                ToolbarItem(placement: .primaryAction) {
                                     Button {
                                         reloadToken += 1
                                     } label: {
@@ -51,17 +62,6 @@ struct MainWindowView: View {
                                     }
                                     .help(help)
                                 }
-                            }
-                        }
-                } detail: {
-                    detail
-                        .toolbar {
-                            ToolbarItem(placement: .navigation) {
-                                Text("<C5h>")
-                                    .font(C5hTypography.logoFont)
-                                    .padding(.horizontal, C5hSpacing.sm)
-                                    .padding(.vertical, 4)
-                                    .glassEffect(C5hGlass.toolbar, in: .capsule)
                             }
                         }
                 }
