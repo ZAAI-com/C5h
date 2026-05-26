@@ -196,17 +196,25 @@ struct WeekCalendarView: View {
 
     private func filteredPlanned(forDay day: Date) -> [PlannedWindow] {
         guard showPlanned else { return [] }
-        let dayInterval = CalendarPositioning.dayInterval(for: day)
         return viewModel.planned.filter {
-            visibleProviders.contains($0.providerID) && dayInterval.contains($0.startAt)
+            visibleProviders.contains($0.providerID)
+                && CalendarPositioning.windowOverlaps(
+                    start: $0.startAt,
+                    durationSeconds: $0.durationSeconds,
+                    day: day
+                )
         }
     }
 
     private func filteredActual(forDay day: Date) -> [ActualWindow5h] {
         guard showActual else { return [] }
-        let dayInterval = CalendarPositioning.dayInterval(for: day)
         return viewModel.actual.filter {
-            visibleProviders.contains($0.providerID) && dayInterval.contains($0.startAt)
+            visibleProviders.contains($0.providerID)
+                && CalendarPositioning.windowOverlaps(
+                    start: $0.startAt,
+                    durationSeconds: $0.durationSeconds,
+                    day: day
+                )
         }
     }
 

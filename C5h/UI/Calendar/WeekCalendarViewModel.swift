@@ -86,17 +86,6 @@ final class WeekCalendarViewModel {
         usageHistories[providerID]
     }
 
-    func windows(forDay day: Date, providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5h]) {
-        let dayInterval = CalendarPositioning.dayInterval(for: day)
-        let p = planned.filter {
-            $0.providerID == providerID && dayInterval.contains($0.startAt)
-        }
-        let a = actual.filter {
-            $0.providerID == providerID && dayInterval.contains($0.startAt)
-        }
-        return (p, a)
-    }
-
     func goToPreviousWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
     }

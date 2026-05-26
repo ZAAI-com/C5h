@@ -58,6 +58,20 @@ public enum CalendarPositioning {
         )
     }
 
+    /// Returns true when the half-open interval [start, start+durationSeconds)
+    /// overlaps the local-day interval for `day`. Used by week-view per-day
+    /// filtering so windows crossing midnight render in both day columns.
+    public static func windowOverlaps(
+        start: Date,
+        durationSeconds: Int,
+        day: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        let dayBounds = dayInterval(for: day, calendar: calendar)
+        let end = start.addingTimeInterval(TimeInterval(durationSeconds))
+        return start < dayBounds.end && end > dayBounds.start
+    }
+
     /// Inverse of `yOffset(for:pixelsPerMinute:)`: converts a Y pixel position
     /// within a day column back to the corresponding `Date`. Used by the
     /// hover-to-plan affordance in the day calendar.

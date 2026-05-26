@@ -110,4 +110,65 @@ struct CalendarPositioningTests {
         let seg = CalendarPositioning.visibleSegment(of: window, on: day, calendar: cal)
         #expect(seg == nil)
     }
+
+    @Test("windowOverlaps matches both days when window crosses midnight")
+    func windowOverlapsCrossesMidnight() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day1 = cal.date(from: DateComponents(year: 2026, month: 5, day: 8))!
+        let day2 = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 20))!
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 5 * 3600, day: day1, calendar: cal
+        ))
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 5 * 3600, day: day2, calendar: cal
+        ))
+    }
+
+    @Test("windowOverlaps matches only start day when window fits in one day")
+    func windowOverlapsSingleDay() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day1 = cal.date(from: DateComponents(year: 2026, month: 5, day: 8))!
+        let day2 = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 2))!
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 5 * 3600, day: day1, calendar: cal
+        ))
+        #expect(!CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 5 * 3600, day: day2, calendar: cal
+        ))
+    }
+
+    @Test("windowOverlaps spans both days for 2-minute window starting at 23:59")
+    func windowOverlapsLateMinute() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day1 = cal.date(from: DateComponents(year: 2026, month: 5, day: 8))!
+        let day2 = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 23, minute: 59))!
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 120, day: day1, calendar: cal
+        ))
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 120, day: day2, calendar: cal
+        ))
+    }
+
+    @Test("windowOverlaps treats interval as half-open at the end boundary")
+    func windowOverlapsHalfOpenEnd() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let day1 = cal.date(from: DateComponents(year: 2026, month: 5, day: 8))!
+        let day2 = cal.date(from: DateComponents(year: 2026, month: 5, day: 9))!
+        // Window ends exactly at 00:00 day 2 — overlaps day 1 but NOT day 2.
+        let start = cal.date(from: DateComponents(year: 2026, month: 5, day: 8, hour: 22))!
+        #expect(CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 2 * 3600, day: day1, calendar: cal
+        ))
+        #expect(!CalendarPositioning.windowOverlaps(
+            start: start, durationSeconds: 2 * 3600, day: day2, calendar: cal
+        ))
+    }
 }
