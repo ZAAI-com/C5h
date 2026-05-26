@@ -1,5 +1,0 @@
-#!/bin/bash
-# Conductor release-local entry-point: delegates to Toolkit/Conductor/release-local.sh
-set -euo pipefail
-cd "$(dirname "$0")/.."
-exec ./Toolkit/Conductor/release-local.sh "$@"

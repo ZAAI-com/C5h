@@ -7,12 +7,12 @@ C5h is a macOS Xcode app. Use `C5h.xcworkspace` with the `C5h` scheme.
 From the repository root, run:
 
 ```bash
-./.conductor/main
-./.conductor/run
+./Toolkit/Conductor/setup.sh
+./Toolkit/Conductor/run.sh
 ```
 
-`./.conductor/main` verifies the Xcode toolchain and warms the Debug build cache.
-`./.conductor/run` opens the workspace in Xcode. In Xcode, select the `C5h`
+`./Toolkit/Conductor/setup.sh` verifies the Xcode toolchain and warms the Debug build cache.
+`./Toolkit/Conductor/run.sh` opens the workspace in Xcode. In Xcode, select the `C5h`
 scheme and run the app.
 
 For a command-line Debug build:
@@ -76,7 +76,6 @@ LaunchAgent plist in the app bundle.
   - `Core/` — app-side services and adapters (providers, scheduler driver, helper, debug bundle)
   - Resources — assets, plists
 - `Packages/` — three Swift packages: `C5hCore`, `C5hStore`, `C5hHelper`
-- `.conductor/` — build/run scripts (`main`, `run`)
 - `Toolkit/`, `Resources/` — build tooling and app assets
 - `Conductor.json` — Conductor workspace config
 
