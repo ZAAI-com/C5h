@@ -46,15 +46,9 @@ struct MainWindowView: View {
                                 Text("<C5h>")
                                     .font(C5hTypography.logoFont)
                                     .padding(.horizontal, C5hSpacing.sm)
-                                    .padding(.vertical, 4)
-                                    .glassEffect(C5hGlass.toolbar, in: .capsule)
                             }
-                        }
-                } detail: {
-                    detail
-                        .toolbar {
                             if let help = selectedTab.navbarReloadHelp {
-                                ToolbarItem(placement: .primaryAction) {
+                                ToolbarItem(placement: .navigation) {
                                     Button {
                                         reloadToken += 1
                                     } label: {
@@ -64,6 +58,8 @@ struct MainWindowView: View {
                                 }
                             }
                         }
+                } detail: {
+                    detail
                 }
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: columnVisibility) { _, newValue in

@@ -15,6 +15,7 @@ struct SidebarView: View {
                 }
             }
         }
+        .navigationTitle("")
         .navigationSplitViewColumnWidth(220)
     }
 }
