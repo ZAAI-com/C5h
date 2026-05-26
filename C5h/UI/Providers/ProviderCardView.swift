@@ -156,6 +156,7 @@ struct ProviderCardView: View {
                 preview: VersionCommand.displayCommand(providerID: id),
                 systemImage: "number",
                 isRunning: isStatusLoading,
+                isDisabled: isStatusLoading,
                 action: onVersion
             )
             commandRow(
@@ -163,6 +164,7 @@ struct ProviderCardView: View {
                 preview: AuthStatusCommand.displayCommand(providerID: id),
                 systemImage: "person.badge.key",
                 isRunning: isStatusLoading,
+                isDisabled: isStatusLoading,
                 action: onAuthStatus
             )
             commandRow(
@@ -171,6 +173,7 @@ struct ProviderCardView: View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 detail: usageDetail,
                 isRunning: isUsageLoading,
+                isDisabled: isUsageLoading,
                 action: onUsage
             )
             commandRow(
@@ -179,6 +182,7 @@ struct ProviderCardView: View {
                 systemImage: "text.bubble",
                 detail: promptFireDetail,
                 isRunning: isPromptFiring,
+                isDisabled: isPromptFiring,
                 action: onFirePrompt
             )
         }
@@ -190,6 +194,7 @@ struct ProviderCardView: View {
         systemImage: String,
         detail: String? = nil,
         isRunning: Bool = false,
+        isDisabled: Bool = false,
         action: (() -> Void)? = nil
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: C5hSpacing.sm) {
@@ -220,7 +225,7 @@ struct ProviderCardView: View {
                 .labelStyle(.iconOnly)
                 .help("Run \(title)")
                 .buttonStyle(.glass)
-                .disabled(isStatusLoading || isUsageLoading)
+                .disabled(isDisabled)
             }
         }
     }

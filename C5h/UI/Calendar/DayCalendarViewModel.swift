@@ -213,7 +213,11 @@ final class DayCalendarViewModel {
             do {
                 try await scheduledRepository.create(prompt)
             } catch {
-                try? await plannedRepository.delete(id: window.id)
+                do {
+                    try await plannedRepository.delete(id: window.id)
+                } catch let deleteError {
+                    NSLog("DayCalendarViewModel: rollback delete of orphan PlannedWindow \(window.id) failed: \(deleteError)")
+                }
                 throw error
             }
             self.lastError = nil

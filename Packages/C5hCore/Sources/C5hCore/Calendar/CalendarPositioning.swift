@@ -89,6 +89,7 @@ public enum CalendarPositioning {
 
     /// Snaps a date to a multiple of `minutes` (defaults to 5-minute grid).
     public static func snap(_ date: Date, toMinutes minutes: Int) -> Date {
+        precondition(minutes > 0, "CalendarPositioning.snap requires minutes > 0")
         let interval = Double(minutes) * 60
         let snapped = (date.timeIntervalSince1970 / interval).rounded() * interval
         return Date(timeIntervalSince1970: snapped)

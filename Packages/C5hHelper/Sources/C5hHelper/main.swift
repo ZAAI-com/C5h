@@ -282,7 +282,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
         settingsRepo: any AppSettingsRepository,
         resolver: any CLIPathResolving
     ) async throws -> URL {
-        let key = "providers.\(providerID.rawValue).cliPath"
+        let key = AppSettingsKeys.cliPath(for: providerID)
         let configured = try await settingsRepo.get(key, as: String.self)
         guard let cliURL = await resolver.resolveCLI(
             named: providerID.executableName,

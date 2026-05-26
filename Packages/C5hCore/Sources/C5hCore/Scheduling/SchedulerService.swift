@@ -85,10 +85,18 @@ public actor SchedulerService {
                 // window itself (it knows whether to insert, update, or do
                 // nothing). Returning a non-nil row is purely informational so
                 // tests / future callers can observe what was written.
-                _ = try await driver.resolveActualWindow(
-                    for: prompt.providerID,
-                    commandRun: commandRun
-                )
+                //
+                // The trigger already executed — a resolver failure here must
+                // NOT mark the prompt failed (that would re-fire it next tick
+                // and double-execute the side effect). Log and proceed.
+                do {
+                    _ = try await driver.resolveActualWindow(
+                        for: prompt.providerID,
+                        commandRun: commandRun
+                    )
+                } catch {
+                    NSLog("SchedulerService: resolveActualWindow failed for prompt \(prompt.id) (provider \(prompt.providerID.rawValue)): \(error)")
+                }
                 try await driver.markSucceeded(id: prompt.id)
                 succeeded += 1
             } catch {
