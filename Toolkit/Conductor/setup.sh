@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+DERIVED_DATA_PATH="$(pwd)/.derivedData"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -48,6 +50,7 @@ xcodebuild \
   -scheme C5h \
   -configuration Debug \
   -destination 'platform=macOS' \
+  -derivedDataPath "$DERIVED_DATA_PATH" \
   build \
   CODE_SIGNING_ALLOWED=NO \
   | tail -n 25
