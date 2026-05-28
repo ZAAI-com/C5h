@@ -6,16 +6,25 @@ actor RecordingSchedulerDriver: SchedulerDriver {
     var duePrompts: [ScheduledPrompt] = []
     var claimableIDs: Set<UUID> = []
     var triggerOutcome: TriggerOutcome = .succeed
+    var resolveOutcome: ResolveOutcome = .succeed
 
     enum TriggerOutcome: Sendable {
         case succeed
         case fail(message: String)
     }
 
-    var registeredWindows: [ActualWindow] = []
+    enum ResolveOutcome: Sendable {
+        /// Driver "resolves" a window — emits a [now, +5h, c5hTriggered] row
+        case succeed
+        /// Driver returns nil — no window written
+        case skip
+    }
+
+    var resolvedWindows: [ActualWindow5h] = []
     var marks: [(id: UUID, status: ScheduledPromptStatus, error: String?)] = []
     var claims: [UUID] = []
     var triggers: [UUID] = []
+    var resolves: [UUID] = []
 
     func setDue(_ prompts: [ScheduledPrompt]) {
         duePrompts = prompts
@@ -28,6 +37,10 @@ actor RecordingSchedulerDriver: SchedulerDriver {
 
     func setTrigger(_ outcome: TriggerOutcome) {
         triggerOutcome = outcome
+    }
+
+    func setResolve(_ outcome: ResolveOutcome) {
+        resolveOutcome = outcome
     }
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
@@ -55,10 +68,6 @@ actor RecordingSchedulerDriver: SchedulerDriver {
         marks.append((id, .missed, nil))
     }
 
-    func registerActualWindow(_ window: ActualWindow) async throws {
-        registeredWindows.append(window)
-    }
-
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         triggers.append(prompt.id)
         switch triggerOutcome {
@@ -74,11 +83,33 @@ actor RecordingSchedulerDriver: SchedulerDriver {
             throw C5hError.processLaunchFailed(message)
         }
     }
+
+    func resolveActualWindow(
+        for providerID: ProviderID,
+        commandRun: CommandRun
+    ) async throws -> ActualWindow5h? {
+        resolves.append(commandRun.id)
+        switch resolveOutcome {
+        case .succeed:
+            let window = ActualWindow5h(
+                providerID: providerID,
+                startAt: commandRun.startedAt,
+                durationSeconds: 5 * 3600,
+                source: .c5hTriggered,
+                confidence: .exact,
+                commandRunID: commandRun.id
+            )
+            resolvedWindows.append(window)
+            return window
+        case .skip:
+            return nil
+        }
+    }
 }
 
 @Suite("SchedulerService")
 struct SchedulerServiceTests {
-    @Test("Due prompt is claimed, triggered, registers actual window, and marked succeeded")
+    @Test("Due prompt is claimed, triggered, resolves actual window, and marked succeeded")
     func happyPath() async throws {
         let driver = RecordingSchedulerDriver()
         let now = Date(timeIntervalSince1970: 1_730_000_000)
@@ -96,12 +127,37 @@ struct SchedulerServiceTests {
 
         let claims = await driver.claims
         let triggers = await driver.triggers
-        let windows = await driver.registeredWindows
+        let resolves = await driver.resolves
+        let windows = await driver.resolvedWindows
         let marks = await driver.marks
         #expect(claims == [prompt.id])
         #expect(triggers == [prompt.id])
+        #expect(resolves.count == 1)
         #expect(windows.count == 1)
         #expect(windows.first?.source == .c5hTriggered)
+        #expect(marks.last?.status == .succeeded)
+    }
+
+    @Test("When resolver returns nil, no window is written but the prompt still succeeds")
+    func resolveSkipStillSucceeds() async throws {
+        let driver = RecordingSchedulerDriver()
+        await driver.setResolve(.skip)
+        let now = Date(timeIntervalSince1970: 1_730_000_000)
+        let prompt = ScheduledPrompt(
+            providerID: .codex,
+            prompt: "do work",
+            runAt: now.addingTimeInterval(-30)
+        )
+        await driver.setDue([prompt])
+        let scheduler = SchedulerService(driver: driver)
+        let report = await scheduler.tick(now: now)
+        #expect(report.succeeded == 1)
+
+        let resolves = await driver.resolves
+        let windows = await driver.resolvedWindows
+        let marks = await driver.marks
+        #expect(resolves.count == 1)
+        #expect(windows.isEmpty)
         #expect(marks.last?.status == .succeeded)
     }
 

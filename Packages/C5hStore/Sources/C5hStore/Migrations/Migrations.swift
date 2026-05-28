@@ -20,6 +20,8 @@ enum Migrations {
                 t.column("provider_id", .text).notNull().references("providers")
                 t.column("start_at", .text).notNull()
                 t.column("duration_seconds", .integer).notNull()
+                t.column("time_zone_id", .text).notNull()
+                t.column("local_date", .text).notNull()
                 t.column("prompt_template_id", .text)
                 t.column("project_path", .text)
                 t.column("status", .text).notNull()
@@ -32,11 +34,13 @@ enum Migrations {
                 columns: ["provider_id", "start_at"]
             )
 
-            try db.create(table: "actual_windows") { t in
+            try db.create(table: "actual_windows_5h") { t in
                 t.column("id", .text).primaryKey()
                 t.column("provider_id", .text).notNull().references("providers")
                 t.column("start_at", .text).notNull()
                 t.column("duration_seconds", .integer).notNull()
+                t.column("time_zone_id", .text).notNull()
+                t.column("local_date", .text).notNull()
                 t.column("source", .text).notNull()
                 t.column("confidence", .text).notNull()
                 t.column("command_run_id", .text)
@@ -46,8 +50,27 @@ enum Migrations {
                 t.column("updated_at", .text).notNull()
             }
             try db.create(
-                index: "idx_actual_windows_provider_start",
-                on: "actual_windows",
+                index: "idx_actual_windows_5h_provider_start",
+                on: "actual_windows_5h",
+                columns: ["provider_id", "start_at"]
+            )
+
+            try db.create(table: "actual_windows_7d") { t in
+                t.column("id", .text).primaryKey()
+                t.column("provider_id", .text).notNull().references("providers")
+                t.column("start_at", .text).notNull()
+                t.column("duration_seconds", .integer).notNull()
+                t.column("time_zone_id", .text).notNull()
+                t.column("used_percentage", .double).notNull()
+                t.column("source", .text).notNull()
+                t.column("confidence", .text).notNull()
+                t.column("usage_snapshot_id", .text)
+                t.column("created_at", .text).notNull()
+                t.column("updated_at", .text).notNull()
+            }
+            try db.create(
+                index: "idx_actual_windows_7d_provider_start",
+                on: "actual_windows_7d",
                 columns: ["provider_id", "start_at"]
             )
 

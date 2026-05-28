@@ -9,6 +9,8 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
     var providerId: String
     var startAt: String
     var durationSeconds: Int
+    var timeZoneId: String
+    var localDate: String
     var promptTemplateId: String?
     var projectPath: String?
     var status: String
@@ -20,6 +22,8 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
         case providerId = "provider_id"
         case startAt = "start_at"
         case durationSeconds = "duration_seconds"
+        case timeZoneId = "time_zone_id"
+        case localDate = "local_date"
         case promptTemplateId = "prompt_template_id"
         case projectPath = "project_path"
         case status
@@ -32,6 +36,8 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
         self.providerId = window.providerID.rawValue
         self.startAt = DateTimeService.formatUTC(window.startAt)
         self.durationSeconds = window.durationSeconds
+        self.timeZoneId = window.timeZoneIdentifier
+        self.localDate = window.localDate
         self.promptTemplateId = window.promptTemplateID?.uuidString
         self.projectPath = window.projectPath
         self.status = window.status.rawValue
@@ -53,6 +59,8 @@ struct PlannedWindowRecord: Codable, FetchableRecord, PersistableRecord {
             providerID: pid,
             startAt: start,
             durationSeconds: durationSeconds,
+            timeZoneIdentifier: timeZoneId,
+            localDate: localDate,
             promptTemplateID: promptTemplateId.flatMap { UUID(uuidString: $0) },
             projectPath: projectPath,
             status: st,

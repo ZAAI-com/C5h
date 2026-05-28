@@ -5,6 +5,7 @@ struct MainWindowView: View {
     @State private var showOnboarding: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var dayAnchor: Date = .now
+    @State private var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @Environment(\.scenePhase) private var scenePhase
 
@@ -40,9 +41,28 @@ struct MainWindowView: View {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     SidebarView(selection: $selectedTab)
                         .toolbar(removing: .sidebarToggle)
+                        .toolbar {
+                            ToolbarItem(placement: .navigation) {
+                                Text("<C5h>")
+                                    .font(C5hTypography.logoFont)
+                                    .padding(.horizontal, C5hSpacing.sm)
+                            }
+                            ToolbarSpacer(.flexible, placement: .navigation)
+                            if let help = selectedTab.navbarReloadHelp {
+                                ToolbarItem(placement: .navigation) {
+                                    Button {
+                                        reloadToken += 1
+                                    } label: {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
+                                    .help(help)
+                                }
+                            }
+                        }
                 } detail: {
                     detail
                 }
+                .navigationTitle("")
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: columnVisibility) { _, newValue in
                     // Sidebar must remain visible at all times; if SwiftUI auto-collapses
@@ -109,20 +129,21 @@ struct MainWindowView: View {
     private var detail: some View {
         switch selectedTab {
         case .dashboard:
-            DashboardView()
+            DashboardView(reloadToken: reloadToken)
         case .today:
-            DayCalendarScreen(date: dayAnchor, title: "Today")
+            DayCalendarScreen(date: dayAnchor, title: "Today", reloadToken: reloadToken)
         case .tomorrow:
             DayCalendarScreen(
                 date: Calendar.current.date(byAdding: .day, value: 1, to: dayAnchor) ?? dayAnchor,
-                title: "Tomorrow"
+                title: "Tomorrow",
+                reloadToken: reloadToken
             )
         case .calendar:
-            WeekCalendarScreen()
+            WeekCalendarScreen(reloadToken: reloadToken)
         case .logs:
-            LogsView()
+            LogsView(reloadToken: reloadToken)
         case .providers:
-            ProvidersView()
+            ProvidersView(reloadToken: reloadToken)
         case .settings:
             SettingsView()
         }

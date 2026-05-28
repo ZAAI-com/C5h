@@ -6,23 +6,48 @@ import C5hStore
 @Observable
 @MainActor
 final class ProvidersViewModel {
-    var statuses: [ProviderID: ProviderStatus] = [:]
-    var loadingProviders: Set<ProviderID> = []
     var configuredPaths: [ProviderID: String] = [:]
+    var wakePrompts: [ProviderID: String] = [:]
+    var usageChecks: [ProviderID: ProviderUsageCheck] = [:]
+    var loadingUsageProviders: Set<ProviderID> = []
     var lastError: String?
 
     private let registry: ProviderRegistry
     private let appSettings: any AppSettingsRepository
+    private let usageSnapshotRepository: any UsageSnapshotRepository
+    private let fetcher: UsageFetcher
+    private let refreshProviderStatus: @MainActor (ProviderID) async -> Void
 
-    init(registry: ProviderRegistry, appSettings: any AppSettingsRepository) {
+    init(
+        registry: ProviderRegistry,
+        appSettings: any AppSettingsRepository,
+        usageSnapshotRepository: any UsageSnapshotRepository,
+        actual5hRepository: any ActualWindow5hRepository,
+        actual7dRepository: any ActualWindow7dRepository,
+        refreshProviderStatus: @escaping @MainActor (ProviderID) async -> Void
+    ) {
         self.registry = registry
         self.appSettings = appSettings
+        self.usageSnapshotRepository = usageSnapshotRepository
+        self.refreshProviderStatus = refreshProviderStatus
+        self.fetcher = UsageFetcher(
+            persistSnapshot: { snapshot in
+                try await usageSnapshotRepository.create(snapshot)
+            },
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepository.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepository.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
     }
 
     func bootstrap() async {
         for id in ProviderID.allCases {
             await loadConfiguredPath(for: id)
-            await refreshProvider(id: id)
+            await loadWakePrompt(for: id)
+            await loadLatestUsageCheck(for: id)
         }
     }
 
@@ -39,68 +64,25 @@ final class ProvidersViewModel {
         }
     }
 
-    func refreshProvider(id: ProviderID) async {
-        loadingProviders.insert(id)
-        defer { loadingProviders.remove(id) }
-
-        let versionStatus = await runVersion(id: id, managesLoading: false)
-        guard versionStatus.isInstalled, versionStatus.errorMessage == nil else { return }
-        await runAuthStatus(id: id, managesLoading: false)
+    private func loadWakePrompt(for id: ProviderID) async {
+        let key = AppSettingsKeys.defaultWakePrompt(for: id)
+        let value = (try? await appSettings.get(key, as: String.self)) ?? nil
+        wakePrompts[id] = value ?? ""
     }
 
-    @discardableResult
-    func runVersion(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
-        if managesLoading { loadingProviders.insert(id) }
-        defer { if managesLoading { loadingProviders.remove(id) } }
+    func setWakePrompt(id: ProviderID, _ value: String) async {
+        let key = AppSettingsKeys.defaultWakePrompt(for: id)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let adapter = try registry.adapter(for: id)
-            var status = await adapter.runVersionCommand()
-            if status.isInstalled {
-                status.isAuthenticated = statuses[id]?.isAuthenticated
+            if trimmed.isEmpty {
+                try await appSettings.remove(key)
+                wakePrompts[id] = ""
+            } else {
+                try await appSettings.set(key, value: trimmed)
+                wakePrompts[id] = trimmed
             }
-            statuses[id] = status
-            lastError = nil
-            return status
         } catch {
             lastError = String(describing: error)
-            let status = ProviderStatus(providerID: id, isInstalled: false, errorMessage: lastError)
-            statuses[id] = status
-            return status
-        }
-    }
-
-    @discardableResult
-    func runAuthStatus(id: ProviderID, managesLoading: Bool = true) async -> ProviderStatus {
-        if managesLoading { loadingProviders.insert(id) }
-        defer { if managesLoading { loadingProviders.remove(id) } }
-        do {
-            let adapter = try registry.adapter(for: id)
-            let authStatus = await adapter.runAuthStatusCommand()
-            let existing = statuses[id]
-            let status = ProviderStatus(
-                providerID: id,
-                isInstalled: existing?.isInstalled ?? authStatus.isInstalled,
-                cliPath: authStatus.cliPath ?? existing?.cliPath,
-                version: existing?.version,
-                isAuthenticated: authStatus.isAuthenticated,
-                lastCheckedAt: authStatus.lastCheckedAt,
-                errorMessage: authStatus.errorMessage
-            )
-            statuses[id] = status
-            lastError = nil
-            return status
-        } catch {
-            lastError = String(describing: error)
-            let status = ProviderStatus(
-                providerID: id,
-                isInstalled: statuses[id]?.isInstalled ?? false,
-                cliPath: statuses[id]?.cliPath,
-                version: statuses[id]?.version,
-                isAuthenticated: statuses[id]?.isAuthenticated,
-                errorMessage: lastError
-            )
-            statuses[id] = status
-            return status
         }
     }
 
@@ -114,9 +96,69 @@ final class ProvidersViewModel {
                 try await appSettings.remove(key)
                 configuredPaths[id] = ""
             }
-            await refreshProvider(id: id)
+            await refreshProviderStatus(id)
         } catch {
             lastError = String(describing: error)
         }
     }
+
+    func runUsage(id: ProviderID) async {
+        loadingUsageProviders.insert(id)
+        defer { loadingUsageProviders.remove(id) }
+
+        do {
+            let adapter = try registry.adapter(for: id)
+            let snapshot = try await fetcher.fetchAndPersist(adapter: adapter)
+            usageChecks[id] = Self.usageCheck(from: snapshot)
+            lastError = nil
+        } catch {
+            let message = String(describing: error)
+            usageChecks[id] = ProviderUsageCheck(
+                checkedAt: .now,
+                usedPercentage: nil,
+                windowEndsAt: nil,
+                errorMessage: message
+            )
+            lastError = message
+        }
+    }
+
+    private func loadLatestUsageCheck(for id: ProviderID) async {
+        do {
+            if let snapshot = try await usageSnapshotRepository.fetchLatest(providerID: id) {
+                usageChecks[id] = Self.usageCheck(from: snapshot)
+            }
+        } catch {
+            usageChecks[id] = ProviderUsageCheck(
+                checkedAt: .now,
+                usedPercentage: nil,
+                windowEndsAt: nil,
+                errorMessage: String(describing: error)
+            )
+        }
+    }
+
+    private static func usageCheck(from snapshot: UsageSnapshot) -> ProviderUsageCheck {
+        let normalized = normalizedUsage(from: snapshot)
+        return ProviderUsageCheck(
+            checkedAt: snapshot.capturedAt,
+            usedPercentage: normalized?.usedPercentage,
+            windowEndsAt: normalized?.windowEndsAt,
+            errorMessage: nil
+        )
+    }
+
+    private static func normalizedUsage(from snapshot: UsageSnapshot) -> NormalizedUsage? {
+        guard let data = snapshot.normalizedJSON.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(NormalizedUsage.self, from: data)
+    }
+}
+
+struct ProviderUsageCheck: Sendable, Hashable {
+    var checkedAt: Date
+    var usedPercentage: Double?
+    var windowEndsAt: Date?
+    var errorMessage: String?
 }

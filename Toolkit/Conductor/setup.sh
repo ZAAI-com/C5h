@@ -56,7 +56,7 @@ echo
 ok "Setup complete."
 echo
 echo "To open the project in Xcode:"
-echo "  ./.conductor/run"
+echo "  ./Toolkit/Conductor/run.sh"
 echo
 echo "Or build from the command line:"
 echo "  xcodebuild -workspace C5h.xcworkspace -scheme C5h -configuration Debug build"

@@ -6,8 +6,18 @@ public protocol SchedulerDriver: Sendable {
     func markSucceeded(id: UUID) async throws
     func markFailed(id: UUID, error: String) async throws
     func markMissed(id: UUID) async throws
-    func registerActualWindow(_ window: ActualWindow) async throws
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun
+
+    /// Resolves and persists the provider's *real* current rolling 5h window
+    /// after a prompt has fired, by reading upstream usage data. Returning
+    /// `nil` signals that no `ActualWindow5h` should be written for this trigger
+    /// — preferred over persisting a fictitious `[now, +5h]` placeholder when
+    /// the upstream `resetsAt` is unknown. The returned row (when non-nil) is
+    /// purely informational; the driver has already written it.
+    func resolveActualWindow(
+        for providerID: ProviderID,
+        commandRun: CommandRun
+    ) async throws -> ActualWindow5h?
 }
 
 public struct SchedulerTickReport: Sendable {
@@ -71,15 +81,22 @@ public actor SchedulerService {
                     continue
                 }
                 let commandRun = try await driver.trigger(prompt: prompt)
-                let actualWindow = ActualWindow(
-                    providerID: prompt.providerID,
-                    startAt: commandRun.startedAt,
-                    durationSeconds: 5 * 3600,
-                    source: .c5hTriggered,
-                    confidence: .exact,
-                    commandRunID: commandRun.id
-                )
-                try await driver.registerActualWindow(actualWindow)
+                // `resolveActualWindow` is expected to persist the resolved
+                // window itself (it knows whether to insert, update, or do
+                // nothing). Returning a non-nil row is purely informational so
+                // tests / future callers can observe what was written.
+                //
+                // The trigger already executed — a resolver failure here must
+                // NOT mark the prompt failed (that would re-fire it next tick
+                // and double-execute the side effect). Log and proceed.
+                do {
+                    _ = try await driver.resolveActualWindow(
+                        for: prompt.providerID,
+                        commandRun: commandRun
+                    )
+                } catch {
+                    NSLog("SchedulerService: resolveActualWindow failed for prompt \(prompt.id) (provider \(prompt.providerID.rawValue)): \(error)")
+                }
                 try await driver.markSucceeded(id: prompt.id)
                 succeeded += 1
             } catch {

@@ -2,24 +2,45 @@ import SwiftUI
 import C5hCore
 
 struct ProviderCardView: View {
+    /// Hardcoded — bumped only when a new app release changes the window length.
+    private static let windowLengthDisplay = "5 hours"
+
     let id: ProviderID
     let status: ProviderStatus?
     let configuredPath: String
-    let isLoading: Bool
+    let wakePrompt: String
+    let usageCheck: ProviderUsageCheck?
+    let isStatusLoading: Bool
+    let isUsageLoading: Bool
+    let isPromptFiring: Bool
+    let promptFireDetail: String?
     let onVersion: () -> Void
     let onAuthStatus: () -> Void
+    let onUsage: () -> Void
+    let onFirePrompt: () -> Void
     let onSetPath: (String) -> Void
     let onClearPath: () -> Void
+    let onSetWakePrompt: (String) -> Void
 
     @State private var pathDraft: String = ""
+    @State private var wakePromptDraft: String = ""
+    @FocusState private var wakePromptFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: C5hSpacing.md) {
             header
             Divider()
-            statusGrid
+            section("Status") {
+                statusGrid
+            }
             Divider()
-            actions
+            section("Settings") {
+                settings
+            }
+            Divider()
+            section("Commands") {
+                commands
+            }
         }
         .padding(C5hSpacing.lg)
         // LEVEL 2 — Material content card with a thin brand-tinted stroke
@@ -29,8 +50,62 @@ struct ProviderCardView: View {
             C5hShape.rect(C5hRadius.l)
                 .strokeBorder(brandColor.opacity(0.15), lineWidth: 1)
         }
-        .onAppear { pathDraft = configuredPath }
+        .onAppear {
+            pathDraft = configuredPath
+            wakePromptDraft = wakePrompt
+        }
         .onChange(of: configuredPath) { _, newValue in pathDraft = newValue }
+        .onChange(of: wakePrompt) { _, newValue in
+            if !wakePromptFocused { wakePromptDraft = newValue }
+        }
+        .onChange(of: wakePromptFocused) { _, isFocused in
+            if !isFocused, wakePromptDraft != wakePrompt {
+                onSetWakePrompt(wakePromptDraft)
+            }
+        }
+    }
+
+    private var settings: some View {
+        Grid(alignment: .leading, horizontalSpacing: C5hSpacing.lg, verticalSpacing: 6) {
+            GridRow {
+                Text("CLI path")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                HStack(spacing: C5hSpacing.sm) {
+                    TextField("/usr/local/bin/\(id.rawValue)", text: $pathDraft)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Save") {
+                        onSetPath(pathDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    .buttonStyle(.glass)
+                    Button("Clear") {
+                        pathDraft = ""
+                        onClearPath()
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+            GridRow {
+                Text("Wake prompt")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                TextField(
+                    AppSettingsKeys.defaultWakePromptFallback,
+                    text: $wakePromptDraft,
+                    prompt: Text(AppSettingsKeys.defaultWakePromptFallback)
+                )
+                .textFieldStyle(.roundedBorder)
+                .focused($wakePromptFocused)
+                .onSubmit { wakePromptFocused = false }
+            }
+            GridRow {
+                Text("Window length")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                Text(Self.windowLengthDisplay)
+                    .font(C5hTypography.captionFont)
+            }
+        }
     }
 
     private var header: some View {
@@ -39,7 +114,16 @@ struct ProviderCardView: View {
             Text(id.displayName).font(C5hTypography.titleFont)
             Spacer()
             ProviderStatusBadge(state: healthState)
-            if isLoading { ProgressView().scaleEffect(0.6) }
+            if isStatusLoading || isUsageLoading { ProgressView().scaleEffect(0.6) }
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: C5hSpacing.sm) {
+            Text(title)
+                .font(C5hTypography.captionFont)
+                .foregroundStyle(C5hColors.fgSecondary)
+            content()
         }
     }
 
@@ -51,10 +135,7 @@ struct ProviderCardView: View {
             row("Auth", authText)
             row("Last checked", status?.lastCheckedAt.formatted(date: .omitted, time: .standard) ?? "—")
             if let err = status?.errorMessage, !err.isEmpty {
-                GridRow {
-                    Text("Error").font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgSecondary)
-                    Text(err).font(C5hTypography.captionFont).foregroundStyle(.red)
-                }
+                row("Latest error", err, valueColor: .red)
             }
         }
     }
@@ -75,35 +156,117 @@ struct ProviderCardView: View {
         return "—"
     }
 
-    private func row(_ label: String, _ value: String) -> some View {
+    private func row(_ label: String, _ value: String, valueColor: Color = C5hColors.foreground) -> some View {
         GridRow {
             Text(label).font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgSecondary)
-            Text(value).font(C5hTypography.captionFont).lineLimit(1).truncationMode(.middle)
+            Text(value)
+                .font(C5hTypography.captionFont)
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 
-    private var actions: some View {
-        HStack(spacing: C5hSpacing.sm) {
-            Button("Version", action: onVersion)
-                .buttonStyle(.glass)
-                .disabled(isLoading)
-            Button("Auth status", action: onAuthStatus)
-                .buttonStyle(.glass)
-                .disabled(isLoading)
-            Spacer()
-            HStack(spacing: C5hSpacing.xs) {
-                TextField("/usr/local/bin/\(id.executableName)", text: $pathDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 240)
-                Button("Save") { onSetPath(pathDraft) }
-                    .buttonStyle(.glass)
-                    .disabled(pathDraft == configuredPath)
-                if !configuredPath.isEmpty {
-                    Button("Clear", action: onClearPath)
-                        .buttonStyle(.glass)
+    private var commands: some View {
+        VStack(alignment: .leading, spacing: C5hSpacing.sm) {
+            commandRow(
+                title: "Version",
+                preview: VersionCommand.displayCommand(providerID: id),
+                systemImage: "number",
+                isRunning: isStatusLoading,
+                isDisabled: isStatusLoading,
+                action: onVersion
+            )
+            commandRow(
+                title: "Auth status",
+                preview: AuthStatusCommand.displayCommand(providerID: id),
+                systemImage: "person.badge.key",
+                isRunning: isStatusLoading,
+                isDisabled: isStatusLoading,
+                action: onAuthStatus
+            )
+            commandRow(
+                title: "Usage",
+                preview: UsageCommand.displayCommand(providerID: id),
+                systemImage: "chart.line.uptrend.xyaxis",
+                detail: usageDetail,
+                isRunning: isUsageLoading,
+                isDisabled: isUsageLoading,
+                action: onUsage
+            )
+            commandRow(
+                title: "Prompt template",
+                preview: PromptCommand.displayCommand(providerID: id, prompt: promptPreview),
+                systemImage: "text.bubble",
+                detail: promptFireDetail,
+                isRunning: isPromptFiring,
+                isDisabled: isPromptFiring,
+                action: onFirePrompt
+            )
+        }
+    }
+
+    private func commandRow(
+        title: String,
+        preview: String,
+        systemImage: String,
+        detail: String? = nil,
+        isRunning: Bool = false,
+        isDisabled: Bool = false,
+        action: (() -> Void)? = nil
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: C5hSpacing.sm) {
+            Label(title, systemImage: systemImage)
+                .font(C5hTypography.captionFont)
+                .frame(width: 120, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(preview)
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let detail {
+                    Text(detail)
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(detail.contains("failed") ? .red : C5hColors.fgSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
+            Spacer(minLength: C5hSpacing.sm)
+            if isRunning {
+                ProgressView().scaleEffect(0.55)
+            }
+            if let action {
+                Button(action: action) {
+                    Label("Run", systemImage: "play.fill")
+                }
+                .labelStyle(.iconOnly)
+                .help("Run \(title)")
+                .buttonStyle(.glass)
+                .disabled(isDisabled)
+            }
         }
+    }
+
+    private var usageDetail: String? {
+        guard let usageCheck else { return nil }
+        if let err = usageCheck.errorMessage, !err.isEmpty {
+            return "failed \(usageCheck.checkedAt.formatted(date: .omitted, time: .shortened)): \(err)"
+        }
+
+        var parts = ["checked \(usageCheck.checkedAt.formatted(date: .omitted, time: .shortened))"]
+        if let pct = usageCheck.usedPercentage {
+            parts.append("\(Int(pct.rounded()))% used")
+        }
+        if let end = usageCheck.windowEndsAt {
+            parts.append("resets \(end.formatted(date: .omitted, time: .shortened))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private var promptPreview: String {
+        let trimmed = wakePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? AppSettingsKeys.defaultWakePromptFallback : trimmed
     }
 
     private var brandColor: Color {

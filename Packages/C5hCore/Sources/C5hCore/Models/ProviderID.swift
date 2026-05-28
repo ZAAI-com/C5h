@@ -19,4 +19,11 @@ public enum ProviderID: String, Codable, Sendable, CaseIterable, Identifiable, H
         case .codex: "codex"
         }
     }
+
+    public var plannedWindowSnapMinutes: Int {
+        switch self {
+        case .claude: 10
+        case .codex: 5
+        }
+    }
 }

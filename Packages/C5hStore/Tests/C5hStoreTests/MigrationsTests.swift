@@ -20,7 +20,8 @@ struct MigrationsTests {
         let expectedTables: Set<String> = [
             "providers",
             "planned_windows",
-            "actual_windows",
+            "actual_windows_5h",
+            "actual_windows_7d",
             "scheduled_prompts",
             "command_runs",
             "usage_snapshots",
@@ -32,7 +33,8 @@ struct MigrationsTests {
 
         let expectedIndexes: Set<String> = [
             "idx_planned_windows_provider_start",
-            "idx_actual_windows_provider_start",
+            "idx_actual_windows_5h_provider_start",
+            "idx_actual_windows_7d_provider_start",
             "idx_scheduled_prompts_status_run_at",
             "idx_command_runs_provider_started",
             "idx_command_runs_status_started",

@@ -55,8 +55,10 @@ struct HelperMain {
 
         let heartbeatRepo = GRDBHelperHeartbeatRepository(database: database)
         let scheduledRepo = GRDBScheduledPromptRepository(database: database)
-        let actualRepo = GRDBActualWindowRepository(database: database)
+        let actual5hRepo = GRDBActualWindow5hRepository(database: database)
+        let actual7dRepo = GRDBActualWindow7dRepository(database: database)
         let cmdRepo = GRDBCommandRunRepository(database: database)
+        let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
 
         let logsDir = appSupport
@@ -72,14 +74,35 @@ struct HelperMain {
         let resolver = DefaultCLIPathResolver()
         let settingsRepo = GRDBAppSettingsRepository(database: database)
 
+        let usageFetcher = UsageFetcher(
+            persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepo.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
         let driver = HelperSchedulerDriver(
             scheduledRepo: scheduledRepo,
-            actualRepo: actualRepo,
+            actual5hRepo: actual5hRepo,
             runner: runner,
             resolver: resolver,
-            settingsRepo: settingsRepo
+            settingsRepo: settingsRepo,
+            usageFetcher: usageFetcher,
+            cmdRepo: cmdRepo,
+            logWriter: logWriter
         )
         let scheduler = SchedulerService(driver: driver)
+
+        let usageRefresher = HelperUsageRefresher(
+            resolver: resolver,
+            settingsRepo: settingsRepo,
+            fetcher: usageFetcher,
+            cmdRepo: cmdRepo,
+            logWriter: logWriter,
+            intervalSeconds: 5 * 60
+        )
 
         // Heartbeat + tick loop. Sleep 30s between iterations.
         while true {
@@ -88,17 +111,92 @@ struct HelperMain {
                 pid: Int(getpid())
             )
             _ = await scheduler.tick(now: .now)
+            await usageRefresher.tickIfDue(now: .now)
             try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+        }
+    }
+}
+
+/// Polls every enabled provider's usage on a fixed cadence so the "current 5h
+/// window" we display stays accurate even when the main app isn't open.
+actor HelperUsageRefresher {
+    let resolver: any CLIPathResolving
+    let settingsRepo: any AppSettingsRepository
+    let fetcher: UsageFetcher
+    let cmdRepo: any CommandRunRepository
+    let logWriter: any FileLogWriting
+    let intervalSeconds: TimeInterval
+
+    private var lastRefreshAt: Date?
+
+    init(
+        resolver: any CLIPathResolving,
+        settingsRepo: any AppSettingsRepository,
+        fetcher: UsageFetcher,
+        cmdRepo: any CommandRunRepository,
+        logWriter: any FileLogWriting,
+        intervalSeconds: TimeInterval
+    ) {
+        self.resolver = resolver
+        self.settingsRepo = settingsRepo
+        self.fetcher = fetcher
+        self.cmdRepo = cmdRepo
+        self.logWriter = logWriter
+        self.intervalSeconds = intervalSeconds
+    }
+
+    func tickIfDue(now: Date) async {
+        if let last = lastRefreshAt, now.timeIntervalSince(last) < intervalSeconds {
+            return
+        }
+        lastRefreshAt = now
+        for providerID in ProviderID.allCases {
+            await refresh(providerID: providerID, now: now)
+        }
+    }
+
+    private func refresh(providerID: ProviderID, now: Date) async {
+        do {
+            let configured = try? await settingsRepo.get(
+                AppSettingsKeys.cliPath(for: providerID),
+                as: String.self
+            )
+            guard let cliURL = await resolver.resolveCLI(
+                named: providerID.executableName,
+                configuredPath: configured
+            ) else {
+                return
+            }
+            let snapshot: UsageSnapshot
+            let repo = cmdRepo
+            let writer = logWriter
+            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                logWriter: writer,
+                onStart: { run in try await repo.create(run) },
+                onComplete: { run in try await repo.update(run) }
+            )
+            try await fetcher.persistSnapshot(snapshot)
+            if let window = try fetcher.derived5h(from: snapshot, now: now) {
+                try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
+            }
+            if let window = try fetcher.derived7d(from: snapshot) {
+                try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
+            }
+        } catch {
+            NSLog("C5hHelper: usage refresh failed for \(providerID.rawValue): \(error)")
         }
     }
 }
 
 struct HelperSchedulerDriver: SchedulerDriver {
     let scheduledRepo: any ScheduledPromptRepository
-    let actualRepo: any ActualWindowRepository
+    let actual5hRepo: any ActualWindow5hRepository
     let runner: any CommandRunning
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
+    let usageFetcher: UsageFetcher
+    let cmdRepo: any CommandRunRepository
+    let logWriter: any FileLogWriting
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
         try await scheduledRepo.fetchDuePrompts(now: now)
@@ -120,19 +218,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
         try await scheduledRepo.markMissed(id: id)
     }
 
-    func registerActualWindow(_ window: ActualWindow) async throws {
-        try await actualRepo.create(window)
-    }
-
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
-        let key = "providers.\(prompt.providerID.rawValue).cliPath"
-        let configured = try await settingsRepo.get(key, as: String.self)
-        guard let cliURL = await resolver.resolveCLI(
-            named: prompt.providerID.executableName,
-            configuredPath: configured
-        ) else {
-            throw C5hError.cliNotFound(prompt.providerID.executableName)
-        }
+        let cliURL = try await resolveCLI(for: prompt.providerID)
         return try await runner.run(PromptCommand(
             providerID: prompt.providerID,
             executableURL: cliURL,
@@ -142,5 +229,67 @@ struct HelperSchedulerDriver: SchedulerDriver {
                 mode: .newSession
             )
         ).spec())
+    }
+
+    func resolveActualWindow(
+        for providerID: ProviderID,
+        commandRun: CommandRun
+    ) async throws -> ActualWindow5h? {
+        let actual5hRepo = actual5hRepo
+        let settingsRepo = settingsRepo
+        let cliResolver = resolver
+        let cmdRepo = cmdRepo
+        let logWriter = logWriter
+        let resolver = ActiveWindowResolver(
+            fetcher: usageFetcher,
+            snapshotFetch: { providerID in
+                let cliURL = try await Self.resolveCLIStandalone(
+                    for: providerID,
+                    settingsRepo: settingsRepo,
+                    resolver: cliResolver
+                )
+                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                    logWriter: logWriter,
+                    onStart: { run in try await cmdRepo.create(run) },
+                    onComplete: { run in try await cmdRepo.update(run) }
+                )
+            },
+            activeWindowFetch: { providerID, now in
+                let interval = DateInterval(start: now, duration: 1)
+                let windows = try await actual5hRepo.fetchWindows(for: interval)
+                return windows.first { $0.providerID == providerID }
+            },
+            updateActualWindow: { window in
+                try await actual5hRepo.update(window)
+            }
+        )
+        return await resolver.resolveTriggeredWindow(
+            providerID: providerID,
+            commandRunID: commandRun.id
+        )
+    }
+
+    private func resolveCLI(for providerID: ProviderID) async throws -> URL {
+        try await Self.resolveCLIStandalone(
+            for: providerID,
+            settingsRepo: settingsRepo,
+            resolver: resolver
+        )
+    }
+
+    private static func resolveCLIStandalone(
+        for providerID: ProviderID,
+        settingsRepo: any AppSettingsRepository,
+        resolver: any CLIPathResolving
+    ) async throws -> URL {
+        let key = AppSettingsKeys.cliPath(for: providerID)
+        let configured = try await settingsRepo.get(key, as: String.self)
+        guard let cliURL = await resolver.resolveCLI(
+            named: providerID.executableName,
+            configuredPath: configured
+        ) else {
+            throw C5hError.cliNotFound(providerID.executableName)
+        }
+        return cliURL
     }
 }

@@ -14,7 +14,6 @@
 		0A0012020401000000000003 /* CommandRunTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000003 /* CommandRunTable.swift */; };
 		0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000004 /* CommandRunDetailView.swift */; };
 		0A0012020401000000000005 /* OutputLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020401000000000005 /* OutputLogView.swift */; };
-		0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000001 /* LogsFixtureLoader.swift */; };
 		0A0012050000000000000001 /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000001 /* ProviderRegistry.swift */; };
 		0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */; };
 		0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011050000000000000003 /* ClaudeProviderAdapter.swift */; };
@@ -25,23 +24,19 @@
 		0A0012020301000000000001 /* DayCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000001 /* DayCalendarView.swift */; };
 		0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000002 /* DayCalendarViewModel.swift */; };
 		0A0012020301000000000003 /* TimeRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000003 /* TimeRulerView.swift */; };
-		0A0012020301000000000004 /* NowLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000004 /* NowLineView.swift */; };
 		0A0012020301000000000005 /* ProviderColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000005 /* ProviderColumnView.swift */; };
 		0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000006 /* PlannedWindowBlockView.swift */; };
 		0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000007 /* ActualWindowBlockView.swift */; };
 		0A0012020301000000000008 /* WindowInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000008 /* WindowInspectorView.swift */; };
+		0A0012020301000000000014 /* BlockFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000014 /* BlockFormatters.swift */; };
 		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
-		0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011040000000000000002 /* CalendarFixtureLoader.swift */; };
-		0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000011 /* StartProviderNowSheet.swift */; };
 		0A0012020301000000000012 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000012 /* WeekCalendarView.swift */; };
 		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
-		0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000001 /* ManualTriggerCoordinator.swift */; };
 		0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000002 /* AppSchedulerDriver.swift */; };
 		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
 		0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000001 /* HelperRegistrationService.swift */; };
 		0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000002 /* HelperDevModeRunner.swift */; };
 		0A0012080000000000000001 /* DebugBundleExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011080000000000000001 /* DebugBundleExporter.swift */; };
-		0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
 		0A0012010000000000000003 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000003 /* AppEnvironment.swift */; };
@@ -88,7 +83,6 @@
 		0A0011020401000000000003 /* CommandRunTable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunTable.swift; sourceTree = "<group>"; };
 		0A0011020401000000000004 /* CommandRunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunDetailView.swift; sourceTree = "<group>"; };
 		0A0011020401000000000005 /* OutputLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputLogView.swift; sourceTree = "<group>"; };
-		0A0011040000000000000001 /* LogsFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsFixtureLoader.swift; sourceTree = "<group>"; };
 		0A0011050000000000000001 /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderRegistry.swift; sourceTree = "<group>"; };
 		0A0011050000000000000002 /* CLIBackedProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIBackedProviderAdapter.swift; sourceTree = "<group>"; };
 		0A0011050000000000000003 /* ClaudeProviderAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProviderAdapter.swift; sourceTree = "<group>"; };
@@ -99,23 +93,19 @@
 		0A0011020301000000000001 /* DayCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000002 /* DayCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayCalendarViewModel.swift; sourceTree = "<group>"; };
 		0A0011020301000000000003 /* TimeRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeRulerView.swift; sourceTree = "<group>"; };
-		0A0011020301000000000004 /* NowLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowLineView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000005 /* ProviderColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderColumnView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000006 /* PlannedWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowBlockView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000014 /* BlockFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockFormatters.swift; sourceTree = "<group>"; };
 		0A0011020301000000000007 /* ActualWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActualWindowBlockView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000008 /* WindowInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInspectorView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
-		0A0011040000000000000002 /* CalendarFixtureLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarFixtureLoader.swift; sourceTree = "<group>"; };
-		0A0011020301000000000011 /* StartProviderNowSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartProviderNowSheet.swift; sourceTree = "<group>"; };
 		0A0011020301000000000012 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000013 /* WeekCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarViewModel.swift; sourceTree = "<group>"; };
-		0A0011060000000000000001 /* ManualTriggerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualTriggerCoordinator.swift; sourceTree = "<group>"; };
 		0A0011060000000000000002 /* AppSchedulerDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSchedulerDriver.swift; sourceTree = "<group>"; };
 		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
 		0A0011070000000000000001 /* HelperRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRegistrationService.swift; sourceTree = "<group>"; };
 		0A0011070000000000000002 /* HelperDevModeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperDevModeRunner.swift; sourceTree = "<group>"; };
 		0A0011080000000000000001 /* DebugBundleExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugBundleExporter.swift; sourceTree = "<group>"; };
-		0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlannedWindowEditorSheet.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0A0011020700000000000001 /* PlaceholderScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderScreen.swift; sourceTree = "<group>"; };
@@ -191,7 +181,6 @@
 			isa = PBXGroup;
 			children = (
 				0A0010040100000000000001 /* Paths */,
-				0A0010040200000000000001 /* DevSeed */,
 				0A0010040300000000000001 /* Providers */,
 				0A0010040400000000000001 /* Services */,
 				0A0010040500000000000001 /* Helper */,
@@ -220,7 +209,6 @@
 		0A0010040400000000000001 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				0A0011060000000000000001 /* ManualTriggerCoordinator.swift */,
 				0A0011060000000000000002 /* AppSchedulerDriver.swift */,
 				0A0011060000000000000003 /* SchedulerTicker.swift */,
 			);
@@ -300,14 +288,12 @@
 				0A0011020301000000000001 /* DayCalendarView.swift */,
 				0A0011020301000000000002 /* DayCalendarViewModel.swift */,
 				0A0011020301000000000003 /* TimeRulerView.swift */,
-				0A0011020301000000000004 /* NowLineView.swift */,
 				0A0011020301000000000005 /* ProviderColumnView.swift */,
 				0A0011020301000000000006 /* PlannedWindowBlockView.swift */,
 				0A0011020301000000000007 /* ActualWindowBlockView.swift */,
+				0A0011020301000000000014 /* BlockFormatters.swift */,
 				0A0011020301000000000008 /* WindowInspectorView.swift */,
 				0A0011020301000000000009 /* CalendarLayoutConfig.swift */,
-				0A0011020301000000000010 /* PlannedWindowEditorSheet.swift */,
-				0A0011020301000000000011 /* StartProviderNowSheet.swift */,
 				0A0011020301000000000012 /* WeekCalendarView.swift */,
 				0A0011020301000000000013 /* WeekCalendarViewModel.swift */,
 			);
@@ -324,15 +310,6 @@
 				0A0011020401000000000005 /* OutputLogView.swift */,
 			);
 			path = Logs;
-			sourceTree = "<group>";
-		};
-		0A0010040200000000000001 /* DevSeed */ = {
-			isa = PBXGroup;
-			children = (
-				0A0011040000000000000001 /* LogsFixtureLoader.swift */,
-				0A0011040000000000000002 /* CalendarFixtureLoader.swift */,
-			);
-			path = DevSeed;
 			sourceTree = "<group>";
 		};
 		0A0010020500000000000001 /* Providers */ = {
@@ -405,6 +382,7 @@
 				0A0030010000000000000001 /* Sources */,
 				0A0030020000000000000001 /* Resources */,
 				0A0030030000000000000001 /* Frameworks */,
+				0A0030040000000000000001 /* Embed C5hHelper + LaunchAgent */,
 			);
 			buildRules = (
 			);
@@ -457,6 +435,31 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		0A0030040000000000000001 /* Embed C5hHelper + LaunchAgent */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Packages/C5hHelper/Package.swift",
+				"$(SRCROOT)/Packages/C5hHelper/Sources/C5hHelper/main.swift",
+				"$(SRCROOT)/Resources/com.zaai.c5h.helper.plist",
+			);
+			name = "Embed C5hHelper + LaunchAgent";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\n\nif [ \"${ACTION:-build}\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nCONFIG_LOWER=$(echo \"$CONFIGURATION\" | tr '[:upper:]' '[:lower:]')\nHELPER_PKG=\"$SRCROOT/Packages/C5hHelper\"\nARCH=$(uname -m)\n\necho \"Building C5hHelper ($CONFIG_LOWER, $ARCH)\"\ncd \"$HELPER_PKG\"\nxcrun swift build -c \"$CONFIG_LOWER\" --arch \"$ARCH\"\n\nBIN=\"$HELPER_PKG/.build/$ARCH-apple-macosx/$CONFIG_LOWER/C5hHelper\"\nif [ ! -x \"$BIN\" ]; then\n  echo \"error: helper binary not found at $BIN\"\n  exit 1\nfi\n\nHELPERS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Helpers\"\nLAUNCHAGENTS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Library/LaunchAgents\"\nmkdir -p \"$HELPERS_DIR\" \"$LAUNCHAGENTS_DIR\"\n\ncp -f \"$BIN\" \"$HELPERS_DIR/C5hHelper\"\ncp -f \"$SRCROOT/Resources/com.zaai.c5h.helper.plist\" \"$LAUNCHAGENTS_DIR/com.zaai.c5h.helper.plist\"\n\nIDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}\"\nif [ -z \"$IDENTITY\" ]; then IDENTITY=\"-\"; fi\necho \"Signing C5hHelper with identity: $IDENTITY\"\ncodesign --force --sign \"$IDENTITY\" --options=runtime --timestamp=none \"$HELPERS_DIR/C5hHelper\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXResourcesBuildPhase section */
 		0A0030020000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -504,7 +507,6 @@
 				0A0012020401000000000003 /* CommandRunTable.swift in Sources */,
 				0A0012020401000000000004 /* CommandRunDetailView.swift in Sources */,
 				0A0012020401000000000005 /* OutputLogView.swift in Sources */,
-				0A0012040000000000000001 /* LogsFixtureLoader.swift in Sources */,
 				0A0012050000000000000001 /* ProviderRegistry.swift in Sources */,
 				0A0012050000000000000002 /* CLIBackedProviderAdapter.swift in Sources */,
 				0A0012050000000000000003 /* ClaudeProviderAdapter.swift in Sources */,
@@ -515,18 +517,14 @@
 				0A0012020301000000000001 /* DayCalendarView.swift in Sources */,
 				0A0012020301000000000002 /* DayCalendarViewModel.swift in Sources */,
 				0A0012020301000000000003 /* TimeRulerView.swift in Sources */,
-				0A0012020301000000000004 /* NowLineView.swift in Sources */,
 				0A0012020301000000000005 /* ProviderColumnView.swift in Sources */,
 				0A0012020301000000000006 /* PlannedWindowBlockView.swift in Sources */,
 				0A0012020301000000000007 /* ActualWindowBlockView.swift in Sources */,
+				0A0012020301000000000014 /* BlockFormatters.swift in Sources */,
 				0A0012020301000000000008 /* WindowInspectorView.swift in Sources */,
 				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
-				0A0012040000000000000002 /* CalendarFixtureLoader.swift in Sources */,
-				0A0012020301000000000010 /* PlannedWindowEditorSheet.swift in Sources */,
-				0A0012020301000000000011 /* StartProviderNowSheet.swift in Sources */,
 				0A0012020301000000000012 /* WeekCalendarView.swift in Sources */,
 				0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */,
-				0A0012060000000000000001 /* ManualTriggerCoordinator.swift in Sources */,
 				0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */,
 				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,
 				0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */,
@@ -612,6 +610,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_STRING_CATALOG_SYMBOLS = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -669,6 +668,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_STRING_CATALOG_SYMBOLS = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -688,9 +688,9 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"C5h/Resources/PreviewData\"";
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = C5h/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -698,7 +698,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = NO;
@@ -717,10 +717,10 @@
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"C5h/Resources/PreviewData\"";
 				DEVELOPMENT_TEAM = 57KL6Y7V32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = C5h/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -728,7 +728,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = NO;

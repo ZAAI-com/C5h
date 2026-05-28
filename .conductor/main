@@ -1,5 +1,0 @@
-#!/bin/bash
-# Conductor entry-point: delegates to Toolkit/Conductor/setup.sh
-set -euo pipefail
-cd "$(dirname "$0")/.."
-exec ./Toolkit/Conductor/setup.sh "$@"

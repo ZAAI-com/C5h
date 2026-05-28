@@ -7,12 +7,12 @@ C5h is a macOS Xcode app. Use `C5h.xcworkspace` with the `C5h` scheme.
 From the repository root, run:
 
 ```bash
-./.conductor/main
-./.conductor/run
+./Toolkit/Conductor/setup.sh
+./Toolkit/Conductor/run.sh
 ```
 
-`./.conductor/main` verifies the Xcode toolchain and warms the Debug build cache.
-`./.conductor/run` opens the workspace in Xcode. In Xcode, select the `C5h`
+`./Toolkit/Conductor/setup.sh` verifies the Xcode toolchain and warms the Debug build cache.
+`./Toolkit/Conductor/run.sh` opens the workspace in Xcode. In Xcode, select the `C5h`
 scheme and run the app.
 
 For a command-line Debug build:
@@ -54,7 +54,7 @@ runner > Start**. Use **Refresh** under **Heartbeat** to verify a recent last-se
 time and PID.
 
 The Debug helper wakes every 30 seconds, writes a heartbeat, checks due scheduled
-prompts, runs `claude -p ...` or `codex chat -p ...`, and records command logs
+prompts, runs `claude -p ...` or `codex exec ...`, and records command logs
 and actual windows in the app database.
 
 Debug helper logs:
@@ -76,14 +76,13 @@ LaunchAgent plist in the app bundle.
   - `Core/` — app-side services and adapters (providers, scheduler driver, helper, debug bundle)
   - Resources — assets, plists
 - `Packages/` — three Swift packages: `C5hCore`, `C5hStore`, `C5hHelper`
-- `.conductor/` — build/run scripts (`main`, `run`)
 - `Toolkit/`, `Resources/` — build tooling and app assets
 - `Conductor.json` — Conductor workspace config
 
 ## Architecture
 
 - **Entry point**: `C5h/App/C5hApp.swift` (SwiftUI `@main`, main `WindowGroup` + `Settings` scene).
-- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, `AppSchedulerDriver`, and `ManualTriggerCoordinator`, and seeds fixture data in Debug.
+- **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, and `AppSchedulerDriver`, and seeds fixture data in Debug.
 - **Navigation**: `C5h/UI/Root/MainWindowView.swift` uses `NavigationSplitView(.balanced)` with an `AppTab` enum; sidebar pinned to `.all` visibility. Tabs are grouped into named sections: **Overview** (dashboard, today, tomorrow), **Calendar** (calendar), **Activity** (logs), **App** (providers, settings). Each screen owns its own `principal` toolbar item; `MainWindowView` is toolbar-agnostic.
 - **Onboarding**: `OnboardingView` is shown on first launch (keyed by `hasCompletedOnboarding` flag in `AppSettingsRepository`) before the main `NavigationSplitView`.
 - **State**: SwiftUI Observation (`@Observable`), `@MainActor` ViewModels, constructor-injected dependencies. No Combine, no global singletons.
@@ -96,7 +95,7 @@ LaunchAgent plist in the app bundle.
 - **C5hCore** (`Packages/C5hCore`) — domain models, services, process primitives. Has tests.
   - Models: `Provider`, `ProviderID`, `ScheduledPrompt`, `PlannedWindow`, `ActualWindow`, `CommandRun`, `PromptTemplate`, `UsageSnapshot`
   - Services: `SchedulerService`, `PlannedWindowService`, `MissedPromptPolicy`, `DateTimeService`, `CommandRunner`, `CLIPathResolver`, `EnvironmentResolver`, `CalendarPositioning`, `LogRetentionSweeper`
-  - Usage: `ClaudeUsageStatus`, `CodexUsageStatus`, `UsageDiffEngine`, `UsageNormalizer`
+  - Usage: `ClaudeUsageStatus`, `CodexUsageStatus`, `UsageNormalizer`, `UsageFetcher`
   - Validation: `PlannedWindowValidator`
   - Process: `DisclaimingSpawn` / `LaunchedProcess`, `CommandSpec`, `FileLogWriter`
   - Errors: `C5hError` (`LocalizedError`)
@@ -105,7 +104,7 @@ LaunchAgent plist in the app bundle.
 - **C5hHelper** (`Packages/C5hHelper`) — executable background helper (see Debug helper section above).
 - **C5h/Core/** (app target, not a package) — app-side adapters and drivers:
   - `Providers/`: `ProviderAdapter` protocol implementations (`ClaudeProviderAdapter`, `CodexProviderAdapter`, `CLIBackedProviderAdapter`), `ProviderRegistry`
-  - `Services/`: `AppSchedulerDriver`, `ManualTriggerCoordinator`, `SchedulerTicker`
+  - `Services/`: `AppSchedulerDriver`, `SchedulerTicker`
   - `Helper/`: `HelperDevModeRunner`, `HelperRegistrationService`
   - `DebugBundle/`: `DebugBundleExporter`
   - `Paths/`: `AppPaths`
@@ -132,8 +131,6 @@ LaunchAgent plist in the app bundle.
 swift test --package-path Packages/C5hCore
 swift test --package-path Packages/C5hStore
 ```
-
-- Debug-only fixture loaders (`LogsFixtureLoader`, `CalendarFixtureLoader`) are guarded by `#if DEBUG`.
 
 ## Conventions
 

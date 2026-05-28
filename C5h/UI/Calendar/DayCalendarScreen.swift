@@ -5,9 +5,9 @@ import C5hStore
 struct DayCalendarScreen: View {
     let date: Date
     var title: String = ""
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DayCalendarViewModel?
-    @State private var coordinator: ManualTriggerCoordinator?
     @State private var now: Date = .now
     private let layout = CalendarLayoutConfig()
 
@@ -24,13 +24,18 @@ struct DayCalendarScreen: View {
         .task(id: BootstrapKey(env: ObjectIdentifier(appEnv), day: Calendar.current.startOfDay(for: date))) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actualRepo = appEnv.actualWindowRepository,
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let actual7dRepo = appEnv.actualWindow7dRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository {
                 let vm = DayCalendarViewModel(
                     date: date,
                     plannedRepository: plannedRepo,
-                    actualRepository: actualRepo,
-                    scheduledRepository: scheduledRepo
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
+                    scheduledRepository: scheduledRepo,
+                    usageSnapshotRepository: appEnv.usageSnapshotRepository,
+                    providerRegistry: appEnv.providerRegistry,
+                    appSettings: appEnv.appSettingsRepository
                 )
                 viewModel = vm
                 await vm.reload()
@@ -39,14 +44,6 @@ struct DayCalendarScreen: View {
                 vm.date = date
                 await vm.reload()
             }
-            if coordinator == nil,
-               let registry = appEnv.providerRegistry,
-               let actualRepo = appEnv.actualWindowRepository {
-                coordinator = ManualTriggerCoordinator(
-                    registry: registry,
-                    actualWindowRepository: actualRepo
-                )
-            }
         }
         .task {
             for await tick in Timer.publish(every: 30, on: .main, in: .common).autoconnect().values {
@@ -54,6 +51,11 @@ struct DayCalendarScreen: View {
             }
         }
         .onAppear {
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
+        .onChange(of: reloadToken) { _, _ in
             if let viewModel {
                 Task { await viewModel.reload() }
             }
@@ -72,7 +74,6 @@ struct DayCalendarScreen: View {
 
     @ViewBuilder
     private func content(_ viewModel: DayCalendarViewModel) -> some View {
-        @Bindable var bound = viewModel
         DayCalendarView(
             viewModel: viewModel,
             layout: layout,
@@ -86,6 +87,9 @@ struct DayCalendarScreen: View {
                 withAnimation(C5hAnimation.morph) {
                     viewModel.selection = .actual(window)
                 }
+            },
+            onMovePlanned: { window, start in
+                Task { await viewModel.move(window: window, to: start) }
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {
@@ -113,10 +117,6 @@ struct DayCalendarScreen: View {
             if let sel = viewModel.selection {
                 WindowInspectorView(
                     selection: sel,
-                    onEdit: { window in
-                        viewModel.selection = nil
-                        viewModel.presentEdit(for: window)
-                    },
                     onDelete: { id in
                         viewModel.selection = nil
                         Task { try? await viewModel.delete(id: id) }
@@ -127,64 +127,10 @@ struct DayCalendarScreen: View {
                 EmptyView()
             }
         }
-        .sheet(isPresented: $bound.editingDraftPresented) {
-            PlannedWindowEditorSheet(
-                editing: viewModel.editingExisting,
-                defaultStart: viewModel.date.atHour(9),
-                allWindows: viewModel.planned,
-                onSave: { draft in try await viewModel.save(draft: draft) },
-                onDelete: { id in try await viewModel.delete(id: id) }
-            )
-        }
-        .sheet(isPresented: $bound.startNowPresented) {
-            StartProviderNowSheet(
-                defaultProviderID: viewModel.startNowDefaultProvider
-            ) { providerID, prompt, projectPath in
-                guard let coordinator else {
-                    throw C5hError.providerNotConfigured("trigger coordinator")
-                }
-                _ = try await coordinator.startNow(
-                    providerID: providerID,
-                    prompt: prompt,
-                    projectPath: projectPath
-                )
-                await viewModel.reload()
-            }
-        }
     }
 
     @ToolbarContentBuilder
     private func actionToolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                viewModel.presentNewDraft()
-            } label: {
-                Label("Add planned", systemImage: "plus.circle")
-            }
-            .help("Create planned window")
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                ForEach(ProviderID.allCases) { id in
-                    Button("Start \(id.displayName) now") {
-                        viewModel.presentStartNow(provider: id)
-                    }
-                }
-            } label: {
-                Label("Start now", systemImage: "play.circle.fill")
-            }
-        }
-
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                Task { await viewModel.reload() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Reload")
-        }
-
         ToolbarItem(placement: .primaryAction) {
             Button {
                 withAnimation(C5hAnimation.morph) {
@@ -203,12 +149,6 @@ struct DayCalendarScreen: View {
             }
             .help("Toggle inspector")
         }
-    }
-}
-
-private extension Date {
-    func atHour(_ hour: Int) -> Date {
-        Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: self) ?? self
     }
 }
 

@@ -6,34 +6,49 @@ import C5hStore
 @Observable
 @MainActor
 final class DashboardViewModel {
-    var activeWindows: [ActualWindow] = []
+    var activeWindows: [ActualWindow5h] = []
+    var weeklyWindows: [ActualWindow7d] = []
     var activeWindowUsagePercentages: [UUID: Double] = [:]
     var upcomingPrompts: [ScheduledPrompt] = []
     var recentRuns: [CommandRun] = []
-    var providerStatuses: [ProviderID: ProviderStatus] = [:]
     var dailyUsageHistory: [DailyProviderUsage] = []
     var sparklineCounts: [ProviderID: [Int]] = [:]
     var lastError: String?
     var isLoading: Bool = false
 
-    private let actualRepo: any ActualWindowRepository
+    private let actual5hRepo: any ActualWindow5hRepository
+    private let actual7dRepo: any ActualWindow7dRepository
     private let scheduledRepo: any ScheduledPromptRepository
     private let commandRepo: any CommandRunRepository
     private let usageRepo: any UsageSnapshotRepository
     private let registry: ProviderRegistry
+    private let fetcher: UsageFetcher
 
     init(
-        actualRepository: any ActualWindowRepository,
+        actual5hRepository: any ActualWindow5hRepository,
+        actual7dRepository: any ActualWindow7dRepository,
         scheduledRepository: any ScheduledPromptRepository,
         commandRunRepository: any CommandRunRepository,
         usageSnapshotRepository: any UsageSnapshotRepository,
         registry: ProviderRegistry
     ) {
-        self.actualRepo = actualRepository
+        self.actual5hRepo = actual5hRepository
+        self.actual7dRepo = actual7dRepository
         self.scheduledRepo = scheduledRepository
         self.commandRepo = commandRunRepository
         self.usageRepo = usageSnapshotRepository
         self.registry = registry
+        self.fetcher = UsageFetcher(
+            persistSnapshot: { snapshot in
+                try await usageSnapshotRepository.create(snapshot)
+            },
+            upsertActualWindow5h: { window, tolerance in
+                try await actual5hRepository.upsertByEndAt(window, tolerance: tolerance)
+            },
+            upsertActualWindow7d: { window, tolerance in
+                try await actual7dRepository.upsertByEndAt(window, tolerance: tolerance)
+            }
+        )
     }
 
     func reload() async {
@@ -45,16 +60,14 @@ final class DashboardViewModel {
                 await refreshUsageWindow(providerID: providerID, now: now)
             }
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
-            let actuals = try await actualRepo.fetchWindows(for: interval)
+            let actuals = try await actual5hRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await refreshUsagePercentages()
             self.recentRuns = try await commandRepo.fetchRecent(
                 limit: 5,
                 filter: CommandRunFilter()
             )
-            for id in ProviderID.allCases {
-                await refreshProviderStatus(id: id)
-            }
             await loadUsageHistory(now: now)
             self.lastError = nil
         } catch {
@@ -68,7 +81,7 @@ final class DashboardViewModel {
         let weekStart = cal.date(byAdding: .day, value: -days, to: cal.startOfDay(for: now)) ?? now
         let interval = DateInterval(start: weekStart, end: endOfToday)
         do {
-            let actuals = try await actualRepo.fetchWindows(for: interval)
+            let actuals = try await actual5hRepo.fetchWindows(for: interval)
             var bucket: [Date: [ProviderID: Int]] = [:]
             for d in 0..<days {
                 if let date = cal.date(byAdding: .day, value: d, to: weekStart) {
@@ -103,79 +116,21 @@ final class DashboardViewModel {
     private func refreshUsageWindow(providerID: ProviderID, now: Date) async {
         do {
             let adapter = try registry.adapter(for: providerID)
-            let snapshot = try await adapter.runUsageCommand()
-            guard !isSnapshotStale(snapshot, now: now) else {
-                NSLog("\(providerID.displayName) usage snapshot is stale; skipping")
-                return
-            }
-            try await usageRepo.create(snapshot)
-            let windows = try actualWindows(from: snapshot)
-
-            for window in windows where window.startAt <= now && window.endAt >= now {
-                let duplicateSearch = DateInterval(
-                    start: window.startAt.addingTimeInterval(-TimeInterval(window.durationSeconds)),
-                    end: window.endAt.addingTimeInterval(1)
-                )
-                let existing = try await actualRepo.fetchWindows(for: duplicateSearch)
-                guard !existing.contains(where: { overlaps($0, window) }) else { continue }
-                try await actualRepo.create(window)
-            }
+            _ = try await fetcher.fetchAndPersist(adapter: adapter, now: now)
         } catch {
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
     }
 
-    private func refreshProviderStatus(id: ProviderID) async {
-        do {
-            let adapter = try registry.adapter(for: id)
-            let versionStatus = await adapter.runVersionCommand()
-            providerStatuses[id] = versionStatus
-            guard versionStatus.isInstalled, versionStatus.errorMessage == nil else { return }
-
-            let authStatus = await adapter.runAuthStatusCommand()
-            providerStatuses[id] = ProviderStatus(
-                providerID: id,
-                isInstalled: versionStatus.isInstalled,
-                cliPath: authStatus.cliPath ?? versionStatus.cliPath,
-                version: versionStatus.version,
-                isAuthenticated: authStatus.isAuthenticated,
-                lastCheckedAt: authStatus.lastCheckedAt,
-                errorMessage: authStatus.errorMessage
-            )
-        } catch {
-            providerStatuses[id] = ProviderStatus(
-                providerID: id,
-                isInstalled: false,
-                errorMessage: String(describing: error)
-            )
-        }
-    }
-
-    private func actualWindows(from snapshot: UsageSnapshot) throws -> [ActualWindow] {
-        switch snapshot.providerID {
-        case .claude:
-            let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
-            var result = [status.actualWindow(providerID: .claude, createdAt: snapshot.capturedAt)]
-            if let weekly = status.sevenDayActualWindow(providerID: .claude, createdAt: snapshot.capturedAt) {
-                result.append(weekly)
+    private func loadLatestWeeklyWindows(now: Date) async throws -> [ActualWindow7d] {
+        var windows: [ActualWindow7d] = []
+        for providerID in ProviderID.allCases {
+            if let window = try await actual7dRepo.fetchLatest(providerID: providerID),
+               window.endAt >= now {
+                windows.append(window)
             }
-            return result
-        case .codex:
-            let status = try CodexUsageStatus.parsePayload(snapshot.rawJSON)
-            var result = [status.actualWindow(providerID: .codex, createdAt: snapshot.capturedAt)]
-            if let weekly = status.secondaryActualWindow(providerID: .codex, createdAt: snapshot.capturedAt) {
-                result.append(weekly)
-            }
-            return result
         }
-    }
-
-    private func isSnapshotStale(_ snapshot: UsageSnapshot, now: Date) -> Bool {
-        guard snapshot.providerID == .codex,
-              let status = try? CodexUsageStatus.parsePayload(snapshot.rawJSON) else {
-            return false
-        }
-        return status.isStale(now: now)
+        return windows
     }
 
     private func refreshUsagePercentages() async {
@@ -206,10 +161,4 @@ final class DashboardViewModel {
         return try? decoder.decode(NormalizedUsage.self, from: data)
     }
 
-    private func overlaps(_ existing: ActualWindow, _ detected: ActualWindow) -> Bool {
-        existing.providerID == detected.providerID
-            && existing.durationSeconds == detected.durationSeconds
-            && existing.startAt < detected.endAt
-            && existing.endAt > detected.startAt
-    }
 }

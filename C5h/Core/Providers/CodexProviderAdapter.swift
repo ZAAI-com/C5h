@@ -6,11 +6,15 @@ struct CodexProviderAdapter: ProviderAdapter {
     let id: ProviderID = .codex
     let displayName: String = ProviderID.codex.displayName
     private let backing: CLIBackedProviderAdapter
+    private let cmdRepo: any CommandRunRepository
+    private let logWriter: any FileLogWriting
 
     init(
         runner: any CommandRunning,
         resolver: any CLIPathResolving,
-        appSettings: any AppSettingsRepository
+        appSettings: any AppSettingsRepository,
+        cmdRepo: any CommandRunRepository,
+        logWriter: any FileLogWriting
     ) {
         self.backing = CLIBackedProviderAdapter(
             id: .codex,
@@ -20,17 +24,28 @@ struct CodexProviderAdapter: ProviderAdapter {
             resolver: resolver,
             appSettings: appSettings
         )
+        self.cmdRepo = cmdRepo
+        self.logWriter = logWriter
     }
 
     func runVersionCommand() async -> ProviderStatus { await backing.runVersionCommand() }
     func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
 
     func runUsageCommand() async throws -> UsageSnapshot {
-        // Codex usage reset detection is intentionally disabled: reading
-        // ~/.codex/sessions/*.jsonl triggers macOS's "access data from other
-        // apps" TCC dialog, and the Codex CLI does not expose a programmatic
-        // /usage equivalent we could shell out to instead.
-        throw C5hError.providerNotConfigured("Codex usage reset detection is unavailable")
+        let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
+        guard let cliURL = await backing.resolver.resolveCLI(
+            named: backing.executableName,
+            configuredPath: configured
+        ) else {
+            throw C5hError.cliNotFound(backing.executableName)
+        }
+        let repo = cmdRepo
+        let writer = logWriter
+        return try await UsageCommand(providerID: .codex, executableURL: cliURL).collect(
+            logWriter: writer,
+            onStart: { run in try await repo.create(run) },
+            onComplete: { run in try await repo.update(run) }
+        )
     }
 
     func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {

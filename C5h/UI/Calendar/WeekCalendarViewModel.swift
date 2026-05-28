@@ -8,20 +8,24 @@ import C5hStore
 final class WeekCalendarViewModel {
     var weekStart: Date
     var planned: [PlannedWindow] = []
-    var actual: [ActualWindow] = []
+    var actual: [ActualWindow5h] = []
+    var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
-    private let actualRepo: any ActualWindowRepository
+    private let actual5hRepo: any ActualWindow5hRepository
+    private let usageSnapshotRepo: (any UsageSnapshotRepository)?
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
-        actualRepository: any ActualWindowRepository
+        actual5hRepository: any ActualWindow5hRepository,
+        usageSnapshotRepository: (any UsageSnapshotRepository)? = nil
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
-        self.actualRepo = actualRepository
+        self.actual5hRepo = actual5hRepository
+        self.usageSnapshotRepo = usageSnapshotRepository
     }
 
     static func startOfWeek(for date: Date) -> Date {
@@ -43,24 +47,43 @@ final class WeekCalendarViewModel {
         )
         do {
             async let p = plannedRepo.fetchWindows(for: interval)
-            async let a = actualRepo.fetchWindows(for: interval)
+            async let a = actual5hRepo.fetchWindows(for: interval)
             self.planned = try await p
             self.actual = try await a
             self.lastError = nil
         } catch {
             self.lastError = String(describing: error)
         }
+        await loadUsageHistories()
     }
 
-    func windows(forDay day: Date, providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow]) {
-        let dayInterval = CalendarPositioning.dayInterval(for: day)
-        let p = planned.filter {
-            $0.providerID == providerID && dayInterval.contains($0.startAt)
+    private func loadUsageHistories() async {
+        guard let repo = usageSnapshotRepo else { return }
+        let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        let lookback = DateInterval(
+            start: weekStart.addingTimeInterval(-7 * 24 * 60 * 60),
+            end: weekEnd.addingTimeInterval(7 * 24 * 60 * 60)
+        )
+        var built: [ProviderID: UsageHistorySeries] = [:]
+        for providerID in ProviderID.allCases {
+            do {
+                let snapshots = try await repo.fetchInRange(
+                    providerID: providerID,
+                    interval: lookback
+                )
+                built[providerID] = UsageHistorySeries(
+                    providerID: providerID,
+                    snapshots: snapshots
+                )
+            } catch {
+                NSLog("WeekCalendarViewModel: usage history load failed for \(providerID.rawValue): \(error)")
+            }
         }
-        let a = actual.filter {
-            $0.providerID == providerID && dayInterval.contains($0.startAt)
-        }
-        return (p, a)
+        self.usageHistories = built
+    }
+
+    func history(for providerID: ProviderID) -> UsageHistorySeries? {
+        usageHistories[providerID]
     }
 
     func goToPreviousWeek() {

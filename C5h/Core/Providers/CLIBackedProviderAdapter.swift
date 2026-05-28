@@ -54,9 +54,11 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         do {
             let run = try await runner.run(AuthStatusCommand(providerID: id, executableURL: cliURL).spec())
             let stdout = try await stdout(run: run)
+            let stderr = await stderr(run: run) ?? ""
             let authenticated = AuthStatusCommand.isAuthenticated(
                 providerID: id,
                 stdout: stdout,
+                stderr: stderr,
                 exitCode: run.exitCode
             )
             return ProviderStatus(
@@ -128,5 +130,13 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         guard let path = run.stdoutPath else { return "" }
         let data = try Data(contentsOf: URL(fileURLWithPath: path))
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func stderr(run: CommandRun) async -> String? {
+        guard let path = run.stderrPath,
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 }

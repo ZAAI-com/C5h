@@ -3,47 +3,93 @@ import C5hCore
 
 struct PlannedWindowBlockView: View {
     let window: PlannedWindow
+    var now: Date = .now
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
+    var visibleDurationSeconds: Int? = nil
+    var clipsTop: Bool = false
+    var clipsBottom: Bool = false
+    var compact: Bool = false
+    var displayStart: Date? = nil
 
     var body: some View {
+        let duration = visibleDurationSeconds ?? window.durationSeconds
         let height = CalendarPositioning.blockHeight(
-            durationSeconds: window.durationSeconds,
+            durationSeconds: duration,
             pixelsPerMinute: layout.pixelsPerMinute
         )
-        VStack(alignment: .leading, spacing: 2) {
-            Text(timeRange).font(.system(size: 10, weight: .semibold))
-            Text("Planned · \(window.status.rawValue)")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            if let path = window.projectPath {
-                Text(path).font(.system(size: 10))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(6)
-        .frame(width: columnWidth * layout.plannedBlockWidthRatio, height: height, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .fill(brandColor.opacity(0.22))
+        let density = BlockDensity.forHeight(height, compact: compact)
+        let radius = layout.blockCornerRadius
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: clipsTop ? 0 : radius,
+            bottomLeadingRadius: clipsBottom ? 0 : radius,
+            bottomTrailingRadius: clipsBottom ? 0 : radius,
+            topTrailingRadius: clipsTop ? 0 : radius,
+            style: .continuous
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: layout.blockCornerRadius, style: .continuous)
-                .strokeBorder(brandColor.opacity(0.7), lineWidth: 1)
+        let width = compact ? columnWidth : columnWidth * layout.plannedBlockWidthRatio
+
+        let shownStart = displayStart ?? window.startAt
+        // Bottom label tracks the visible clipped portion when the block is
+        // segmented across midnight; otherwise the full window duration.
+        let shownEnd = shownStart.addingTimeInterval(TimeInterval(duration))
+
+        ZStack {
+            cornersOverlay(
+                shownStart: shownStart,
+                shownEnd: shownEnd,
+                density: density
+            )
+            if density.showsCenter, density.showsDetailLine,
+               let path = window.projectPath, !path.isEmpty {
+                projectPathOverlay(path: path)
+            }
         }
+        .padding(compact ? 3 : 6)
+        .frame(width: width, height: height, alignment: .topLeading)
+        .background(shape.fill(brandColor.opacity(0.22)))
+        .overlay(shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1))
+        .clipShape(shape)
+    }
+
+    private func cornersOverlay(
+        shownStart: Date,
+        shownEnd: Date,
+        density: BlockDensity
+    ) -> some View {
+        VStack(spacing: 0) {
+            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+            if density.showsBottomCorners {
+                cornerText(BlockFormatters.formatTime(shownEnd))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func projectPathOverlay(path: String) -> some View {
+        Text(path)
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    private func cornerText(
+        _ string: String,
+        weight: Font.Weight = .regular,
+        alignment: TextAlignment = .leading
+    ) -> some View {
+        Text(string)
+            .font(.system(size: compact ? 9 : 10, weight: weight))
+            .multilineTextAlignment(alignment)
+            .monospacedDigit()
     }
 
     private var brandColor: Color {
         C5hColors.tintForProvider(window.providerID)
-    }
-
-    private var timeRange: String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return "\(f.string(from: window.startAt))–\(f.string(from: window.endAt))"
     }
 }

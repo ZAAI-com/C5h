@@ -16,7 +16,7 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .dashboard: "Dashboard"
         case .today: "Today"
         case .tomorrow: "Tomorrow"
-        case .calendar: "Calendar"
+        case .calendar: "Week"
         case .logs: "Logs"
         case .providers: "Providers"
         case .settings: "Settings"
@@ -32,6 +32,18 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .logs: "terminal"
         case .providers: "shippingbox"
         case .settings: "gearshape"
+        }
+    }
+
+    var navbarReloadHelp: String? {
+        switch self {
+        case .dashboard: "Reload dashboard"
+        case .today: "Reload today"
+        case .tomorrow: "Reload tomorrow"
+        case .calendar: "Reload calendar"
+        case .logs: "Reload logs"
+        case .providers: "Refresh provider version and authentication status"
+        case .settings: nil
         }
     }
 

@@ -11,36 +11,21 @@ struct SettingsView: View {
     #endif
 
     var body: some View {
-        TabView {
-            generalTab.tabItem { Label("General", systemImage: "gearshape") }
-            helperTab.tabItem { Label("Helper", systemImage: "bolt.horizontal.circle") }
-            advancedTab.tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Settings")
-                    .font(.title3.weight(.semibold))
-                    .padding(.horizontal, C5hSpacing.sm)
+        Form {
+            Section("Paths") {
+                pathRow("Application Support", url: appEnv.paths?.appSupportDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Logs", url: appEnv.paths?.logsDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Command run logs", url: appEnv.paths?.commandRunsDirectory) { url in
+                    openFolder(url)
+                }
+                pathRow("Database", url: appEnv.paths?.databaseURL, actionTitle: "Reveal in Finder") { url in
+                    revealInFinder(url)
+                }
             }
-        }
-        .task { await reloadHeartbeat() }
-    }
-
-    private var generalTab: some View {
-        Form {
-            LabeledContent("Database location", value: appEnv.paths?.databaseURL.path ?? "—")
-                .lineLimit(1)
-                .truncationMode(.middle)
-            LabeledContent("Logs directory", value: appEnv.paths?.logsDirectory.path ?? "—")
-                .lineLimit(1)
-                .truncationMode(.middle)
-            LabeledContent("Default window length", value: "5 hours")
-        }
-        .formStyle(.grouped)
-    }
-
-    private var helperTab: some View {
-        Form {
             Section("LaunchAgent") {
                 LabeledContent("Status", value: registration.status.label)
                 if case .error(let message) = registration.status {
@@ -54,6 +39,8 @@ struct SettingsView: View {
                     Button("Register") { registration.register() }
                         .buttonStyle(.glass)
                     Button("Unregister") { Task { await registration.unregister() } }
+                        .buttonStyle(.glass)
+                    Button("Open Login Items…") { openLoginItemsSettings() }
                         .buttonStyle(.glass)
                 }
             }
@@ -81,21 +68,13 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
-        }
-        .formStyle(.grouped)
-    }
-
-    private var advancedTab: some View {
-        Form {
-            Section("Database") {
-                LabeledContent("Path", value: appEnv.paths?.databaseURL.path ?? "—")
-                    .lineLimit(1).truncationMode(.middle)
-                Button("Reveal in Finder") {
-                    if let url = appEnv.paths?.databaseURL {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                }
-                .buttonStyle(.glass)
+            Section("Time zone") {
+                LabeledContent("Identifier", value: TimeZone.current.identifier)
+                LabeledContent("Abbreviation", value: TimeZone.current.abbreviation() ?? "—")
+                LabeledContent("Offset", value: timeZoneOffsetLabel)
+                Text("Read-only — follows your system time zone. New windows are tagged with this zone at creation.")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgTertiary)
             }
             Section("Bundle") {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
@@ -135,11 +114,69 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Settings")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, C5hSpacing.sm)
+            }
+        }
+        .task {
+            await reloadHeartbeat()
+        }
     }
 
     @State private var lastSweepResult: LogRetentionResult?
     @State private var lastExportedBundlePath: String?
     @State private var lastExportError: String?
+
+    private func pathRow(
+        _ title: String,
+        url: URL?,
+        actionTitle: String = "Open in Finder",
+        action: @escaping (URL) -> Void
+    ) -> some View {
+        LabeledContent {
+            HStack(spacing: C5hSpacing.sm) {
+                Text(url?.path ?? "—")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Button(actionTitle) {
+                    if let url {
+                        action(url)
+                    }
+                }
+                .buttonStyle(.glass)
+                .disabled(url == nil)
+            }
+        } label: {
+            Text(title)
+        }
+    }
+
+    private var timeZoneOffsetLabel: String {
+        let seconds = TimeZone.current.secondsFromGMT()
+        let sign = seconds >= 0 ? "+" : "-"
+        let abs = Swift.abs(seconds)
+        let h = abs / 3600
+        let m = (abs % 3600) / 60
+        return String(format: "GMT%@%02d:%02d", sign, h, m)
+    }
+
+    private func openFolder(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openLoginItemsSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
 
     private func sweepLogs(policy: LogRetentionPolicy) async {
         guard let dir = appEnv.paths?.commandRunsDirectory else { return }
@@ -171,4 +208,5 @@ struct SettingsView: View {
         guard let repo = appEnv.helperHeartbeatRepository else { return }
         heartbeat = try? await repo.latest()
     }
+
 }

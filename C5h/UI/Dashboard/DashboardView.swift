@@ -3,10 +3,9 @@ import C5hCore
 import C5hStore
 
 struct DashboardView: View {
+    var reloadToken: Int = 0
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DashboardViewModel?
-    @State private var coordinator: ManualTriggerCoordinator?
-    @State private var startNowProvider: ProviderID?
 
     var body: some View {
         Group {
@@ -19,47 +18,32 @@ struct DashboardView: View {
         }
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
-               let actualRepo = appEnv.actualWindowRepository,
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let actual7dRepo = appEnv.actualWindow7dRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository,
                let cmdRepo = appEnv.commandRunRepository,
                let usageRepo = appEnv.usageSnapshotRepository,
                let registry = appEnv.providerRegistry {
                 let vm = DashboardViewModel(
-                    actualRepository: actualRepo,
+                    actual5hRepository: actual5hRepo,
+                    actual7dRepository: actual7dRepo,
                     scheduledRepository: scheduledRepo,
                     commandRunRepository: cmdRepo,
                     usageSnapshotRepository: usageRepo,
                     registry: registry
                 )
                 viewModel = vm
-                if coordinator == nil {
-                    coordinator = ManualTriggerCoordinator(
-                        registry: registry,
-                        actualWindowRepository: actualRepo
-                    )
-                }
                 await vm.reload()
             }
         }
-        .sheet(item: Binding(
-            get: { startNowProvider.map(ProviderTag.init) },
-            set: { startNowProvider = $0?.id }
-        )) { tag in
-            StartProviderNowSheet(defaultProviderID: tag.id) { providerID, prompt, projectPath in
-                guard let coordinator else {
-                    throw C5hError.providerNotConfigured("trigger coordinator")
-                }
-                _ = try await coordinator.startNow(
-                    providerID: providerID,
-                    prompt: prompt,
-                    projectPath: projectPath
-                )
-                await viewModel?.reload()
+        .onAppear {
+            // Reload on every visit so active windows and recent runs pick up
+            // changes that happened while the user was on another tab.
+            if let viewModel {
+                Task { await viewModel.reload() }
             }
         }
-        .onAppear {
-            // Reload on every visit so Active Windows / Recent Runs / Provider Health
-            // pick up changes that happened while the user was on another tab.
+        .onChange(of: reloadToken) { _, _ in
             if let viewModel {
                 Task { await viewModel.reload() }
             }
@@ -69,8 +53,8 @@ struct DashboardView: View {
     @ViewBuilder
     private func content(_ viewModel: DashboardViewModel) -> some View {
         ScrollView {
-            // LEVEL 2 — Material content cards; chips and quick-action buttons
-            // remain glass since they are navigation-layer affordances.
+            // LEVEL 2 — Material content cards; navigation-layer affordances
+            // remain in the toolbar.
             VStack(alignment: .leading, spacing: C5hSpacing.lg) {
                 if let err = viewModel.lastError {
                     Label(err, systemImage: "exclamationmark.triangle.fill")
@@ -86,8 +70,8 @@ struct DashboardView: View {
                     spacing: C5hSpacing.lg
                 ) {
                     activeWindowsCard(viewModel: viewModel)
-                    quickActionsCard(viewModel: viewModel)
-                    providerHealthCard(viewModel: viewModel)
+                    weeklyLimitsCard(viewModel: viewModel)
+                    providerHealthCard(viewModel: viewModel, statuses: appEnv.providerStatuses)
                     recentRunsCard(viewModel: viewModel)
                 }
             }
@@ -99,62 +83,97 @@ struct DashboardView: View {
                     .font(.title3.weight(.semibold))
                     .padding(.horizontal, C5hSpacing.sm)
             }
-
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    ForEach(ProviderID.allCases) { id in
-                        Button("Start \(id.displayName) now") {
-                            startNowProvider = id
-                        }
-                    }
-                } label: {
-                    Label("Start now", systemImage: "play.circle.fill")
-                }
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await viewModel.reload() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Reload dashboard")
-            }
         }
     }
 
     private func activeWindowsCard(viewModel: DashboardViewModel) -> some View {
-        DashboardCard(title: "Active windows") {
+        DashboardCard(title: "Active 5h windows") {
             if viewModel.activeWindows.isEmpty {
                 Text("No active windows right now.").foregroundStyle(C5hColors.fgSecondary)
             } else {
-                VStack(alignment: .leading, spacing: C5hSpacing.sm) {
+                VStack(alignment: .leading, spacing: C5hSpacing.md) {
                     ForEach(viewModel.activeWindows) { window in
-                        HStack(spacing: C5hSpacing.sm) {
-                            Circle().fill(brandColor(for: window.providerID)).frame(width: 10, height: 10)
-                            Text(window.providerID.displayName).font(C5hTypography.bodyFont)
-                            Text(windowKindLabel(durationSeconds: window.durationSeconds))
-                                .font(C5hTypography.captionFont)
-                                .foregroundStyle(C5hColors.fgTertiary)
-                            if let pct = viewModel.activeWindowUsagePercentages[window.id] {
-                                let clamped = min(max(pct, 0), 100)
-                                ProgressView(value: clamped, total: 100)
-                                    .progressViewStyle(.linear)
-                                    .tint(brandColor(for: window.providerID))
-                                    .frame(width: 60)
-                                Text("\(Int(clamped.rounded()))%")
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: C5hSpacing.sm) {
+                                Circle().fill(brandColor(for: window.providerID)).frame(width: 10, height: 10)
+                                Text(window.providerID.displayName).font(C5hTypography.bodyFont)
+                                Text(windowKindLabel(durationSeconds: window.durationSeconds))
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgTertiary)
+                                if let pct = viewModel.activeWindowUsagePercentages[window.id] {
+                                    let clamped = min(max(pct, 0), 100)
+                                    ProgressView(value: clamped, total: 100)
+                                        .progressViewStyle(.linear)
+                                        .tint(brandColor(for: window.providerID))
+                                        .frame(width: 60)
+                                    Text("\(Int(clamped.rounded()))%")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                }
+                                Spacer()
+                                Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
                                     .font(C5hTypography.captionFont)
                                     .foregroundStyle(C5hColors.fgSecondary)
                             }
-                            Spacer()
-                            Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
+                            Text(dataSourceLabel(for: window))
                                 .font(C5hTypography.captionFont)
-                                .foregroundStyle(C5hColors.fgSecondary)
+                                .foregroundStyle(C5hColors.fgTertiary)
                         }
                     }
                 }
             }
         }
+    }
+
+    private func weeklyLimitsCard(viewModel: DashboardViewModel) -> some View {
+        DashboardCard(title: "Weekly limits") {
+            if viewModel.weeklyWindows.isEmpty {
+                Text("No weekly limit data yet.").foregroundStyle(C5hColors.fgSecondary)
+            } else {
+                VStack(alignment: .leading, spacing: C5hSpacing.md) {
+                    ForEach(ProviderID.allCases) { providerID in
+                        if let window = viewModel.weeklyWindows.first(where: { $0.providerID == providerID }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: C5hSpacing.sm) {
+                                    Circle().fill(brandColor(for: providerID)).frame(width: 10, height: 10)
+                                    Text(providerID.displayName).font(C5hTypography.bodyFont)
+                                    Text("7d")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgTertiary)
+                                    let clamped = min(max(window.usedPercentage, 0), 100)
+                                    ProgressView(value: clamped, total: 100)
+                                        .progressViewStyle(.linear)
+                                        .tint(brandColor(for: providerID))
+                                        .frame(width: 60)
+                                    Text("\(Int(clamped.rounded()))%")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                    Spacer()
+                                    Text("ends \(formatEndAt(window.endAt, durationSeconds: window.durationSeconds))")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgSecondary)
+                                }
+                                Text(dataSourceLabel(for: window))
+                                    .font(C5hTypography.captionFont)
+                                    .foregroundStyle(C5hColors.fgTertiary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func dataSourceLabel(for window: ActualWindow5h) -> String {
+        let source = "from \(window.providerID.displayName) CLI"
+        let confidence = window.confidence == .estimated ? "start: estimated" : "start: exact"
+        return "\(source) · \(confidence)"
+    }
+
+    private func dataSourceLabel(for window: ActualWindow7d) -> String {
+        let source = "from \(window.providerID.displayName) CLI"
+        let confidence = window.confidence == .estimated ? "start: estimated" : "start: exact"
+        return "\(source) · \(confidence)"
     }
 
     private func windowKindLabel(durationSeconds: Int) -> String {
@@ -174,31 +193,10 @@ struct DashboardView: View {
         return date.formatted(date: .omitted, time: .shortened)
     }
 
-    private func quickActionsCard(viewModel: DashboardViewModel) -> some View {
-        DashboardCard(title: "Quick actions") {
-            VStack(alignment: .leading, spacing: C5hSpacing.sm) {
-                ForEach(ProviderID.allCases) { id in
-                    Button {
-                        startNowProvider = id
-                    } label: {
-                        Label("Start \(id.displayName) now", systemImage: "play.circle.fill")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(C5hColors.tintForProvider(id))
-                }
-                Button {
-                    Task { await viewModel.reload() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.glass)
-            }
-        }
-    }
-
-    private func providerHealthCard(viewModel: DashboardViewModel) -> some View {
+    private func providerHealthCard(
+        viewModel: DashboardViewModel,
+        statuses: [ProviderID: ProviderStatus]
+    ) -> some View {
         DashboardCard(title: "Provider health") {
             VStack(alignment: .leading, spacing: C5hSpacing.md) {
                 ForEach(ProviderID.allCases) { id in
@@ -207,7 +205,7 @@ struct DashboardView: View {
                             Circle().fill(brandColor(for: id)).frame(width: 10, height: 10)
                             Text(id.displayName)
                             Spacer()
-                            if let status = viewModel.providerStatuses[id] {
+                            if let status = statuses[id] {
                                 ProviderStatusBadge(state: ProviderHealthState(from: status))
                             } else {
                                 Text("unknown")
@@ -253,10 +251,6 @@ struct DashboardView: View {
     private func brandColor(for id: ProviderID) -> Color {
         C5hColors.tintForProvider(id)
     }
-}
-
-private struct ProviderTag: Identifiable {
-    let id: ProviderID
 }
 
 struct DashboardCard<Content: View>: View {

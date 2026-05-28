@@ -15,15 +15,28 @@ struct ModelsTests {
         #expect(window.endAt.timeIntervalSince1970 == start.timeIntervalSince1970 + 5 * 3600)
     }
 
-    @Test("ActualWindow defaults to 5h")
+    @Test("ActualWindow5h defaults to 5h")
     func actualDefaultsTo5h() {
-        let window = ActualWindow(
+        let window = ActualWindow5h(
             providerID: .codex,
             startAt: .now,
             source: .c5hTriggered,
             confidence: .exact
         )
         #expect(window.durationSeconds == 5 * 3600)
+    }
+
+    @Test("ActualWindow7d defaults to 7d and stores usage")
+    func actual7dDefaultsTo7d() {
+        let window = ActualWindow7d(
+            providerID: .claude,
+            startAt: .now,
+            usedPercentage: 42,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        #expect(window.durationSeconds == 7 * 24 * 3600)
+        #expect(window.usedPercentage == 42)
     }
 
     @Test("Codable round-trip for PlannedWindow")
@@ -44,5 +57,7 @@ struct ModelsTests {
         #expect(ProviderID.claude.executableName == "claude")
         #expect(ProviderID.codex.displayName == "Codex")
         #expect(ProviderID.codex.executableName == "codex")
+        #expect(ProviderID.claude.plannedWindowSnapMinutes == 10)
+        #expect(ProviderID.codex.plannedWindowSnapMinutes == 5)
     }
 }

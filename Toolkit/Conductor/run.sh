@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 if [ ! -d "C5h.xcworkspace" ]; then
-  echo "C5h.xcworkspace missing. Run ./.conductor/main first." >&2
+  echo "C5h.xcworkspace missing. Run ./Toolkit/Conductor/setup.sh first." >&2
   exit 1
 fi
 
