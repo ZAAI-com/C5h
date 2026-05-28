@@ -81,9 +81,10 @@ public enum CalendarPositioning {
         pixelsPerMinute: CGFloat,
         calendar: Calendar = .current
     ) -> Date {
+        let startOfDay = calendar.startOfDay(for: day)
+        guard pixelsPerMinute > 0 else { return startOfDay }
         let clamped = max(0, yOffset)
         let minutes = Double(clamped / pixelsPerMinute)
-        let startOfDay = calendar.startOfDay(for: day)
         return startOfDay.addingTimeInterval(minutes * 60)
     }
 

@@ -35,7 +35,9 @@ public struct CodexAppServerClient: Sendable {
     /// Fetches the account rate limits as raw JSON-RPC `result` payload (the
     /// `GetAccountRateLimitsResponse` shape).
     public func fetchRateLimitsResult() async throws -> String {
-        try await Task.detached(priority: .utility) {
+        // Unstructured Task (not detached) so caller cancellation can propagate
+        // and tear down the codex app-server subprocess promptly.
+        try await Task(priority: .utility) {
             try fetchRateLimitsResultBlocking()
         }.value
     }
@@ -128,6 +130,9 @@ public struct CodexAppServerClient: Sendable {
         deadline: Date
     ) throws -> String? {
         while Date() < deadline {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
             if let line = takeLine(from: &buffer) {
                 if let result = try matchResult(in: line, id: targetID) {
                     return result

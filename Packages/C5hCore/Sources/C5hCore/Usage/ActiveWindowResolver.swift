@@ -48,12 +48,17 @@ public struct ActiveWindowResolver: Sendable {
 
         do {
             try await fetcher.persistSnapshot(snapshot)
-            if let window = try fetcher.derived5h(from: snapshot, now: now) {
+            let derived5h = try fetcher.derived5h(from: snapshot, now: now)
+            if let window = derived5h {
                 try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
             }
             if let window = try fetcher.derived7d(from: snapshot) {
                 try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
             }
+            // Don't promote a stale active row from a previous poll when this
+            // snapshot has no 5h window — that would re-introduce the fictitious
+            // window behavior the resolver is meant to avoid.
+            guard derived5h != nil else { return nil }
             guard var active = try await activeWindowFetch(providerID, now) else {
                 return nil
             }

@@ -66,9 +66,20 @@ struct AppSchedulerDriver: SchedulerDriver {
                 return try await adapter.runUsageCommand()
             },
             activeWindowFetch: { providerID, now in
-                let interval = DateInterval(start: now, duration: 1)
+                // Search around `now` rather than a 1-second slice so we don't
+                // miss the active window when boundaries land outside the slot.
+                let lookback: TimeInterval = 24 * 60 * 60
+                let interval = DateInterval(
+                    start: now.addingTimeInterval(-lookback),
+                    end: now.addingTimeInterval(lookback)
+                )
                 let windows = try await actual5hRepo.fetchWindows(for: interval)
-                return windows.first { $0.providerID == providerID }
+                return windows
+                    .filter { $0.providerID == providerID }
+                    .first { window in
+                        let end = window.startAt.addingTimeInterval(TimeInterval(window.durationSeconds))
+                        return window.startAt <= now && now < end
+                    }
             },
             updateActualWindow: { window in
                 try await actual5hRepo.update(window)

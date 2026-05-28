@@ -102,7 +102,11 @@ struct ProviderColumnView: View {
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd
+                            clipsBottom: segment.clippedEnd,
+                            displayStart: segment.start,
+                            displayEnd: segment.start.addingTimeInterval(
+                                TimeInterval(segment.durationSeconds)
+                            )
                         )
                     }
                     .buttonStyle(.plain)
@@ -189,7 +193,18 @@ struct ProviderColumnView: View {
     }
 
     private func draggedStart(for window: PlannedWindow, translationY: CGFloat) -> Date {
-        snappedStart(forY: yOffset(for: window.startAt) + translationY)
+        // For cross-midnight windows the rendered block is anchored to the
+        // visible (clipped) portion, so anchor the drag math there too and
+        // reapply the delta to the original startAt to preserve the hidden
+        // prefix.
+        let dayStart = CalendarPositioning.dayInterval(for: date).start
+        let visibleStart = max(window.startAt, dayStart)
+        let draggedVisibleStart = snappedStart(
+            forY: yOffset(for: visibleStart) + translationY
+        )
+        return window.startAt.addingTimeInterval(
+            draggedVisibleStart.timeIntervalSince(visibleStart)
+        )
     }
 
     private func snappedStart(forY y: CGFloat) -> Date {

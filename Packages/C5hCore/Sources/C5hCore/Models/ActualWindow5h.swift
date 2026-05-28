@@ -34,8 +34,8 @@ public struct ActualWindow5h: Identifiable, Codable, Sendable, Hashable {
         self.providerID = providerID
         self.startAt = startAt
         self.durationSeconds = durationSeconds
-        self.timeZoneIdentifier = timeZoneIdentifier
         let tz = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        self.timeZoneIdentifier = tz.identifier
         self.localDate = localDate ?? DateTimeService.localDate(for: startAt, in: tz)
         self.source = source
         self.confidence = confidence

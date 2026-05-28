@@ -32,13 +32,19 @@ public struct CodexUsageStatus: Sendable, Hashable {
     /// `window_minutes`/`windowDurationMins` field; falls back to the historical
     /// 5h constant when the CLI doesn't report a duration.
     public var primaryDurationSeconds: Int {
-        primaryWindowMinutes.map { $0 * 60 } ?? Self.fiveHourDurationSeconds
+        guard let minutes = primaryWindowMinutes, minutes > 0 else {
+            return Self.fiveHourDurationSeconds
+        }
+        return minutes * 60
     }
 
     /// Duration in seconds for the secondary window. Prefers the CLI-provided
     /// `window_minutes`/`windowDurationMins` field.
     public var secondaryDurationSeconds: Int {
-        secondaryWindowMinutes.map { $0 * 60 } ?? Self.defaultSecondaryDurationSeconds
+        guard let minutes = secondaryWindowMinutes, minutes > 0 else {
+            return Self.defaultSecondaryDurationSeconds
+        }
+        return minutes * 60
     }
 
     public var fiveHourStartAt: Date {
@@ -51,11 +57,12 @@ public struct CodexUsageStatus: Sendable, Hashable {
     /// has anchored the current window. Without this gate every poll would
     /// write a phantom `ActualWindow5h` whose end slides with the clock.
     public var hasActivePrimaryWindow: Bool {
-        let expectedSyntheticReset = eventTimestamp.addingTimeInterval(
-            TimeInterval(primaryDurationSeconds)
-        )
-        let drift = abs(primary.resetsAt.timeIntervalSince(expectedSyntheticReset))
-        return drift >= 60
+        // Synthetic "fresh slot" reports `resetsAt ≈ eventTimestamp + duration`,
+        // so remaining time ≈ full duration. A real anchored window has a
+        // smaller remaining time. Use a small tolerance (5s) to avoid the
+        // ~60s false-negative window right after anchoring.
+        let remaining = primary.resetsAt.timeIntervalSince(eventTimestamp)
+        return remaining < TimeInterval(primaryDurationSeconds) - 5
     }
 
     public func normalizedUsage(

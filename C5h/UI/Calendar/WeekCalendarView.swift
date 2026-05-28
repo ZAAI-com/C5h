@@ -167,7 +167,7 @@ struct WeekCalendarView: View {
                 headerRow(columnWidth: columnWidth, layout: dynamicLayout)
                     .frame(height: Self.headerHeight)
                 Divider()
-                ScrollView {
+                ScrollView([.horizontal, .vertical]) {
                     HStack(alignment: .top, spacing: 0) {
                         TimeRulerView(layout: dynamicLayout)
                         ForEach(viewModel.days, id: \.self) { day in
@@ -287,7 +287,11 @@ private struct WeekDayColumnView: View {
                         layout: layout,
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
-                        clipsBottom: segment.clippedEnd
+                        clipsBottom: segment.clippedEnd,
+                        displayStart: segment.start,
+                        displayEnd: segment.start.addingTimeInterval(
+                            TimeInterval(segment.durationSeconds)
+                        )
                     )
                     .offset(
                         x: actualXOffset(for: window.providerID),

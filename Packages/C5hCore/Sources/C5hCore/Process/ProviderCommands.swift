@@ -303,7 +303,10 @@ private enum ProviderCommandPreview {
 
     private static func shellQuote(_ value: String) -> String {
         guard !value.isEmpty else { return "''" }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:=<>"))
+        // Exclude `<` and `>` — shells treat them as redirection, so leaving the
+        // default placeholder `<prompt>` unquoted would turn the preview into a
+        // shell-redirect command if copy-pasted.
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_./:=@,+"))
         if value.unicodeScalars.allSatisfy({ allowed.contains($0) }) {
             return value
         }

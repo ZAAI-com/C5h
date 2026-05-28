@@ -201,6 +201,7 @@ final class AppEnvironment {
     }
 
     func runProviderPromptCommand(id: ProviderID) async {
+        guard !providerPromptFiring.contains(id) else { return }
         providerPromptFiring.insert(id)
         defer { providerPromptFiring.remove(id) }
 

@@ -38,7 +38,7 @@ Reading `~/.codex/auth.json` does **not** trigger a TCC dialog (it's in the user
 
 Tokens rotate every 8 days. When `last_refresh` is older than 8 days, POST to:
 
-```
+```text
 https://auth.openai.com/oauth/token
 
 Content-Type: application/x-www-form-urlencoded
@@ -53,7 +53,7 @@ Write the returned `access_token` / `refresh_token` / `id_token` / new `last_ref
 
 ### Usage endpoint
 
-```
+```text
 GET https://chatgpt.com/backend-api/wham/usage
 
 Headers:

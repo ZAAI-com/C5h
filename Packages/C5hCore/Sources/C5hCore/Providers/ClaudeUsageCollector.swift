@@ -21,7 +21,9 @@ public struct ClaudeUsageCollector: Sendable {
     }
 
     public func collect() async throws -> UsageSnapshot {
-        try await Task.detached(priority: .utility) {
+        // Unstructured Task (not detached) so caller cancellation reaches the
+        // blocking work via Task.isCancelled checks below.
+        try await Task(priority: .utility) {
             try collectBlocking()
         }.value
     }
@@ -44,6 +46,9 @@ public struct ClaudeUsageCollector: Sendable {
         close(slaveFD)
 
         guard inputFD >= 0, outputFD >= 0, errorFD >= 0 else {
+            [inputFD, outputFD, errorFD]
+                .filter { $0 >= 0 }
+                .forEach { _ = Darwin.close($0) }
             throw C5hError.processLaunchFailed(Self.errnoMessage("dup failed"))
         }
 
@@ -101,6 +106,9 @@ public struct ClaudeUsageCollector: Sendable {
         }
 
         while Date() < deadline {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
             if let chunk = try Self.readAvailable(from: masterFD) {
                 output.append(chunk)
                 if let snapshot = try snapshotIfAvailable(in: output) {

@@ -68,6 +68,24 @@ struct ProviderCardView: View {
     private var settings: some View {
         Grid(alignment: .leading, horizontalSpacing: C5hSpacing.lg, verticalSpacing: 6) {
             GridRow {
+                Text("CLI path")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                HStack(spacing: C5hSpacing.sm) {
+                    TextField("/usr/local/bin/\(id.rawValue)", text: $pathDraft)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Save") {
+                        onSetPath(pathDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                    .buttonStyle(.glass)
+                    Button("Clear") {
+                        pathDraft = ""
+                        onClearPath()
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+            GridRow {
                 Text("Wake prompt")
                     .font(C5hTypography.captionFont)
                     .foregroundStyle(C5hColors.fgSecondary)
@@ -78,7 +96,7 @@ struct ProviderCardView: View {
                 )
                 .textFieldStyle(.roundedBorder)
                 .focused($wakePromptFocused)
-                .onSubmit { onSetWakePrompt(wakePromptDraft) }
+                .onSubmit { wakePromptFocused = false }
             }
             GridRow {
                 Text("Window length")

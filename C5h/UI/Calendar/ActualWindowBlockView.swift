@@ -11,6 +11,11 @@ struct ActualWindowBlockView: View {
     var clipsTop: Bool = false
     var clipsBottom: Bool = false
     var compact: Bool = false
+    /// When the block is rendering a clipped segment of a cross-midnight
+    /// window, the caller passes the segment's actual displayed start/end so
+    /// corner labels and history lookups match what's on screen.
+    var displayStart: Date? = nil
+    var displayEnd: Date? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -29,16 +34,20 @@ struct ActualWindowBlockView: View {
         )
         let width = compact ? columnWidth : columnWidth * layout.actualBlockWidthRatio
 
-        let startSevenD: Double? = window.startAt > now
+        let shownStart = displayStart ?? window.startAt
+        let shownEnd = displayEnd ?? window.endAt
+        let startSevenD: Double? = shownStart > now
             ? nil
-            : history?.sevenDayPercent(at: window.startAt)?.value
-        let endSevenD: Double? = window.endAt > now
+            : history?.sevenDayPercent(at: shownStart)?.value
+        let endSevenD: Double? = shownEnd > now
             ? nil
-            : history?.sevenDayPercent(at: window.endAt)?.value
+            : history?.sevenDayPercent(at: shownEnd)?.value
         let latest5h = history?.latestFiveHourPoint()
 
         ZStack {
             cornersOverlay(
+                shownStart: shownStart,
+                shownEnd: shownEnd,
                 startSevenD: startSevenD,
                 endSevenD: endSevenD,
                 density: density,
@@ -56,6 +65,8 @@ struct ActualWindowBlockView: View {
     }
 
     private func cornersOverlay(
+        shownStart: Date,
+        shownEnd: Date,
         startSevenD: Double?,
         endSevenD: Double?,
         density: BlockDensity,
@@ -64,7 +75,7 @@ struct ActualWindowBlockView: View {
         VStack(spacing: 0) {
             if isNarrow {
                 VStack(alignment: .leading, spacing: 0) {
-                    cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
+                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                     if let v = startSevenD {
                         cornerText("7d limit \(BlockFormatters.formatPercent(v))")
                     }
@@ -72,7 +83,7 @@ struct ActualWindowBlockView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(alignment: .top) {
-                    cornerText(BlockFormatters.formatTime(window.startAt), weight: .semibold)
+                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                     Spacer(minLength: 0)
                     if let v = startSevenD {
                         cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
@@ -86,12 +97,12 @@ struct ActualWindowBlockView: View {
                         if let v = endSevenD {
                             cornerText("7d limit \(BlockFormatters.formatPercent(v))")
                         }
-                        cornerText(BlockFormatters.formatTime(window.endAt))
+                        cornerText(BlockFormatters.formatTime(shownEnd))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     HStack(alignment: .bottom) {
-                        cornerText(BlockFormatters.formatTime(window.endAt))
+                        cornerText(BlockFormatters.formatTime(shownEnd))
                         Spacer(minLength: 0)
                         if let v = endSevenD {
                             cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
