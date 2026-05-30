@@ -9,23 +9,19 @@ final class WeekCalendarViewModel {
     var weekStart: Date
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow5h] = []
-    var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
     private let actual5hRepo: any ActualWindow5hRepository
-    private let usageSnapshotRepo: (any UsageSnapshotRepository)?
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
-        actual5hRepository: any ActualWindow5hRepository,
-        usageSnapshotRepository: (any UsageSnapshotRepository)? = nil
+        actual5hRepository: any ActualWindow5hRepository
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
         self.actual5hRepo = actual5hRepository
-        self.usageSnapshotRepo = usageSnapshotRepository
     }
 
     static func startOfWeek(for date: Date) -> Date {
@@ -54,36 +50,6 @@ final class WeekCalendarViewModel {
         } catch {
             self.lastError = String(describing: error)
         }
-        await loadUsageHistories()
-    }
-
-    private func loadUsageHistories() async {
-        guard let repo = usageSnapshotRepo else { return }
-        let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
-        let lookback = DateInterval(
-            start: weekStart.addingTimeInterval(-7 * 24 * 60 * 60),
-            end: weekEnd.addingTimeInterval(7 * 24 * 60 * 60)
-        )
-        var built: [ProviderID: UsageHistorySeries] = [:]
-        for providerID in ProviderID.allCases {
-            do {
-                let snapshots = try await repo.fetchInRange(
-                    providerID: providerID,
-                    interval: lookback
-                )
-                built[providerID] = UsageHistorySeries(
-                    providerID: providerID,
-                    snapshots: snapshots
-                )
-            } catch {
-                NSLog("WeekCalendarViewModel: usage history load failed for \(providerID.rawValue): \(error)")
-            }
-        }
-        self.usageHistories = built
-    }
-
-    func history(for providerID: ProviderID) -> UsageHistorySeries? {
-        usageHistories[providerID]
     }
 
     func goToPreviousWeek() {

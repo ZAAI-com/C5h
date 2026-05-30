@@ -95,4 +95,88 @@ public enum CalendarPositioning {
         let snapped = (date.timeIntervalSince1970 / interval).rounded() * interval
         return Date(timeIntervalSince1970: snapped)
     }
+
+    /// The lane (column) a window occupies once overlapping windows are laid out
+    /// side-by-side, plus the number of concurrent lanes in its overlap cluster.
+    /// Callers divide the available width by `laneCount` and offset by `lane`.
+    public struct LanePlacement: Sendable, Equatable {
+        public let lane: Int
+        public let laneCount: Int
+
+        public init(lane: Int, laneCount: Int) {
+            self.lane = lane
+            self.laneCount = laneCount
+        }
+    }
+
+    /// Greedy interval-graph packing — the standard calendar column layout.
+    /// Returns one placement per input interval, in the same order as the input.
+    /// Overlapping intervals are assigned distinct lanes; every interval in a
+    /// connected cluster of overlaps shares the same `laneCount` so their columns
+    /// line up. Intervals use half-open `[start, end)` semantics, so touching
+    /// edges (`a.end == b.start`) do **not** overlap and may share a lane.
+    public static func packLanes(_ intervals: [DateInterval]) -> [LanePlacement] {
+        guard !intervals.isEmpty else { return [] }
+
+        // Process intervals in start order (ties broken by end), remembering the
+        // original index so results can be mapped back to input order.
+        let order = intervals.indices.sorted { a, b in
+            let ia = intervals[a], ib = intervals[b]
+            if ia.start != ib.start { return ia.start < ib.start }
+            return ia.end < ib.end
+        }
+
+        var laneByIndex = [Int](repeating: 0, count: intervals.count)
+        var countByIndex = [Int](repeating: 1, count: intervals.count)
+
+        // Mutable sweep state for the cluster currently being built.
+        var laneEnds: [Date] = []      // end time occupying each open lane
+        var clusterMembers: [Int] = [] // original indices in the current cluster
+        var clusterMaxLane = 0
+        var clusterEnd: Date? = nil    // max end across the current cluster
+
+        func closeCluster() {
+            let count = max(clusterMaxLane + 1, 1)
+            for idx in clusterMembers { countByIndex[idx] = count }
+            clusterMembers.removeAll(keepingCapacity: true)
+            clusterMaxLane = 0
+            laneEnds.removeAll(keepingCapacity: true)
+            clusterEnd = nil
+        }
+
+        for sortedIdx in order {
+            let interval = intervals[sortedIdx]
+
+            // A start at/after everything in the cluster has ended begins a new
+            // cluster (no overlap with anything placed so far).
+            if let end = clusterEnd, interval.start >= end {
+                closeCluster()
+            }
+
+            // Reuse the lowest lane whose occupant has ended; otherwise open one.
+            var assigned: Int? = nil
+            for lane in laneEnds.indices where laneEnds[lane] <= interval.start {
+                laneEnds[lane] = interval.end
+                assigned = lane
+                break
+            }
+            let lane: Int
+            if let assigned {
+                lane = assigned
+            } else {
+                lane = laneEnds.count
+                laneEnds.append(interval.end)
+            }
+
+            laneByIndex[sortedIdx] = lane
+            clusterMembers.append(sortedIdx)
+            clusterMaxLane = max(clusterMaxLane, lane)
+            clusterEnd = max(clusterEnd ?? interval.end, interval.end)
+        }
+        closeCluster()
+
+        return intervals.indices.map {
+            LanePlacement(lane: laneByIndex[$0], laneCount: countByIndex[$0])
+        }
+    }
 }
