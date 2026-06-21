@@ -10,7 +10,6 @@ struct WeekCalendarScreen: View {
     @State private var visibleProviders: Set<ProviderID> = Set(ProviderID.allCases)
     @State private var showPlanned: Bool = true
     @State private var showActual: Bool = true
-    @State private var selection: CalendarSelection?
 
     var body: some View {
         Group {
@@ -35,7 +34,8 @@ struct WeekCalendarScreen: View {
                 let vm = WeekCalendarViewModel(
                     weekStart: .now,
                     plannedRepository: plannedRepo,
-                    actual5hRepository: actual5hRepo
+                    actual5hRepository: actual5hRepo,
+                    usageSnapshotRepository: appEnv.usageSnapshotRepository
                 )
                 viewModel = vm
                 await vm.reload()
@@ -65,10 +65,7 @@ struct WeekCalendarScreen: View {
             now: now,
             visibleProviders: visibleProviders,
             showPlanned: showPlanned,
-            showActual: showActual,
-            onSelect: { sel in
-                withAnimation(C5hAnimation.morph) { selection = sel }
-            }
+            showActual: showActual
         )
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let err = viewModel.lastError {
@@ -133,23 +130,6 @@ struct WeekCalendarScreen: View {
                     .help("Show/hide window types")
                 }
             }
-            // Non-blocking right-side glass pane carrying the window detail that
-            // no longer fits inside the slim week bars.
-            .inspector(isPresented: Binding(
-                get: { selection != nil },
-                set: { newValue in
-                    if !newValue {
-                        withAnimation(C5hAnimation.morph) { selection = nil }
-                    }
-                }
-            )) {
-                if let sel = selection {
-                    WindowInspectorView(selection: sel)
-                        .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
-                } else {
-                    EmptyView()
-                }
-            }
     }
 }
 
@@ -159,11 +139,13 @@ struct WeekCalendarView: View {
     let visibleProviders: Set<ProviderID>
     let showPlanned: Bool
     let showActual: Bool
-    let onSelect: (CalendarSelection) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16
     private static let headerHeight: CGFloat = 44
+    /// Narrow gutter so the time scale sits flush to the left, leaving the day
+    /// columns as much width as possible.
+    private static let timeRulerWidth: CGFloat = 44
     private let baseLayout = CalendarLayoutConfig()
 
     var body: some View {
@@ -177,10 +159,12 @@ struct WeekCalendarView: View {
             let dynamicLayout: CalendarLayoutConfig = {
                 var l = baseLayout
                 l.pixelsPerMinute = max(Self.minPixelsPerMinute, fitPpm)
+                l.timeRulerWidth = Self.timeRulerWidth
                 return l
             }()
             // Fit all 7 days plus a single (left) ruler into the width — no
-            // horizontal scroll, so the fixed header stays aligned with the grid.
+            // horizontal scroll, so the fixed header stays aligned with the grid
+            // and the time scale never gets clipped off the right edge.
             let columnWidth = max(
                 1,
                 (proxy.size.width - dynamicLayout.timeRulerWidth) / CGFloat(viewModel.days.count)
@@ -192,16 +176,18 @@ struct WeekCalendarView: View {
                 Divider()
                 ScrollView(.vertical) {
                     HStack(alignment: .top, spacing: 0) {
-                        TimeRulerView(layout: dynamicLayout)
+                        TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                         ForEach(viewModel.days, id: \.self) { day in
                             WeekDayColumnView(
                                 day: day,
                                 planned: filteredPlanned(forDay: day),
                                 actual: filteredActual(forDay: day),
+                                histories: viewModel.usageHistories,
                                 now: now,
                                 layout: dynamicLayout,
                                 columnWidth: columnWidth,
-                                onSelect: onSelect
+                                showPlanned: showPlanned,
+                                showActual: showActual
                             )
                         }
                     }
@@ -262,44 +248,63 @@ private struct WeekDayColumnView: View {
     let day: Date
     let planned: [PlannedWindow]
     let actual: [ActualWindow5h]
+    let histories: [ProviderID: UsageHistorySeries]
     let now: Date
     let layout: CalendarLayoutConfig
     let columnWidth: CGFloat
-    let onSelect: (CalendarSelection) -> Void
-
-    /// Gap between lanes packed within a single provider half.
-    private static let laneGap: CGFloat = 1
-
-    /// Minimum rendered bar height. Bars are packed against this footprint so
-    /// short windows that don't temporally overlap still get distinct lanes
-    /// rather than visually colliding at the height floor.
-    private static let minimumBarHeight: CGFloat = 24
+    let showPlanned: Bool
+    let showActual: Bool
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
-            ForEach(laidOutBars) { bar in
-                Button {
-                    onSelect(bar.selection)
-                } label: {
-                    WeekWindowBarView(
-                        providerID: bar.providerID,
-                        kind: bar.kind,
-                        startLabel: bar.startLabel,
-                        width: bar.width,
-                        height: bar.height,
-                        clipsTop: bar.clipsTop,
-                        clipsBottom: bar.clipsBottom,
-                        cornerRadius: layout.blockCornerRadius
+            ForEach(planned) { window in
+                if let segment = visibleSegment(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds
+                ) {
+                    PlannedWindowBlockView(
+                        window: window,
+                        now: now,
+                        columnWidth: halfColumnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd
                     )
+                    .offset(
+                        x: providerXOffset(for: window.providerID),
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(1)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    "\(bar.kind == .actual ? "Actual" : "Planned") \(bar.providerID.displayName) window starting \(bar.startLabel)"
-                )
-                .accessibilityHint("Opens window details")
-                .offset(x: bar.x, y: bar.y)
-                .zIndex(bar.kind == .actual ? 2 : 1)
+            }
+            ForEach(actual) { window in
+                if let segment = visibleSegment(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds
+                ) {
+                    ActualWindowBlockView(
+                        window: window,
+                        history: histories[window.providerID],
+                        now: now,
+                        columnWidth: halfColumnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd,
+                        showsSourceLabel: false,
+                        displayStart: segment.start,
+                        displayEnd: segment.start.addingTimeInterval(
+                            TimeInterval(segment.durationSeconds)
+                        )
+                    )
+                    .offset(
+                        x: actualXOffset(for: window.providerID),
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(2)
+                }
             }
             if Calendar.current.isDateInToday(day) {
                 Rectangle()
@@ -314,102 +319,25 @@ private struct WeekDayColumnView: View {
         .clipped()
     }
 
-    // MARK: - Layout
-
-    private struct LaidOutBar: Identifiable {
-        let id: String
-        let kind: WeekWindowBarView.Kind
-        let providerID: ProviderID
-        let startLabel: String
-        let x: CGFloat
-        let y: CGFloat
-        let width: CGFloat
-        let height: CGFloat
-        let clipsTop: Bool
-        let clipsBottom: Bool
-        let selection: CalendarSelection
-    }
-
-    private struct PackItem {
-        let kind: WeekWindowBarView.Kind
-        let selection: CalendarSelection
-        let segment: (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool)
-    }
-
-    /// All bars for the day, lane-packed independently within each provider's
-    /// half so overlapping windows sit side-by-side instead of stacking, and
-    /// never bleed past their half.
-    private var laidOutBars: [LaidOutBar] {
-        var bars: [LaidOutBar] = []
-        for providerID in ProviderID.allCases {
-            let providerItems = items(for: providerID)
-            guard !providerItems.isEmpty else { continue }
-            // Pack against the rendered footprint, not the raw duration: bars are
-            // clamped to `minimumBarHeight`, so inflate each interval to that
-            // minimum so near-adjacent short windows land in separate lanes.
-            let minimumVisualSeconds = layout.pixelsPerMinute > 0
-                ? Int(ceil((Self.minimumBarHeight / layout.pixelsPerMinute) * 60))
-                : 0
-            let intervals = providerItems.map {
-                DateInterval(
-                    start: $0.segment.start,
-                    duration: TimeInterval(max($0.segment.durationSeconds, minimumVisualSeconds))
-                )
-            }
-            let placements = CalendarPositioning.packLanes(intervals)
-            let baseX = providerXOffset(for: providerID)
-            for (item, placement) in zip(providerItems, placements) {
-                let laneWidth = halfColumnWidth / CGFloat(max(placement.laneCount, 1))
-                // Shrink the gap rather than overflow the slot when lanes are thin.
-                let effectiveLaneGap = min(Self.laneGap, max(laneWidth - 2, 0))
-                bars.append(LaidOutBar(
-                    id: item.selection.id,
-                    kind: item.kind,
-                    providerID: providerID,
-                    startLabel: BlockFormatters.formatTime(item.segment.start),
-                    x: baseX + CGFloat(placement.lane) * laneWidth,
-                    y: yOffset(for: item.segment.start),
-                    width: max(laneWidth - effectiveLaneGap, 0),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: item.segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute,
-                        minimum: Self.minimumBarHeight
-                    ),
-                    clipsTop: item.segment.clippedStart,
-                    clipsBottom: item.segment.clippedEnd,
-                    selection: item.selection
-                ))
-            }
-        }
-        return bars
-    }
-
-    private func items(for providerID: ProviderID) -> [PackItem] {
-        var result: [PackItem] = []
-        for window in planned where window.providerID == providerID {
-            if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
-                result.append(PackItem(kind: .planned, selection: .planned(window), segment: segment))
-            }
-        }
-        for window in actual where window.providerID == providerID {
-            if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
-                result.append(PackItem(kind: .actual, selection: .actual(window), segment: segment))
-            }
-        }
-        return result
-    }
-
     private var halfColumnWidth: CGFloat {
         max(0, (columnWidth - 4) / 2)
     }
 
-    /// Claude bars render in the left half, Codex in the right half — keeps both
-    /// providers visible at the same time of day without overlap.
+    /// Claude blocks render in the left half, Codex in the right half — keeps
+    /// both providers visible at the same time of day without overlap.
     private func providerXOffset(for providerID: ProviderID) -> CGFloat {
         switch providerID {
         case .claude: return 2
         case .codex: return 2 + halfColumnWidth
         }
+    }
+
+    private func actualXOffset(for providerID: ProviderID) -> CGFloat {
+        // Right-justify actual blocks within each provider's half, matching
+        // the day view's convention where actual blocks sit on the right edge.
+        let baseX = providerXOffset(for: providerID)
+        let actualWidth = halfColumnWidth * layout.actualBlockWidthRatio
+        return baseX + (halfColumnWidth - actualWidth)
     }
 
     private var background: some View {
