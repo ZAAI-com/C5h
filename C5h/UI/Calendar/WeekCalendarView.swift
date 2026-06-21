@@ -249,9 +249,9 @@ struct WeekCalendarView: View {
                     Text(day.formatted(.dateTime.day()))
                         .font(C5hTypography.bodyFont)
                 }
-                .frame(width: columnWidth, alignment: .leading)
                 .padding(.horizontal, C5hSpacing.sm)
                 .padding(.vertical, 6)
+                .frame(width: columnWidth, alignment: .leading)
                 .modifier(TodayHeaderBackground(isToday: Calendar.current.isDateInToday(day)))
             }
         }
@@ -269,6 +269,11 @@ private struct WeekDayColumnView: View {
 
     /// Gap between lanes packed within a single provider half.
     private static let laneGap: CGFloat = 1
+
+    /// Minimum rendered bar height. Bars are packed against this footprint so
+    /// short windows that don't temporally overlap still get distinct lanes
+    /// rather than visually colliding at the height floor.
+    private static let minimumBarHeight: CGFloat = 24
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -289,6 +294,10 @@ private struct WeekDayColumnView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(
+                    "\(bar.kind == .actual ? "Actual" : "Planned") \(bar.providerID.displayName) window starting \(bar.startLabel)"
+                )
+                .accessibilityHint("Opens window details")
                 .offset(x: bar.x, y: bar.y)
                 .zIndex(bar.kind == .actual ? 2 : 1)
             }
@@ -335,16 +344,24 @@ private struct WeekDayColumnView: View {
         for providerID in ProviderID.allCases {
             let providerItems = items(for: providerID)
             guard !providerItems.isEmpty else { continue }
+            // Pack against the rendered footprint, not the raw duration: bars are
+            // clamped to `minimumBarHeight`, so inflate each interval to that
+            // minimum so near-adjacent short windows land in separate lanes.
+            let minimumVisualSeconds = layout.pixelsPerMinute > 0
+                ? Int(ceil((Self.minimumBarHeight / layout.pixelsPerMinute) * 60))
+                : 0
             let intervals = providerItems.map {
                 DateInterval(
                     start: $0.segment.start,
-                    duration: TimeInterval($0.segment.durationSeconds)
+                    duration: TimeInterval(max($0.segment.durationSeconds, minimumVisualSeconds))
                 )
             }
             let placements = CalendarPositioning.packLanes(intervals)
             let baseX = providerXOffset(for: providerID)
             for (item, placement) in zip(providerItems, placements) {
                 let laneWidth = halfColumnWidth / CGFloat(max(placement.laneCount, 1))
+                // Shrink the gap rather than overflow the slot when lanes are thin.
+                let effectiveLaneGap = min(Self.laneGap, max(laneWidth - 2, 0))
                 bars.append(LaidOutBar(
                     id: item.selection.id,
                     kind: item.kind,
@@ -352,10 +369,11 @@ private struct WeekDayColumnView: View {
                     startLabel: BlockFormatters.formatTime(item.segment.start),
                     x: baseX + CGFloat(placement.lane) * laneWidth,
                     y: yOffset(for: item.segment.start),
-                    width: max(laneWidth - Self.laneGap, 2),
+                    width: max(laneWidth - effectiveLaneGap, 0),
                     height: CalendarPositioning.blockHeight(
                         durationSeconds: item.segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
+                        pixelsPerMinute: layout.pixelsPerMinute,
+                        minimum: Self.minimumBarHeight
                     ),
                     clipsTop: item.segment.clippedStart,
                     clipsBottom: item.segment.clippedEnd,

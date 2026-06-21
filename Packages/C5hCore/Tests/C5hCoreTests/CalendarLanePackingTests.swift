@@ -99,6 +99,27 @@ struct CalendarLanePackingTests {
         #expect(placements[2] == .init(lane: 0, laneCount: 1))
     }
 
+    @Test("Inflating short adjacent intervals to a visual minimum splits their lanes")
+    func inflatedFootprintSeparatesLanes() {
+        // Two back-to-back ~36s windows touch (raw) and so reuse one lane…
+        let rawA = interval(0, 0.01)
+        let rawB = interval(0.01, 0.02)
+        #expect(CalendarPositioning.packLanes([rawA, rawB]).allSatisfy { $0.lane == 0 })
+
+        // …but once each is inflated to a minimum visual footprint (here 0.5h),
+        // they overlap and must occupy separate lanes — matching the week view's
+        // `minimumBarHeight` packing so short bars don't visually collide.
+        let minimumFootprint: TimeInterval = 0.5 * 3600
+        func inflated(_ i: DateInterval) -> DateInterval {
+            DateInterval(start: i.start, duration: max(i.duration, minimumFootprint))
+        }
+        let placements = CalendarPositioning.packLanes([inflated(rawA), inflated(rawB)])
+        #expect(placements == [
+            .init(lane: 0, laneCount: 2),
+            .init(lane: 1, laneCount: 2),
+        ])
+    }
+
     @Test("Results are returned in input order, not sorted order")
     func preservesInputOrder() {
         // Provided out of start order: later-starting interval listed first.
