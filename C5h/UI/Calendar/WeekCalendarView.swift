@@ -143,6 +143,9 @@ struct WeekCalendarView: View {
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16
     private static let headerHeight: CGFloat = 44
+    /// Narrow gutter so the time scale sits flush to the left, leaving the day
+    /// columns as much width as possible.
+    private static let timeRulerWidth: CGFloat = 44
     private let baseLayout = CalendarLayoutConfig()
 
     var body: some View {
@@ -156,20 +159,24 @@ struct WeekCalendarView: View {
             let dynamicLayout: CalendarLayoutConfig = {
                 var l = baseLayout
                 l.pixelsPerMinute = max(Self.minPixelsPerMinute, fitPpm)
+                l.timeRulerWidth = Self.timeRulerWidth
                 return l
             }()
+            // Fit all 7 days plus a single (left) ruler into the width — no
+            // horizontal scroll, so the fixed header stays aligned with the grid
+            // and the time scale never gets clipped off the right edge.
             let columnWidth = max(
-                120,
-                (proxy.size.width - 2 * dynamicLayout.timeRulerWidth) / CGFloat(viewModel.days.count)
+                1,
+                (proxy.size.width - dynamicLayout.timeRulerWidth) / CGFloat(viewModel.days.count)
             )
 
             VStack(spacing: 0) {
                 headerRow(columnWidth: columnWidth, layout: dynamicLayout)
                     .frame(height: Self.headerHeight)
                 Divider()
-                ScrollView([.horizontal, .vertical]) {
+                ScrollView(.vertical) {
                     HStack(alignment: .top, spacing: 0) {
-                        TimeRulerView(layout: dynamicLayout)
+                        TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                         ForEach(viewModel.days, id: \.self) { day in
                             WeekDayColumnView(
                                 day: day,
@@ -183,7 +190,6 @@ struct WeekCalendarView: View {
                                 showActual: showActual
                             )
                         }
-                        TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
                     }
                     .padding(.vertical, Self.gridVerticalPadding)
                     .background(.background)
@@ -229,12 +235,11 @@ struct WeekCalendarView: View {
                     Text(day.formatted(.dateTime.day()))
                         .font(C5hTypography.bodyFont)
                 }
-                .frame(width: columnWidth, alignment: .leading)
                 .padding(.horizontal, C5hSpacing.sm)
                 .padding(.vertical, 6)
+                .frame(width: columnWidth, alignment: .leading)
                 .modifier(TodayHeaderBackground(isToday: Calendar.current.isDateInToday(day)))
             }
-            Color.clear.frame(width: layout.timeRulerWidth)
         }
     }
 }
@@ -288,6 +293,7 @@ private struct WeekDayColumnView: View {
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
+                        showsSourceLabel: false,
                         displayStart: segment.start,
                         displayEnd: segment.start.addingTimeInterval(
                             TimeInterval(segment.durationSeconds)

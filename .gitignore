@@ -36,6 +36,7 @@ Icon?
 
 # Xcode — derived / build outputs
 DerivedData/
+.derivedData/
 build/
 .build/
 .swiftpm/

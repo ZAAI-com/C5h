@@ -11,6 +11,10 @@ struct ActualWindowBlockView: View {
     var clipsTop: Bool = false
     var clipsBottom: Bool = false
     var compact: Bool = false
+    /// When false, the "from … CLI" / "manual" source footer is suppressed.
+    /// The Week overview hides it to keep the dense tiles readable; the Day
+    /// view keeps it (the default).
+    var showsSourceLabel: Bool = true
     /// When the block is rendering a clipped segment of a cross-midnight
     /// window, the caller passes the segment's actual displayed start/end so
     /// corner labels and history lookups match what's on screen.
@@ -38,10 +42,10 @@ struct ActualWindowBlockView: View {
         let shownEnd = displayEnd ?? window.endAt
         let startSevenD: Double? = shownStart > now
             ? nil
-            : history?.sevenDayPercent(at: shownStart)?.value
+            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownStart)?.value)
         let endSevenD: Double? = shownEnd > now
             ? nil
-            : history?.sevenDayPercent(at: shownEnd)?.value
+            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
         let latest5h = history?.latestFiveHourPoint()
 
         ZStack {
@@ -130,7 +134,7 @@ struct ActualWindowBlockView: View {
                     .font(.system(size: compact ? 9 : 10))
                     .opacity(0.85)
             }
-            if density.showsDetailLine {
+            if showsSourceLabel, density.showsDetailLine {
                 Text(sourceLabel)
                     .font(.system(size: 9))
                     .opacity(0.75)
@@ -150,6 +154,14 @@ struct ActualWindowBlockView: View {
             .font(.system(size: compact ? 9 : 10, weight: weight))
             .multilineTextAlignment(alignment)
             .monospacedDigit()
+    }
+
+    /// Returns the 7d% only when there is enough data to be worth showing.
+    /// A missing reading (`nil`) or one that rounds to 0% is treated as "not
+    /// enough data" and hidden, so tiles don't render a meaningless `7d limit 0%`.
+    private static func meaningfulSevenDay(_ value: Double?) -> Double? {
+        guard let value, value.rounded() >= 1 else { return nil }
+        return value
     }
 
     private var brandColor: Color {
