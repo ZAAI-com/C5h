@@ -5,16 +5,16 @@
 C5h is a native macOS app that tracks your Claude and Codex **5-hour usage
 windows** in one place. See which windows are active on a day calendar, schedule
 prompts to run inside planned or background windows, and watch your usage trends
-over time — so you always know where you stand against your limits before you hit
+over time, so you always know where you stand against your limits before you hit
 them.
 
 ## Features
 
-- **Track 5-hour windows** — Claude and Codex usage windows, side by side.
-- **Day calendar** — see active and upcoming windows laid out on a timeline.
-- **Connect your CLIs** — point C5h at your installed `claude` and `codex` CLIs.
-- **Usage trends** — area and sparkline charts of usage over time.
-- **Scheduled & background runs** — queue prompts to run automatically inside a
+- **Track 5-hour windows**: Claude and Codex usage windows, side by side.
+- **Day calendar**: see active and upcoming windows laid out on a timeline.
+- **Connect your CLIs**: point C5h at your installed `claude` and `codex` CLIs.
+- **Usage trends**: area and sparkline charts of usage over time.
+- **Scheduled & background runs**: queue prompts to run automatically inside a
   window, even when you're away.
 
 ## Requirements
@@ -29,7 +29,7 @@ them.
 
 ## Install
 
-> Distribution via Homebrew and GitHub Releases is rolling out — if a step below
+> Distribution via Homebrew and GitHub Releases is rolling out. If a step below
 > isn't live yet, grab the latest from the [Releases](https://github.com/ZAAI-com/C5h/releases) page.
 
 **Homebrew (recommended):**
@@ -69,8 +69,8 @@ xcodebuild -workspace C5h.xcworkspace -scheme C5h \
   -configuration Debug -destination 'platform=macOS' build
 ```
 
-For the full development runbook — architecture, packages, the background helper,
-and scheduled-run testing — see [`.claude/CLAUDE.md`](../.claude/CLAUDE.md).
+For the full development runbook (architecture, packages, the background helper,
+and scheduled-run testing) see [`.claude/CLAUDE.md`](../.claude/CLAUDE.md).
 
 ## License
 
