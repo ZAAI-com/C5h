@@ -80,12 +80,14 @@ struct DayCalendarScreen: View {
             now: now,
             onSelectPlanned: { window in
                 withAnimation(C5hAnimation.morph) {
-                    viewModel.selection = .planned(window)
+                    let next = CalendarSelection.planned(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
                 }
             },
             onSelectActual: { window in
                 withAnimation(C5hAnimation.morph) {
-                    viewModel.selection = .actual(window)
+                    let next = CalendarSelection.actual(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
                 }
             },
             onMovePlanned: { window, start in

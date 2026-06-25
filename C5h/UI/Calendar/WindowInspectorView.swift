@@ -59,7 +59,8 @@ struct WindowInspectorView: View {
     private func plannedContent(_ window: PlannedWindow) -> some View {
         Text("Planned window").font(C5hTypography.titleFont)
         labelled("Provider", window.providerID.displayName)
-        labelled("When", "\(format(window.startAt)) → \(format(window.endAt))")
+        labelled("Start", format(window.startAt))
+        labelled("End", format(window.endAt))
         labelled("Status", window.status.rawValue)
         if let project = window.projectPath {
             labelled("Project", project)
@@ -70,7 +71,8 @@ struct WindowInspectorView: View {
     private func actualContent(_ window: ActualWindow5h) -> some View {
         Text("Actual window").font(C5hTypography.titleFont)
         labelled("Provider", window.providerID.displayName)
-        labelled("When", "\(format(window.startAt)) → \(format(window.endAt))")
+        labelled("Start", format(window.startAt))
+        labelled("End", format(window.endAt))
         labelled("Source", window.source.rawValue)
         labelled("Confidence", window.confidence.rawValue)
         if let runID = window.commandRunID {
