@@ -76,17 +76,22 @@ LaunchAgent plist in the app bundle.
   - `Core/` — app-side services and adapters (providers, scheduler driver, helper, debug bundle)
   - Resources — assets, plists
 - `Packages/` — three Swift packages: `C5hCore`, `C5hStore`, `C5hHelper`
-- `Toolkit/`, `Resources/` — build tooling and app assets
-- `Conductor.json` — Conductor workspace config
+- `Toolkit/` — build/release tooling: `Conductor/` (setup, run, release scripts),
+  `Homebrew/` (cask template `cask.rb.tmpl` + `render-cask.sh`)
+- `Resources/` — app assets
+- `Docs/` — project documentation, including the public-facing `README.md`
+- `.github/workflows/` — CI and release automation (see Conventions)
+- `.conductor/settings.toml` — Conductor workspace config
 
 ## Architecture
 
 - **Entry point**: `C5h/App/C5hApp.swift` (SwiftUI `@main`, main `WindowGroup` + `Settings` scene).
 - **Bootstrapping**: `C5h/App/AppEnvironment.swift` — `@Observable @MainActor` env that opens the database, builds repositories, wires `ProviderRegistry`, `CommandRunner`, `SchedulerTicker`, and `AppSchedulerDriver`, and seeds fixture data in Debug.
 - **Navigation**: `C5h/UI/Root/MainWindowView.swift` uses `NavigationSplitView(.balanced)` with an `AppTab` enum; sidebar pinned to `.all` visibility. Tabs are grouped into named sections: **Overview** (dashboard, today, tomorrow), **Calendar** (calendar), **Activity** (logs), **App** (providers, settings). Each screen owns its own `principal` toolbar item; `MainWindowView` is toolbar-agnostic.
+- **Charts**: `C5h/UI/Charts/` holds the usage-trend visualizations (`UsageAreaChartView`, `UsageSparklineView`) used by the dashboard/usage screens.
 - **Onboarding**: `OnboardingView` is shown on first launch (keyed by `hasCompletedOnboarding` flag in `AppSettingsRepository`) before the main `NavigationSplitView`.
 - **State**: SwiftUI Observation (`@Observable`), `@MainActor` ViewModels, constructor-injected dependencies. No Combine, no global singletons.
-- **Persistence**: GRDB (SQLite) wrapped by `C5hStore.Database` over `DatabasePool`; foreign keys on; versioned migrations in `Packages/C5hStore/Sources/C5hStore/Migrations`.
+- **Persistence**: GRDB (SQLite) wrapped by `C5hStore.Database` over `DatabasePool`; foreign keys on; schema applied by the `Migrator` in `Packages/C5hStore/Sources/C5hStore/Migrations`. Pre-1.0.0, schema changes wipe the local DB rather than adding incremental migrations — edit the base schema and delete the on-disk database instead of writing a new migration.
 - **Concurrency**: `async/await` + `@MainActor`; models are `Sendable` value types.
 - **Process spawning**: All CLI invocations go through `DisclaimingSpawn` (in C5hCore), which uses `posix_spawn` + `responsibility_spawnattrs_setdisclaim` so macOS TCC attributes filesystem access to the child binary, not to C5h/C5hHelper.
 
@@ -135,7 +140,10 @@ swift test --package-path Packages/C5hStore
 ## Conventions
 
 - No SwiftLint / SwiftFormat config currently — match surrounding style.
-- No CI workflows (`.github/` is absent).
+- CI/release lives in `.github/workflows/`, all `workflow_dispatch` (manual):
+  `S1-Test-CI.yml` (build helper + run `C5hCore`/`C5hStore` tests + build app),
+  `S2-Release-GitHub.yml` (build, sign, notarize, publish the DMG to Releases),
+  `S3-Publish-Homebrew.yml` (render the cask and push to the `zaai-com/homebrew-tap`).
 - Custom errors flow through `C5hError`; avoid bare `throw NSError`.
 - DB-touching code goes through repository protocols, not raw GRDB calls in views.
 - Provider display names are "Claude" and "Codex" (short form); avoid "Claude Code" or "OpenAI Codex".
