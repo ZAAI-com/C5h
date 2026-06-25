@@ -54,6 +54,21 @@ public struct UsageHistorySeries: Sendable, Hashable {
         return nil
     }
 
+    /// 5h% from the latest point with `capturedAt <= time` that has a 5h value,
+    /// with its source capture time. Mirrors `sevenDayPercent(at:)` but, because
+    /// 5h readings can be sparse, scans backward for the most recent point at or
+    /// before `time` that actually carries a `fiveHour` value. Returns nil when
+    /// no such point exists. The series has no notion of "now"; callers that want
+    /// to hide values for future windows should guard with their own check.
+    public func fiveHourPercent(at time: Date) -> (value: Double, asOf: Date)? {
+        for point in points.reversed() where point.capturedAt <= time {
+            if let value = point.fiveHour {
+                return (value, point.capturedAt)
+            }
+        }
+        return nil
+    }
+
     private func lastPoint(atOrBefore time: Date) -> UsagePoint? {
         guard !points.isEmpty else { return nil }
         var lo = 0

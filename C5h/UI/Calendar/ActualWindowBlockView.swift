@@ -46,7 +46,13 @@ struct ActualWindowBlockView: View {
         let endSevenD: Double? = shownEnd > now
             ? nil
             : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
-        let latest5h = history?.latestFiveHourPoint()
+        // Anchor the 5h reading to this window's own time (capped at `now` so an
+        // in-progress window still shows the current value); hide for windows
+        // that start in the future, matching the 7d guards above.
+        let fiveHourAnchor = min(shownEnd, now)
+        let windowed5h: (value: Double, asOf: Date)? = shownStart > now
+            ? nil
+            : history?.fiveHourPercent(at: fiveHourAnchor)
 
         ZStack {
             cornersOverlay(
@@ -58,7 +64,7 @@ struct ActualWindowBlockView: View {
                 isNarrow: width < 130
             )
             if density.showsCenter {
-                centerOverlay(latest5h: latest5h, density: density)
+                centerOverlay(fiveHour: windowed5h, density: density)
             }
         }
         .padding(compact ? 3 : 6)
@@ -119,11 +125,11 @@ struct ActualWindowBlockView: View {
     }
 
     private func centerOverlay(
-        latest5h: (value: Double, asOf: Date)?,
+        fiveHour: (value: Double, asOf: Date)?,
         density: BlockDensity
     ) -> some View {
         VStack(spacing: 1) {
-            if let p = latest5h {
+            if let p = fiveHour {
                 Text("5h: \(BlockFormatters.formatPercent(p.value))")
                     .font(.system(size: compact ? 9 : 10, weight: .semibold))
                 Text("@ \(BlockFormatters.formatTime(p.asOf))")

@@ -178,6 +178,63 @@ struct UsageHistorySeriesTests {
         #expect(latest?.asOf.timeIntervalSince1970 == 1_000)
     }
 
+    @Test("fiveHourPercent is anchored to time, not the global latest point")
+    func fiveHourPercentAtTime() {
+        let t0 = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 30,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let t1 = claudeSnapshot(
+            fiveHourPercent: 42,
+            sevenDayPercent: 40,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let t2 = claudeSnapshot(
+            fiveHourPercent: 92,
+            sevenDayPercent: 50,
+            capturedAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [t0, t1, t2])
+
+        // Before any point: nil.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 500)) == nil)
+
+        // At t0 and between t0/t1: the t0 reading.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 1_000))?.value == 10)
+        let between = series.fiveHourPercent(at: Date(timeIntervalSince1970: 2_500))
+        #expect(between?.value == 42)
+        #expect(between?.asOf.timeIntervalSince1970 == 2_000)
+
+        // At/after t2: the t2 reading. Distinct from earlier anchors — the bug
+        // was every window collapsing to this single latest value.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 9_999))?.value == 92)
+    }
+
+    @Test("fiveHourPercent skips points without a 5h value")
+    func fiveHourPercentSkipsMissing() {
+        let withFive = claudeSnapshot(
+            fiveHourPercent: 7,
+            sevenDayPercent: 8,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let synthetic = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: nil,
+            sevenDay: 9
+        )
+        let parsed = UsageHistorySeries(providerID: .claude, snapshots: [withFive])
+        let combined = UsageHistorySeries(
+            providerID: .claude,
+            points: parsed.points + [synthetic]
+        )
+
+        // Anchoring at t=2_000 (which has no 5h) falls back to the t=1_000 reading.
+        let result = combined.fiveHourPercent(at: Date(timeIntervalSince1970: 2_000))
+        #expect(result?.value == 7)
+        #expect(result?.asOf.timeIntervalSince1970 == 1_000)
+    }
+
     // MARK: - Helpers
 
     private func claudeSnapshot(
