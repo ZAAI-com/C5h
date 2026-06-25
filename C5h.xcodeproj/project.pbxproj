@@ -37,6 +37,7 @@
 		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
 		0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000001 /* HelperRegistrationService.swift */; };
 		0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000002 /* HelperDevModeRunner.swift */; };
+		0A0012070000000000000003 /* ProcessLivenessChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000003 /* ProcessLivenessChecker.swift */; };
 		0A0012080000000000000001 /* DebugBundleExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011080000000000000001 /* DebugBundleExporter.swift */; };
 		0A0012010000000000000001 /* C5hApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000001 /* C5hApp.swift */; };
 		0A0012010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011010000000000000002 /* AppDelegate.swift */; };
@@ -107,6 +108,7 @@
 		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
 		0A0011070000000000000001 /* HelperRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRegistrationService.swift; sourceTree = "<group>"; };
 		0A0011070000000000000002 /* HelperDevModeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperDevModeRunner.swift; sourceTree = "<group>"; };
+		0A0011070000000000000003 /* ProcessLivenessChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessLivenessChecker.swift; sourceTree = "<group>"; };
 		0A0011080000000000000001 /* DebugBundleExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugBundleExporter.swift; sourceTree = "<group>"; };
 		0A0011020500000000000001 /* ProvidersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProvidersView.swift; sourceTree = "<group>"; };
 		0A0011020600000000000001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 			children = (
 				0A0011070000000000000001 /* HelperRegistrationService.swift */,
 				0A0011070000000000000002 /* HelperDevModeRunner.swift */,
+				0A0011070000000000000003 /* ProcessLivenessChecker.swift */,
 			);
 			path = Helper;
 			sourceTree = "<group>";
@@ -533,6 +536,7 @@
 				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,
 				0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */,
 				0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */,
+				0A0012070000000000000003 /* ProcessLivenessChecker.swift in Sources */,
 				0A0012080000000000000001 /* DebugBundleExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
