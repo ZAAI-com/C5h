@@ -1,0 +1,7 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+enterprise_data_privacy = false
+
+[scripts]
+setup = "./Toolkit/Conductor/setup.sh"
+run = "./Toolkit/Conductor/run.sh"
+run_mode = "nonconcurrent"
