@@ -89,4 +89,14 @@ fi
 echo "==> Build DMG"
 hdiutil create -volname "C5h" -srcfolder "${EXPORT_DIR}" -ov -format UDZO "${DMG}"
 
-echo "Done: ${DMG}"
+if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+  echo "==> Staple DMG"
+  # The .app inside is already stapled above; stapling the DMG too lets Gatekeeper
+  # validate the downloaded disk image offline (e.g. a Homebrew cask install).
+  xcrun stapler staple "${DMG}"
+fi
+
+echo "==> Compute SHA256"
+shasum -a 256 "${DMG}" | awk '{print $1}' > "${DMG}.sha256"
+
+echo "Done: ${DMG} (sha256: $(cat "${DMG}.sha256"))"

@@ -1,0 +1,88 @@
+name: S2 - Release GitHub
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (strict semver, no v prefix, e.g. 0.5.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, sign, notarize, and publish DMG
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Version must be strict semver, no leading zeros (e.g. 0.5.0). Got: $VERSION"
+            exit 1
+          fi
+
+      - name: Select latest Xcode
+        run: |
+          latest=$(printf '%s\n' /Applications/Xcode_*.app | sort -V | tail -n1)
+          [ -e "$latest" ] && sudo xcode-select -s "$latest" || true
+          xcodebuild -version
+
+      - name: Import Developer ID certificate into a temp keychain
+        env:
+          APPLE_DEVELOPER_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 }}
+          APPLE_DEVELOPER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_NAME="c5h-build.keychain"
+          CERT_FILE="$(mktemp -t c5h-cert.XXXXXX)"
+
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_NAME"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
+          security list-keychains -d user -s "$KEYCHAIN_NAME" "$(security list-keychains -d user | tr -d '"')"
+
+          printf '%s' "$APPLE_DEVELOPER_CERTIFICATE_P12" | base64 -D > "$CERT_FILE"
+          security import "$CERT_FILE" \
+            -k "$KEYCHAIN_NAME" \
+            -P "$APPLE_DEVELOPER_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$APPLE_KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_NAME" >/dev/null
+          rm -f "$CERT_FILE"
+
+      - name: Build, sign, notarize, and DMG
+        env:
+          DEVELOPER_ID_APPLICATION: "Developer ID Application: ${{ vars.APPLE_SIGNING_IDENTITY }}"
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: ./Toolkit/Conductor/release.sh "${{ inputs.version }}"
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain c5h-build.keychain || true
+
+      - name: Create/update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          files: |
+            build/C5h-${{ inputs.version }}.dmg
+            build/C5h-${{ inputs.version }}.dmg.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

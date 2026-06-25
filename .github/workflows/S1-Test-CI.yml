@@ -1,0 +1,71 @@
+name: S1 - Test CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build + Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select latest Xcode
+        # C5h targets the macOS 26 SDK, so it needs the newest Xcode the runner ships.
+        run: |
+          latest=$(printf '%s\n' /Applications/Xcode_*.app | sort -V | tail -n1)
+          [ -e "$latest" ] && sudo xcode-select -s "$latest" || true
+          xcodebuild -version
+
+      - name: Build helper executable
+        run: swift build --package-path Packages/C5hHelper
+
+      - name: Test C5hCore
+        run: swift test --package-path Packages/C5hCore
+
+      - name: Test C5hStore
+        run: swift test --package-path Packages/C5hStore
+
+      - name: Build app
+        run: |
+          xcodebuild \
+            -workspace C5h.xcworkspace \
+            -scheme C5h \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            build
+
+  workflow-secret-safety:
+    name: Workflow Secret Safety
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Block known secret-leak patterns in workflows
+        run: |
+          set -euo pipefail
+
+          # Prevent credentials embedded in URLs (high leak risk in logs/config).
+          if grep -RInE 'https://[^/@[:space:]]+@github[.]com' .github/workflows; then
+            echo "ERROR: Credential-in-URL pattern found in workflow files."
+            exit 1
+          fi
+
+          # Prevent direct printing of expressions that evaluate from secrets.
+          if grep -RInE 'echo[[:space:]].*\$\{\{[[:space:]]*secrets\.' .github/workflows; then
+            echo "ERROR: Direct echo of secrets expression found in workflow files."
+            exit 1
+          fi
+
+          # Prevent shell xtrace in workflow scripts.
+          if grep -RInE '(^|[[:space:];])set[[:space:]]+-[a-wyzA-WYZ]*x|bash[[:space:]]+-[a-wyzA-WYZ]*x' .github/workflows; then
+            echo "ERROR: Shell xtrace detected in workflow files."
+            exit 1
+          fi
