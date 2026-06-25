@@ -136,12 +136,10 @@ struct SettingsView: View {
         actionTitle: String = "Open in Finder",
         action: @escaping (URL) -> Void
     ) -> some View {
-        LabeledContent {
+        VStack(alignment: .leading, spacing: C5hSpacing.xs) {
             HStack(spacing: C5hSpacing.sm) {
-                Text(url?.path ?? "—")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Text(title)
+                Spacer(minLength: C5hSpacing.sm)
                 Button(actionTitle) {
                     if let url {
                         action(url)
@@ -150,8 +148,9 @@ struct SettingsView: View {
                 .buttonStyle(.glass)
                 .disabled(url == nil)
             }
-        } label: {
-            Text(title)
+            Text(url?.path ?? "—")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 
