@@ -7,7 +7,6 @@ public protocol ActualWindow5hRepository: Sendable {
     func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h]
     func create(_ window: ActualWindow5h) async throws
     func update(_ window: ActualWindow5h) async throws
-    func delete(_ id: UUID) async throws
 
     /// Inserts the window, or updates an existing window for the same provider
     /// whose `endAt` is within `tolerance` of the new window's `endAt`. Used to
@@ -60,12 +59,6 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
         let record = ActualWindow5hRecord(from: updated)
         try await writer.write { db in
             try record.update(db)
-        }
-    }
-
-    public func delete(_ id: UUID) async throws {
-        _ = try await writer.write { db in
-            try ActualWindow5hRecord.deleteOne(db, key: id.uuidString)
         }
     }
 
