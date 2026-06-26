@@ -43,6 +43,26 @@ final class AppEnvironment {
         Task { await self.bootstrap() }
     }
 
+    /// Collapses stale `c5hTriggered` placeholder 5h windows onto their real
+    /// detected windows at startup (see `ActualWindow5hReconciler`). Idempotent:
+    /// once clean it finds nothing, so it is safe to run every launch.
+    private static func reconcileActualWindows(
+        repository: any ActualWindow5hRepository
+    ) async {
+        do {
+            let windows = try await repository.fetchAll()
+            let resolutions = ActualWindow5hReconciler.resolve(windows: windows)
+            guard !resolutions.isEmpty else { return }
+            for resolution in resolutions {
+                try await repository.update(resolution.survivor)
+                try await repository.delete(resolution.phantomID)
+            }
+            NSLog("Reconciled \(resolutions.count) stale c5hTriggered 5h window(s) at startup")
+        } catch {
+            NSLog("Actual-window reconciliation failed at startup: \(error)")
+        }
+    }
+
     func bootstrap() async {
         do {
             let paths = try AppPaths.live()
@@ -70,6 +90,10 @@ final class AppEnvironment {
             self.promptTemplateRepository = GRDBPromptTemplateRepository(database: db)
             self.appSettingsRepository = settingsRepo
             self.helperHeartbeatRepository = GRDBHelperHeartbeatRepository(database: db)
+
+            if let actual5hRepo = self.actualWindow5hRepository {
+                await Self.reconcileActualWindows(repository: actual5hRepo)
+            }
 
             self.providers = try await providerRepo.fetchAll()
 

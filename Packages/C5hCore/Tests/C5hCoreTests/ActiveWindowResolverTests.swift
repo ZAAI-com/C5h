@@ -89,6 +89,47 @@ struct ActiveWindowResolverTests {
         #expect(updates.isEmpty)
     }
 
+    @Test("Reuses the active window covering now when the usage fetch fails")
+    func reusesActiveWindowWhenSnapshotFails() async throws {
+        let recorder = Recorder()
+        let triggerTime = Date(timeIntervalSince1970: 1_000_000)
+        let commandRunID = UUID()
+        // An earlier detected poll left a window that still covers the trigger;
+        // the run lands mid-window, so there is no new window to anchor.
+        let existing = ActualWindow5h(
+            providerID: .claude,
+            startAt: triggerTime.addingTimeInterval(-3000),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in throw C5hError.processLaunchFailed("usage CLI timed out") },
+            activeWindowFetch: { _, _ in existing },
+            updateActualWindow: { window in await recorder.addUpdate(window) }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        // The existing window is reused (same id), not a new pinned placeholder.
+        #expect(window.id == existing.id)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.commandRunID == commandRunID)
+        // Confidence is left untouched: no fresh snapshot to confirm exact bounds.
+        #expect(window.confidence == .estimated)
+        #expect(window.startAt == existing.startAt)
+
+        let updates = await recorder.updated
+        #expect(updates.count == 1)
+        let upserts = await recorder.upserted5h
+        #expect(upserts.isEmpty)
+    }
+
     @Test("Promotes the real active window to exact when Codex reports an anchored window")
     func promotesRealWindowToExact() async throws {
         let recorder = Recorder()

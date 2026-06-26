@@ -34,7 +34,7 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
     public func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h] {
         let startStr = DateTimeService.formatUTC(interval.start)
         let endStr = DateTimeService.formatUTC(interval.end)
-        // Overlap match — see PlannedWindowRepository.fetchWindows for rationale.
+        // Overlap match (see PlannedWindowRepository.fetchWindows for rationale).
         let records = try await writer.read { db in
             try ActualWindow5hRecord
                 .filter(sql: """
@@ -121,7 +121,7 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 // Preserve a stronger user-visible tag: if the row was already
                 // promoted to `c5hTriggered`/`exact` by a triggered command, a
                 // routine `detectedFromUsage`/`estimated` refresh shouldn't
-                // downgrade the labels — only correct the times.
+                // downgrade the labels, only correct the times.
                 if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
                     // keep updated.source / updated.confidence / updated.commandRunID
                 } else {
