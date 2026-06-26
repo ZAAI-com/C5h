@@ -339,16 +339,16 @@ struct SettingsView: View {
         guard let repo = appEnv.helperHeartbeatRepository else { return }
         let latest = try? await repo.latest()
         heartbeat = latest
-        var expectedVersion: String?
+        var expectedBinaryModifiedAt: Date?
         #if DEBUG
-        expectedVersion = devRunner.expectedVersion
+        expectedBinaryModifiedAt = devRunner.expectedBinaryModifiedAt
         #endif
         helperHealth = HelperHealthEvaluator().evaluate(
             heartbeat: latest.map {
-                HelperHeartbeatEvidence(lastSeenAt: $0.lastSeenAt, pid: $0.pid, version: $0.helperVersion)
+                HelperHeartbeatEvidence(startedAt: $0.startedAt, lastSeenAt: $0.lastSeenAt, pid: $0.pid)
             },
             now: .now,
-            expectedVersion: expectedVersion,
+            expectedBinaryModifiedAt: expectedBinaryModifiedAt,
             isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
         )
     }

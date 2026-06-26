@@ -5,11 +5,9 @@ import C5hStore
 @main
 struct HelperMain {
     static func main() async {
-        // Stamp the heartbeat with this binary's build identity so the app can
-        // detect a running helper that is older than the binary on disk (e.g.
-        // rebuilt in dev but never restarted).
-        let helperBinaryURL = URL(fileURLWithPath: CommandLine.arguments.first ?? "")
-        let helperVersion = HelperBuildStamp.version(forBinaryAt: helperBinaryURL)
+        let helperBinaryURL = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments.first ?? "")
+        let helperVersion = HelperAppVersion.version(forHelperAt: helperBinaryURL)
 
         let appSupport: URL
         do {

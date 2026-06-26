@@ -1,14 +1,14 @@
 import Foundation
 
 public struct HelperHeartbeatEvidence: Sendable, Hashable {
+    public var startedAt: Date
     public var lastSeenAt: Date
     public var pid: Int?
-    public var version: String?
 
-    public init(lastSeenAt: Date, pid: Int?, version: String? = nil) {
+    public init(startedAt: Date, lastSeenAt: Date, pid: Int?) {
+        self.startedAt = startedAt
         self.lastSeenAt = lastSeenAt
         self.pid = pid
-        self.version = version
     }
 }
 
@@ -25,8 +25,8 @@ public struct HelperHealthEvaluation: Sendable, Hashable {
     public var lastSeenAt: Date?
     public var ageSeconds: TimeInterval?
     public var pid: Int?
-    /// True when the running helper reports a build identity that differs from
-    /// the binary the app would launch (i.e. the process is running stale code).
+    /// True when the running helper started before the helper binary currently
+    /// on disk was built.
     public var outdated: Bool
 
     public init(
@@ -53,14 +53,13 @@ public struct HelperHealthEvaluator: Sendable {
         self.staleAfterSeconds = staleAfterSeconds
     }
 
-    /// `expectedVersion` is the build identity of the helper binary the app
-    /// would launch (see `HelperBuildStamp`). When provided and the heartbeat
-    /// reports a different version, the evaluation is flagged `outdated`. Pass
-    /// `nil` to skip the check (e.g. when the expected binary is unknown).
+    /// `expectedBinaryModifiedAt` is the modification date of the helper binary
+    /// the app would launch. When it is newer than the running helper's
+    /// `startedAt`, the evaluation is flagged `outdated`.
     public func evaluate(
         heartbeat: HelperHeartbeatEvidence?,
         now: Date,
-        expectedVersion: String? = nil,
+        expectedBinaryModifiedAt: Date? = nil,
         isProcessAlive: @Sendable (Int) -> Bool
     ) -> HelperHealthEvaluation {
         guard let heartbeat else {
@@ -72,12 +71,7 @@ public struct HelperHealthEvaluator: Sendable {
             )
         }
 
-        let outdated: Bool
-        if let expectedVersion, let reported = heartbeat.version {
-            outdated = reported != expectedVersion
-        } else {
-            outdated = false
-        }
+        let outdated = expectedBinaryModifiedAt.map { $0 > heartbeat.startedAt } ?? false
 
         let ageSeconds = max(0, now.timeIntervalSince(heartbeat.lastSeenAt))
         if ageSeconds > staleAfterSeconds {

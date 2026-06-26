@@ -25,6 +25,7 @@ struct HelperHealthEvaluatorTests {
     func freshHeartbeatWithAlivePIDIsRunning() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
                 pid: 123
             ),
@@ -41,6 +42,7 @@ struct HelperHealthEvaluatorTests {
     func freshHeartbeatWithDeadPIDIsStopped() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
                 pid: 123
             ),
@@ -57,6 +59,7 @@ struct HelperHealthEvaluatorTests {
     func staleHeartbeatWithDeadPIDIsStale() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-120),
                 lastSeenAt: now.addingTimeInterval(-91),
                 pid: 123
             ),
@@ -73,6 +76,7 @@ struct HelperHealthEvaluatorTests {
     func staleHeartbeatWithAlivePIDIsStale() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-120),
                 lastSeenAt: now.addingTimeInterval(-91),
                 pid: 123
             ),
@@ -86,15 +90,15 @@ struct HelperHealthEvaluatorTests {
     }
 
     @Test
-    func outdatedWhenReportedVersionDiffersFromExpected() {
+    func outdatedWhenBinaryWasModifiedAfterHelperStarted() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
-                pid: 123,
-                version: "0.0.1+100"
+                pid: 123
             ),
             now: now,
-            expectedVersion: "0.0.1+200",
+            expectedBinaryModifiedAt: now.addingTimeInterval(-45),
             isProcessAlive: { _ in true }
         )
 
@@ -103,15 +107,15 @@ struct HelperHealthEvaluatorTests {
     }
 
     @Test
-    func notOutdatedWhenVersionsMatch() {
+    func notOutdatedWhenBinaryWasModifiedBeforeHelperStarted() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
-                pid: 123,
-                version: "0.0.1+200"
+                pid: 123
             ),
             now: now,
-            expectedVersion: "0.0.1+200",
+            expectedBinaryModifiedAt: now.addingTimeInterval(-90),
             isProcessAlive: { _ in true }
         )
 
@@ -119,15 +123,31 @@ struct HelperHealthEvaluatorTests {
     }
 
     @Test
-    func notOutdatedWhenExpectedVersionUnknown() {
+    func notOutdatedWhenBinaryModifiedAtMatchesHelperStart() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
-                pid: 123,
-                version: "0.0.1+100"
+                pid: 123
             ),
             now: now,
-            expectedVersion: nil,
+            expectedBinaryModifiedAt: now.addingTimeInterval(-60),
+            isProcessAlive: { _ in true }
+        )
+
+        #expect(!result.outdated)
+    }
+
+    @Test
+    func notOutdatedWhenExpectedBinaryModifiedAtIsUnknown() {
+        let result = evaluator.evaluate(
+            heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
+                lastSeenAt: now.addingTimeInterval(-30),
+                pid: 123
+            ),
+            now: now,
+            expectedBinaryModifiedAt: nil,
             isProcessAlive: { _ in true }
         )
 
@@ -138,6 +158,7 @@ struct HelperHealthEvaluatorTests {
     func freshHeartbeatWithoutPIDIsUnknown() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(
+                startedAt: now.addingTimeInterval(-60),
                 lastSeenAt: now.addingTimeInterval(-30),
                 pid: nil
             ),
