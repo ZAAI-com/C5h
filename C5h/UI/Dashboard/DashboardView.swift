@@ -199,7 +199,7 @@ struct DashboardView: View {
 
     private func formatEndAt(_ date: Date, durationSeconds: Int) -> String {
         if durationSeconds > 24 * 3600 {
-            return date.formatted(date: .abbreviated, time: .shortened)
+            return date.c5hDateTime
         }
         return date.formatted(date: .omitted, time: .shortened)
     }

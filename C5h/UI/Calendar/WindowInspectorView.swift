@@ -88,6 +88,6 @@ struct WindowInspectorView: View {
     }
 
     private func format(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .standard)
+        date.c5hDateTime
     }
 }

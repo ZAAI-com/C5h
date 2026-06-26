@@ -216,7 +216,7 @@ struct SettingsView: View {
 
     private var lastSeenLabel: String {
         guard let lastSeenAt = helperHealth.lastSeenAt else { return "—" }
-        let formatted = lastSeenAt.formatted(date: .abbreviated, time: .standard)
+        let formatted = lastSeenAt.c5hDateTime
         guard let ageSeconds = helperHealth.ageSeconds else { return formatted }
         return "\(formatted) (\(durationLabel(seconds: ageSeconds)) ago)"
     }

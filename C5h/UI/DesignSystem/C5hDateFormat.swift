@@ -10,10 +10,11 @@ private enum C5hDateFormatters {
         return f
     }()
 
-    static let logTimestamp: DateFormatter = {
+    static let dateTime: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd 'at' HH:mm:ss"
         return f
     }()
@@ -26,8 +27,9 @@ extension Date {
         C5hDateFormatters.isoDate.string(from: self)
     }
 
-    /// `2026-05-21 at 09:45:45` - local time, fixed numeric format for logs.
-    var c5hLogTimestamp: String {
-        C5hDateFormatters.logTimestamp.string(from: self)
+    /// `2026-05-21 at 09:45:45` - local date and time in a fixed numeric format.
+    /// Use for any UI label that shows a full date with a time.
+    var c5hDateTime: String {
+        C5hDateFormatters.dateTime.string(from: self)
     }
 }
