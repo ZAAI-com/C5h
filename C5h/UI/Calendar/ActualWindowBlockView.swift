@@ -59,6 +59,8 @@ struct ActualWindowBlockView: View {
         // display bounds so the earlier window stops where the new one starts.
         let shownStart = displayStart ?? window.startAt
         let shownEnd = displayEnd ?? window.endAt
+        let marksResetStart = isReset
+        let marksResetEnd = displayEnd.map { $0 < window.endAt } ?? false
         let visibleStart = effectiveSegmentStart
         let usageAnchor = min(shownEnd, now)
         let isPast = shownEnd <= now
@@ -103,6 +105,8 @@ struct ActualWindowBlockView: View {
                 condensedOverlay(
                     shownStart: shownStart,
                     shownEnd: shownEnd,
+                    marksResetStart: false,
+                    marksResetEnd: false,
                     endSevenD: condensedSevenD,
                     fiveHour: condensed5h
                 )
@@ -112,6 +116,8 @@ struct ActualWindowBlockView: View {
                     cornersOverlay(
                         shownStart: shownStart,
                         shownEnd: shownEnd,
+                        marksResetStart: marksResetStart,
+                        marksResetEnd: marksResetEnd,
                         openReading: openReading,
                         closeReading: closeReading,
                         contentWidth: contentWidth,
@@ -143,20 +149,14 @@ struct ActualWindowBlockView: View {
         }
         .clipShape(shape)
         .foregroundStyle(.white)
-        .overlay(alignment: .topTrailing) {
-            if isReset {
-                resetGlyph
-            }
-        }
     }
 
-    /// Subtle, neutral marker that this window followed a quota reset. Deliberately
-    /// plain (no plan name, no text) so it reads as a reset indicator only.
+    /// Subtle, neutral marker for a quota reset boundary. Deliberately plain (no
+    /// plan name, no text) so it reads as a reset indicator only.
     private var resetGlyph: some View {
         Image(systemName: "arrow.triangle.2.circlepath")
             .font(.system(size: compact ? 8 : 9, weight: .semibold))
             .foregroundStyle(.white.opacity(0.7))
-            .padding(compact ? 2 : 3)
             .allowsHitTesting(false)
     }
 
@@ -166,6 +166,8 @@ struct ActualWindowBlockView: View {
     private func cornersOverlay(
         shownStart: Date,
         shownEnd: Date,
+        marksResetStart: Bool,
+        marksResetEnd: Bool,
         openReading: (capturedAt: Date, fiveHour: Double?, sevenDay: Double?)?,
         closeReading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?)?,
         contentWidth: CGFloat,
@@ -174,6 +176,7 @@ struct ActualWindowBlockView: View {
         VStack(spacing: 0) {
             usageReadingRow(
                 timeText: BlockFormatters.formatTime(shownStart),
+                showsResetGlyph: marksResetStart,
                 fiveHour: density.showsBottomCorners ? openReading?.fiveHour : nil,
                 sevenDay: density.showsBottomCorners ? openReading?.sevenDay : nil,
                 showFiveHourWhenZero: false,
@@ -183,6 +186,7 @@ struct ActualWindowBlockView: View {
             if density.showsBottomCorners {
                 usageReadingRow(
                     timeText: BlockFormatters.formatTime(shownEnd),
+                    showsResetGlyph: marksResetEnd,
                     fiveHour: closeReading?.fiveHour,
                     sevenDay: closeReading?.sevenDay,
                     showFiveHourWhenZero: true,
@@ -200,11 +204,17 @@ struct ActualWindowBlockView: View {
     private func condensedOverlay(
         shownStart: Date,
         shownEnd: Date,
+        marksResetStart: Bool,
+        marksResetEnd: Bool,
         endSevenD: Double?,
         fiveHour: (value: Double, asOf: Date)?
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            cornerText(BlockFormatters.formatTime(shownStart), weight: .bold)
+            timeLabel(
+                BlockFormatters.formatTime(shownStart),
+                weight: .bold,
+                showsResetGlyph: marksResetStart
+            )
             Spacer(minLength: 0)
             if let p = fiveHour {
                 cornerText("5h \(BlockFormatters.formatPercent(p.value))")
@@ -212,7 +222,11 @@ struct ActualWindowBlockView: View {
             if let v = endSevenD {
                 cornerText("7d \(BlockFormatters.formatPercent(v))")
             }
-            cornerText(BlockFormatters.formatTime(shownEnd), weight: .bold)
+            timeLabel(
+                BlockFormatters.formatTime(shownEnd),
+                weight: .bold,
+                showsResetGlyph: marksResetEnd
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -228,6 +242,20 @@ struct ActualWindowBlockView: View {
             .monospacedDigit()
     }
 
+    private func timeLabel(
+        _ string: String,
+        weight: Font.Weight = .regular,
+        showsResetGlyph: Bool
+    ) -> some View {
+        HStack(spacing: compact ? 2 : 3) {
+            cornerText(string, weight: weight)
+            if showsResetGlyph {
+                resetGlyph
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
     /// Estimated line height of a reading label, used to clamp it inside the
     /// block and clear of the start/end corner times.
     private var labelLineHeight: CGFloat { compact ? 12 : 14 }
@@ -239,6 +267,7 @@ struct ActualWindowBlockView: View {
     /// controlled by its caller.
     private func usageReadingRow(
         timeText: String,
+        showsResetGlyph: Bool = false,
         fiveHour: Double?,
         sevenDay: Double?,
         showFiveHourWhenZero: Bool,
@@ -250,7 +279,11 @@ struct ActualWindowBlockView: View {
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
         return ZStack(alignment: .leading) {
-            cornerText(timeText, weight: .semibold)
+            timeLabel(
+                timeText,
+                weight: .semibold,
+                showsResetGlyph: showsResetGlyph
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let five {
                 usageMetricLabel("5h usage", value: five)
@@ -275,6 +308,7 @@ struct ActualWindowBlockView: View {
     ) -> some View {
         usageReadingRow(
             timeText: BlockFormatters.formatTime(reading.capturedAt),
+            showsResetGlyph: false,
             fiveHour: reading.fiveHour,
             sevenDay: reading.sevenDay,
             showFiveHourWhenZero: true,
