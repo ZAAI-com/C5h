@@ -11,10 +11,10 @@ struct ActualWindowBlockView: View {
     var clipsTop: Bool = false
     var clipsBottom: Bool = false
     var compact: Bool = false
-    /// When false, the "from … CLI" / "manual" source footer is suppressed.
-    /// The Week overview hides it to keep the dense tiles readable; the Day
-    /// view keeps it (the default).
-    var showsSourceLabel: Bool = true
+    /// When true, the block uses the condensed Week-overview layout: start time,
+    /// 7d usage, and 5h usage stacked top-left. The Day view (Today/Tomorrow)
+    /// keeps the default full layout with start/end corners and a middle 5h row.
+    var condensed: Bool = false
     /// When the block is rendering a clipped segment of a cross-midnight
     /// window, the caller passes the segment's actual displayed start/end so
     /// corner labels and history lookups match what's on screen.
@@ -54,17 +54,27 @@ struct ActualWindowBlockView: View {
             ? nil
             : history?.fiveHourPercent(at: fiveHourAnchor)
 
-        ZStack {
-            cornersOverlay(
-                shownStart: shownStart,
-                shownEnd: shownEnd,
-                startSevenD: startSevenD,
-                endSevenD: endSevenD,
-                density: density,
-                isNarrow: width < 130
-            )
-            if density.showsCenter {
-                centerOverlay(fiveHour: windowed5h, density: density)
+        Group {
+            if condensed {
+                condensedOverlay(
+                    shownStart: shownStart,
+                    endSevenD: endSevenD,
+                    fiveHour: windowed5h
+                )
+            } else {
+                ZStack {
+                    cornersOverlay(
+                        shownStart: shownStart,
+                        shownEnd: shownEnd,
+                        startSevenD: startSevenD,
+                        endSevenD: endSevenD,
+                        density: density,
+                        isNarrow: width < 130
+                    )
+                    if density.showsCenter, let p = windowed5h {
+                        middleLeadingOverlay(fiveHour: p)
+                    }
+                }
             }
         }
         .padding(compact ? 3 : 6)
@@ -87,7 +97,7 @@ struct ActualWindowBlockView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                     if let v = startSevenD {
-                        cornerText("7d limit \(BlockFormatters.formatPercent(v))")
+                        cornerText("7d usage \(BlockFormatters.formatPercent(v))")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -96,7 +106,7 @@ struct ActualWindowBlockView: View {
                     cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                     Spacer(minLength: 0)
                     if let v = startSevenD {
-                        cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+                        cornerText("7d usage \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                     }
                 }
             }
@@ -105,7 +115,7 @@ struct ActualWindowBlockView: View {
                 if isNarrow {
                     VStack(alignment: .leading, spacing: 0) {
                         if let v = endSevenD {
-                            cornerText("7d limit \(BlockFormatters.formatPercent(v))")
+                            cornerText("7d usage \(BlockFormatters.formatPercent(v))")
                         }
                         cornerText(BlockFormatters.formatTime(shownEnd))
                     }
@@ -115,7 +125,7 @@ struct ActualWindowBlockView: View {
                         cornerText(BlockFormatters.formatTime(shownEnd))
                         Spacer(minLength: 0)
                         if let v = endSevenD {
-                            cornerText("7d limit \(BlockFormatters.formatPercent(v))", alignment: .trailing)
+                            cornerText("7d usage \(BlockFormatters.formatPercent(v))", alignment: .trailing)
                         }
                     }
                 }
@@ -124,31 +134,40 @@ struct ActualWindowBlockView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func centerOverlay(
-        fiveHour: (value: Double, asOf: Date)?,
-        density: BlockDensity
+    /// Day view: the live 5h reading and the time it was reported, pinned to the
+    /// left edge and vertically centered so it sits between the start and end
+    /// corner times.
+    private func middleLeadingOverlay(
+        fiveHour p: (value: Double, asOf: Date)
     ) -> some View {
-        VStack(spacing: 1) {
-            if let p = fiveHour {
-                Text("5h: \(BlockFormatters.formatPercent(p.value))")
-                    .font(.system(size: compact ? 9 : 10, weight: .semibold))
-                Text("@ \(BlockFormatters.formatTime(p.asOf))")
-                    .font(.system(size: compact ? 8 : 9))
-                    .opacity(0.85)
-            } else {
-                Text("—")
-                    .font(.system(size: compact ? 9 : 10))
-                    .opacity(0.85)
+        HStack(spacing: 6) {
+            Text(BlockFormatters.formatTime(p.asOf))
+                .font(.system(size: compact ? 9 : 10))
+                .monospacedDigit()
+                .opacity(0.85)
+            Text("5h usage \(BlockFormatters.formatPercent(p.value))")
+                .font(.system(size: compact ? 9 : 10, weight: .semibold))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    /// Week overview: only start time, end 7d usage, and 5h usage, stacked
+    /// top-left to stay legible in the dense tiles.
+    private func condensedOverlay(
+        shownStart: Date,
+        endSevenD: Double?,
+        fiveHour: (value: Double, asOf: Date)?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
+            if let v = endSevenD {
+                cornerText("7d \(BlockFormatters.formatPercent(v))")
             }
-            if showsSourceLabel, density.showsDetailLine {
-                Text(sourceLabel)
-                    .font(.system(size: 9))
-                    .opacity(0.75)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            if let p = fiveHour {
+                cornerText("5h \(BlockFormatters.formatPercent(p.value))")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func cornerText(
@@ -164,7 +183,7 @@ struct ActualWindowBlockView: View {
 
     /// Returns the 7d% only when there is enough data to be worth showing.
     /// A missing reading (`nil`) or one that rounds to 0% is treated as "not
-    /// enough data" and hidden, so tiles don't render a meaningless `7d limit 0%`.
+    /// enough data" and hidden, so tiles don't render a meaningless `7d usage 0%`.
     private static func meaningfulSevenDay(_ value: Double?) -> Double? {
         guard let value, value.rounded() >= 1 else { return nil }
         return value
@@ -172,13 +191,5 @@ struct ActualWindowBlockView: View {
 
     private var brandColor: Color {
         C5hColors.tintForProvider(window.providerID)
-    }
-
-    private var sourceLabel: String {
-        switch window.source {
-        case .c5hTriggered: "from \(window.providerID.displayName) CLI (triggered)"
-        case .detectedFromUsage: "from \(window.providerID.displayName) CLI"
-        case .manual: "manual"
-        }
     }
 }

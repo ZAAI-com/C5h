@@ -162,7 +162,7 @@ struct WeekCalendarView: View {
                 l.timeRulerWidth = Self.timeRulerWidth
                 return l
             }()
-            // Fit all 7 days plus a single (left) ruler into the width — no
+            // Fit all 7 days plus a single (left) ruler into the width, with no
             // horizontal scroll, so the fixed header stays aligned with the grid
             // and the time scale never gets clipped off the right edge.
             let columnWidth = max(
@@ -293,7 +293,7 @@ private struct WeekDayColumnView: View {
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
-                        showsSourceLabel: false,
+                        condensed: true,
                         displayStart: segment.start,
                         displayEnd: segment.start.addingTimeInterval(
                             TimeInterval(segment.durationSeconds)
@@ -323,7 +323,7 @@ private struct WeekDayColumnView: View {
         max(0, (columnWidth - 4) / 2)
     }
 
-    /// Claude blocks render in the left half, Codex in the right half — keeps
+    /// Claude blocks render in the left half, Codex in the right half. This keeps
     /// both providers visible at the same time of day without overlap.
     private func providerXOffset(for providerID: ProviderID) -> CGFloat {
         switch providerID {
