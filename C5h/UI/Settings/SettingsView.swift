@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import C5hCore
 import C5hStore
@@ -109,7 +110,10 @@ struct SettingsView: View {
             }
             Section("Bundle") {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                LabeledContent("Version", value: bundleValue("CFBundleShortVersionString", fallback: "—"))
+                LabeledContent("Build number", value: bundleValue("CFBundleVersion", fallback: "—"))
+                LabeledContent("Build time", value: buildTimeLabel)
+                LabeledContent("Source revision", value: sourceRevisionLabel)
             }
             Section("Logs maintenance") {
                 Button("Sweep logs older than 30 days") {
@@ -212,6 +216,37 @@ struct SettingsView: View {
         let h = abs / 3600
         let m = (abs % 3600) / 60
         return String(format: "GMT%@%02d:%02d", sign, h, m)
+    }
+
+    private var buildTimeLabel: String {
+        let raw = bundleValue("C5hBuildTime", fallback: "—")
+        guard raw != "—" else { return raw }
+
+        let parser = ISO8601DateFormatter()
+        if let date = parser.date(from: raw) {
+            return date.formatted(date: .abbreviated, time: .standard)
+        }
+        return raw
+    }
+
+    private var sourceRevisionLabel: String {
+        let commit = bundleValue("C5hGitCommit", fallback: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !commit.isEmpty, commit != "-" else { return "-" }
+
+        let isDirty = bundleValue("C5hGitDirty", fallback: "NO")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() == "YES"
+        return isDirty ? "\(commit)-dirty" : commit
+    }
+
+    private func bundleValue(_ key: String, fallback: String) -> String {
+        guard let value = Bundle.main.infoDictionary?[key] as? String,
+              !value.isEmpty
+        else {
+            return fallback
+        }
+        return value
     }
 
     private var lastSeenLabel: String {

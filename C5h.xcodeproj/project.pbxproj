@@ -389,6 +389,7 @@
 				0A0030020000000000000001 /* Resources */,
 				0A0030030000000000000001 /* Frameworks */,
 				0A0030040000000000000001 /* Embed C5hHelper + LaunchAgent */,
+				0A0030050000000000000001 /* Stamp Build Metadata */,
 			);
 			buildRules = (
 			);
@@ -463,6 +464,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
 			shellScript = "set -euo pipefail\n\nif [ \"${ACTION:-build}\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nCONFIG_LOWER=$(echo \"$CONFIGURATION\" | tr '[:upper:]' '[:lower:]')\nHELPER_PKG=\"$SRCROOT/Packages/C5hHelper\"\nARCH=$(uname -m)\n\necho \"Building C5hHelper ($CONFIG_LOWER, $ARCH)\"\ncd \"$HELPER_PKG\"\nxcrun swift build -c \"$CONFIG_LOWER\" --arch \"$ARCH\"\n\nBIN=\"$HELPER_PKG/.build/$ARCH-apple-macosx/$CONFIG_LOWER/C5hHelper\"\nif [ ! -x \"$BIN\" ]; then\n  echo \"error: helper binary not found at $BIN\"\n  exit 1\nfi\n\nHELPERS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Helpers\"\nLAUNCHAGENTS_DIR=\"$CODESIGNING_FOLDER_PATH/Contents/Library/LaunchAgents\"\nmkdir -p \"$HELPERS_DIR\" \"$LAUNCHAGENTS_DIR\"\n\ncp -f \"$BIN\" \"$HELPERS_DIR/C5hHelper\"\ncp -f \"$SRCROOT/Resources/com.zaai.c5h.helper.plist\" \"$LAUNCHAGENTS_DIR/com.zaai.c5h.helper.plist\"\n\nIDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:-${CODE_SIGN_IDENTITY:--}}\"\nif [ -z \"$IDENTITY\" ]; then IDENTITY=\"-\"; fi\necho \"Signing C5hHelper with identity: $IDENTITY\"\ncodesign --force --sign \"$IDENTITY\" --options=runtime --timestamp=none \"$HELPERS_DIR/C5hHelper\"\n";
+		};
+		0A0030050000000000000001 /* Stamp Build Metadata */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp Build Metadata";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "set -euo pipefail\n\nif [ \"${ACTION:-build}\" = \"indexbuild\" ]; then\n  exit 0\nfi\n\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\nif [ ! -f \"$PLIST\" ]; then\n  echo \"warning: Info.plist not found at $PLIST; skipping build metadata stamp\"\n  exit 0\nfi\n\nBUILD_TIME=$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\nGIT_COMMIT=\"-\"\nGIT_DIRTY=\"NO\"\n\nif command -v git >/dev/null 2>&1 && git -C \"$SRCROOT\" rev-parse --is-inside-work-tree >/dev/null 2>&1; then\n  GIT_COMMIT=$(git -C \"$SRCROOT\" rev-parse --short=12 HEAD 2>/dev/null || printf '-')\n  if [ -z \"$GIT_COMMIT\" ]; then\n    GIT_COMMIT=\"-\"\n  fi\n\n  if [ -n \"$(git -C \"$SRCROOT\" status --porcelain --untracked-files=normal 2>/dev/null)\" ]; then\n    GIT_DIRTY=\"YES\"\n  fi\nfi\n\nset_plist_value() {\n  local key=\"$1\"\n  local value=\"$2\"\n  /usr/libexec/PlistBuddy -c \"Set :$key $value\" \"$PLIST\" 2>/dev/null || \\\n    /usr/libexec/PlistBuddy -c \"Add :$key string $value\" \"$PLIST\"\n}\n\nset_plist_value \"C5hBuildTime\" \"$BUILD_TIME\"\nset_plist_value \"C5hGitCommit\" \"$GIT_COMMIT\"\nset_plist_value \"C5hGitDirty\" \"$GIT_DIRTY\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
