@@ -195,7 +195,7 @@ public enum DisclaimingSpawn {
         defer { posix_spawn_file_actions_destroy(&actions) }
 
         if let cwd = workingDirectory {
-            let rc = cwd.path.withCString { posix_spawn_file_actions_addchdir(&actions, $0) }
+            let rc = cwd.path.withCString { posix_spawn_file_actions_addchdir_np(&actions, $0) }
             try check(rc, "addchdir for \(cwd.path)")
         }
 
