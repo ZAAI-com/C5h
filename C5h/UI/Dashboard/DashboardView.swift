@@ -23,6 +23,7 @@ struct DashboardView: View {
                let scheduledRepo = appEnv.scheduledPromptRepository,
                let cmdRepo = appEnv.commandRunRepository,
                let usageRepo = appEnv.usageSnapshotRepository,
+               let appSettings = appEnv.appSettingsRepository,
                let registry = appEnv.providerRegistry {
                 let vm = DashboardViewModel(
                     actual5hRepository: actual5hRepo,
@@ -30,22 +31,32 @@ struct DashboardView: View {
                     scheduledRepository: scheduledRepo,
                     commandRunRepository: cmdRepo,
                     usageSnapshotRepository: usageRepo,
+                    appSettingsRepository: appSettings,
                     registry: registry
                 )
                 viewModel = vm
-                await vm.reload()
+                // Render cached data first, then refresh usage in the background.
+                await vm.loadFromStore()
+                Task { await vm.refreshUsageIfStale() }
             }
         }
         .onAppear {
             // Reload on every visit so active windows and recent runs pick up
-            // changes that happened while the user was on another tab.
+            // changes that happened while the user was on another tab. The usage
+            // refresh is throttled, so it only re-runs the CLIs when stale.
             if let viewModel {
-                Task { await viewModel.reload() }
+                Task {
+                    await viewModel.loadFromStore()
+                    await viewModel.refreshUsageIfStale()
+                }
             }
         }
         .onChange(of: reloadToken) { _, _ in
             if let viewModel {
-                Task { await viewModel.reload() }
+                Task {
+                    await viewModel.loadFromStore()
+                    await viewModel.refreshUsageIfStale()
+                }
             }
         }
     }

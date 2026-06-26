@@ -16,4 +16,12 @@ public enum AppSettingsKeys {
     /// Fallback wake prompt when the user hasn't set one. Picked for being
     /// fast to evaluate ("1+1" → "2", short tokens both directions).
     public static let defaultWakePromptFallback = "1+1"
+
+    /// Minimum seconds between background usage refreshes triggered by opening
+    /// the dashboard. The dashboard always shows cached data; this throttles how
+    /// often C5h re-runs the provider CLIs to refresh it.
+    public static let usageRefreshThrottleSeconds = "dashboard.usageRefreshThrottleSeconds"
+
+    /// Default throttle when the user hasn't picked one (5 minutes).
+    public static let defaultUsageRefreshThrottleSeconds: Int = 300
 }

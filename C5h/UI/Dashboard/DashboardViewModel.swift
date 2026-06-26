@@ -15,12 +15,14 @@ final class DashboardViewModel {
     var sparklineCounts: [ProviderID: [Int]] = [:]
     var lastError: String?
     var isLoading: Bool = false
+    var isRefreshingUsage: Bool = false
 
     private let actual5hRepo: any ActualWindow5hRepository
     private let actual7dRepo: any ActualWindow7dRepository
     private let scheduledRepo: any ScheduledPromptRepository
     private let commandRepo: any CommandRunRepository
     private let usageRepo: any UsageSnapshotRepository
+    private let appSettings: any AppSettingsRepository
     private let registry: ProviderRegistry
     private let fetcher: UsageFetcher
 
@@ -30,6 +32,7 @@ final class DashboardViewModel {
         scheduledRepository: any ScheduledPromptRepository,
         commandRunRepository: any CommandRunRepository,
         usageSnapshotRepository: any UsageSnapshotRepository,
+        appSettingsRepository: any AppSettingsRepository,
         registry: ProviderRegistry
     ) {
         self.actual5hRepo = actual5hRepository
@@ -37,6 +40,7 @@ final class DashboardViewModel {
         self.scheduledRepo = scheduledRepository
         self.commandRepo = commandRunRepository
         self.usageRepo = usageSnapshotRepository
+        self.appSettings = appSettingsRepository
         self.registry = registry
         self.fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
@@ -51,14 +55,14 @@ final class DashboardViewModel {
         )
     }
 
-    func reload() async {
+    /// Loads everything the cards display from already-persisted data. No CLI
+    /// calls, so this returns in well under a second and is the only thing the
+    /// view awaits before rendering.
+    func loadFromStore() async {
         isLoading = true
         defer { isLoading = false }
         do {
             let now = Date()
-            for providerID in ProviderID.allCases {
-                await refreshUsageWindow(providerID: providerID, now: now)
-            }
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
@@ -73,6 +77,71 @@ final class DashboardViewModel {
         } catch {
             self.lastError = String(describing: error)
         }
+    }
+
+    /// Refreshes usage by re-running the provider CLIs, but only if the cached
+    /// usage is older than the configured throttle interval. Runs the providers
+    /// concurrently and re-reads the DB-derived windows so fresh data surfaces.
+    /// Safe to call on every dashboard appearance: the throttle prevents
+    /// re-spawning CLIs on rapid tab switches.
+    func refreshUsageIfStale() async {
+        guard !isRefreshingUsage else { return }
+        let now = Date()
+        let throttle = await throttleInterval()
+        if let age = await cachedUsageAge(now: now), age < throttle {
+            return
+        }
+        isRefreshingUsage = true
+        defer { isRefreshingUsage = false }
+
+        await withTaskGroup(of: Void.self) { group in
+            for providerID in ProviderID.allCases {
+                group.addTask { [weak self] in
+                    await self?.refreshUsageWindow(providerID: providerID, now: now)
+                }
+            }
+        }
+        await reloadDerivedUsage(now: now)
+    }
+
+    /// Re-reads the DB-derived usage views after a provider refresh persists new
+    /// snapshots. Mirrors the usage-related portion of `loadFromStore()`.
+    private func reloadDerivedUsage(now: Date) async {
+        do {
+            let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
+            let actuals = try await actual5hRepo.fetchWindows(for: interval)
+            self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
+            await refreshUsagePercentages()
+            await loadUsageHistory(now: now)
+            self.lastError = nil
+        } catch {
+            self.lastError = String(describing: error)
+        }
+    }
+
+    /// Age of the freshest cached usage snapshot across providers, or nil when
+    /// nothing has been fetched yet (treated as stale so a first fetch runs).
+    private func cachedUsageAge(now: Date) async -> TimeInterval? {
+        var newest: Date?
+        for providerID in ProviderID.allCases {
+            if let snapshot = try? await usageRepo.fetchLatest(providerID: providerID) {
+                if newest == nil || snapshot.capturedAt > newest! {
+                    newest = snapshot.capturedAt
+                }
+            }
+        }
+        guard let newest else { return nil }
+        return now.timeIntervalSince(newest)
+    }
+
+    private func throttleInterval() async -> TimeInterval {
+        let stored = (try? await appSettings.get(
+            AppSettingsKeys.usageRefreshThrottleSeconds,
+            as: Int.self
+        )) ?? nil
+        let seconds = stored ?? AppSettingsKeys.defaultUsageRefreshThrottleSeconds
+        return TimeInterval(seconds)
     }
 
     private func loadUsageHistory(now: Date, days: Int = 7) async {
