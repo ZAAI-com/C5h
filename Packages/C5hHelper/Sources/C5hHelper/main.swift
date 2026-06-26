@@ -265,7 +265,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
         )
         return await resolver.resolveTriggeredWindow(
             providerID: providerID,
-            commandRunID: commandRun.id
+            commandRunID: commandRun.id,
+            now: commandRun.startedAt
         )
     }
 
