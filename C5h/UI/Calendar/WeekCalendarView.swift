@@ -293,11 +293,7 @@ private struct WeekDayColumnView: View {
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
-                        condensed: true,
-                        displayStart: segment.start,
-                        displayEnd: segment.start.addingTimeInterval(
-                            TimeInterval(segment.durationSeconds)
-                        )
+                        condensed: true
                     )
                     .offset(
                         x: actualXOffset(for: window.providerID),

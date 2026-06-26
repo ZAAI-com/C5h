@@ -15,11 +15,6 @@ struct ActualWindowBlockView: View {
     /// 7d usage, and 5h usage stacked top-left. The Day view (Today/Tomorrow)
     /// keeps the default full layout with start/end corners and a middle 5h row.
     var condensed: Bool = false
-    /// When the block is rendering a clipped segment of a cross-midnight
-    /// window, the caller passes the segment's actual displayed start/end so
-    /// corner labels and history lookups match what's on screen.
-    var displayStart: Date? = nil
-    var displayEnd: Date? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -38,11 +33,12 @@ struct ActualWindowBlockView: View {
         )
         let width = compact ? columnWidth : columnWidth * layout.actualBlockWidthRatio
 
-        let shownStart = displayStart ?? window.startAt
-        let shownEnd = displayEnd ?? window.endAt
-        let startSevenD: Double? = shownStart > now
-            ? nil
-            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownStart)?.value)
+        // Always label corners with the window's real bounds, even when this is
+        // a clipped segment of a cross-midnight window. The rounded-corner
+        // clipping (clipsTop/clipsBottom) already signals the continuation, and
+        // block position/height still follow the visible segment.
+        let shownStart = window.startAt
+        let shownEnd = window.endAt
         let endSevenD: Double? = shownEnd > now
             ? nil
             : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
@@ -66,7 +62,6 @@ struct ActualWindowBlockView: View {
                     cornersOverlay(
                         shownStart: shownStart,
                         shownEnd: shownEnd,
-                        startSevenD: startSevenD,
                         endSevenD: endSevenD,
                         density: density,
                         isNarrow: width < 130
@@ -87,29 +82,13 @@ struct ActualWindowBlockView: View {
     private func cornersOverlay(
         shownStart: Date,
         shownEnd: Date,
-        startSevenD: Double?,
         endSevenD: Double?,
         density: BlockDensity,
         isNarrow: Bool
     ) -> some View {
         VStack(spacing: 0) {
-            if isNarrow {
-                VStack(alignment: .leading, spacing: 0) {
-                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-                    if let v = startSevenD {
-                        cornerText("7d usage \(BlockFormatters.formatPercent(v))")
-                    }
-                }
+            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                HStack(alignment: .top) {
-                    cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-                    Spacer(minLength: 0)
-                    if let v = startSevenD {
-                        cornerText("7d usage \(BlockFormatters.formatPercent(v))", alignment: .trailing)
-                    }
-                }
-            }
             Spacer(minLength: 0)
             if density.showsBottomCorners {
                 if isNarrow {
