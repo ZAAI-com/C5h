@@ -85,6 +85,37 @@ public struct UsageHistorySeries: Sendable, Hashable {
         return nil
     }
 
+    /// Earliest sample captured in `[start, start + seconds]`, used for the
+    /// "opening" reading shown beside a window's start time. Unlike
+    /// `usageReading(atOrBefore:notBefore:)`, this does not require a 5h value,
+    /// because the opening annotation may show only 7d.
+    public func openingReading(
+        at start: Date,
+        within seconds: TimeInterval
+    ) -> (capturedAt: Date, fiveHour: Double?, sevenDay: Double?)? {
+        let upper = start.addingTimeInterval(seconds)
+        for point in points where point.capturedAt >= start && point.capturedAt <= upper {
+            return (point.capturedAt, point.fiveHour, point.sevenDay)
+        }
+        return nil
+    }
+
+    /// Earliest sample in `[from, to]` whose 5h reading rounds to at least
+    /// `threshold`, used to mark the moment a completed window hit its limit. The
+    /// 7d value, when present, comes from the same snapshot.
+    public func firstFiveHourReaching(
+        _ threshold: Double,
+        from lowerBound: Date,
+        to upperBound: Date
+    ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
+        for point in points where point.capturedAt >= lowerBound && point.capturedAt <= upperBound {
+            if let fiveHour = point.fiveHour, fiveHour.rounded() >= threshold {
+                return (point.capturedAt, fiveHour, point.sevenDay)
+            }
+        }
+        return nil
+    }
+
     private func lastPoint(atOrBefore time: Date) -> UsagePoint? {
         guard !points.isEmpty else { return nil }
         var lo = 0

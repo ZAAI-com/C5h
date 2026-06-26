@@ -50,18 +50,42 @@ struct ActualWindowBlockView: View {
         let shownEnd = window.endAt
         let visibleStart = effectiveSegmentStart
         let usageAnchor = min(shownEnd, now)
+        let isPast = shownEnd <= now
+        let isCurrent = shownStart <= now && now < shownEnd
         let condensedSevenD = shownEnd > now
             ? nil
             : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
         let condensed5h: (value: Double, asOf: Date)? = shownStart > now
             ? nil
             : history?.fiveHourPercent(at: usageAnchor)
-        // Day view usage must come from this visible window segment. A stale
-        // sample from before the block starts is intentionally hidden until a
-        // fresh in-window usage refresh arrives.
-        let usageReading = shownStart > now
+        // Day view: the "opening" reading shown beside the start time, taken from
+        // the first snapshot captured at or just after the window opened.
+        let openReadingRaw = shownStart > now
             ? nil
-            : history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart)
+            : history?.openingReading(at: shownStart, within: Self.openingWindowSeconds)
+        // Day view: the "closing" reading shown beside the end time on a completed
+        // window: the latest in-window snapshot at or before the end (targets the
+        // last few minutes, falling back to the most recent earlier reading).
+        let closeReading = isPast
+            ? history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart)
+            : nil
+        // Suppress the opening annotation when it is the same capture as the close
+        // (single-reading window) so the value isn't shown at both corners.
+        let openReading = openReadingRaw.map(\.capturedAt) == closeReading.map(\.capturedAt)
+            ? nil
+            : openReadingRaw
+        // Day view: a floating, time-anchored row. A current window shows the
+        // latest reading once it is at least 5 min past the start; a completed
+        // window marks the moment 5h first hit 100%.
+        let floatingReading = Self.floatingReading(
+            history: history,
+            isCurrent: isCurrent,
+            isPast: isPast,
+            shownStart: shownStart,
+            shownEnd: shownEnd,
+            visibleStart: visibleStart,
+            usageAnchor: usageAnchor
+        )
 
         Group {
             if condensed {
@@ -77,22 +101,22 @@ struct ActualWindowBlockView: View {
                     cornersOverlay(
                         shownStart: shownStart,
                         shownEnd: shownEnd,
+                        openReading: openReading,
+                        closeReading: closeReading,
                         density: density
                     )
                     .padding(pad)
-                    if density.showsCenter {
-                        if let reading = usageReading {
-                            usageRow(
-                                reading: reading,
-                                pad: pad
-                            )
-                            .offset(y: usageRowOffset(
-                                capturedAt: reading.capturedAt,
-                                height: height,
-                                duration: duration,
-                                pad: pad
-                            ))
-                        }
+                    if density.showsCenter, let reading = floatingReading {
+                        usageRow(
+                            reading: reading,
+                            pad: pad
+                        )
+                        .offset(y: usageRowOffset(
+                            capturedAt: reading.capturedAt,
+                            height: height,
+                            duration: duration,
+                            pad: pad
+                        ))
                     }
                 }
             }
@@ -103,21 +127,76 @@ struct ActualWindowBlockView: View {
         .foregroundStyle(.white)
     }
 
+    /// Start time pinned top-left and end time bottom-left, each with its
+    /// boundary usage reading right-aligned on the same row: the "opening" 7d
+    /// (plus 5h when non-zero) beside the start, and the "closing" 5h + 7d beside
+    /// the end. Annotations only render once the block is tall enough to show
+    /// both corner times.
     private func cornersOverlay(
         shownStart: Date,
         shownEnd: Date,
+        openReading: (capturedAt: Date, fiveHour: Double?, sevenDay: Double?)?,
+        closeReading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?)?,
         density: BlockDensity
     ) -> some View {
         VStack(spacing: 0) {
-            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
+                if density.showsBottomCorners, let openReading {
+                    Spacer(minLength: 8)
+                    cornerUsage(
+                        fiveHour: openReading.fiveHour,
+                        sevenDay: openReading.sevenDay,
+                        showFiveHourWhenZero: false
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             if density.showsBottomCorners {
-                cornerText(BlockFormatters.formatTime(shownEnd), weight: .semibold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 6) {
+                    cornerText(BlockFormatters.formatTime(shownEnd), weight: .semibold)
+                    if let closeReading {
+                        Spacer(minLength: 8)
+                        cornerUsage(
+                            fiveHour: closeReading.fiveHour,
+                            sevenDay: closeReading.sevenDay,
+                            showFiveHourWhenZero: true
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// A boundary usage annotation (`5h usage X%` and/or `7d usage Y%`) shown
+    /// beside a corner time. The 7d value is hidden when it rounds to 0% (see
+    /// `meaningfulSevenDay`). The 5h value is hidden at 0% only when
+    /// `showFiveHourWhenZero` is false (the opening reading); the closing reading
+    /// always shows 5h.
+    private func cornerUsage(
+        fiveHour: Double?,
+        sevenDay: Double?,
+        showFiveHourWhenZero: Bool
+    ) -> some View {
+        let five: Double? = {
+            guard let fiveHour else { return nil }
+            if showFiveHourWhenZero { return fiveHour }
+            return fiveHour.rounded() >= 1 ? fiveHour : nil
+        }()
+        let seven = Self.meaningfulSevenDay(sevenDay)
+        return HStack(spacing: 6) {
+            if let five {
+                usageLabel("5h usage \(BlockFormatters.formatPercent(five))")
+            }
+            if let seven {
+                usageLabel("7d usage \(BlockFormatters.formatPercent(seven))")
+            }
+        }
     }
 
     /// Day view: one usage row, with the 5h reading on the left and the 7d
@@ -126,28 +205,28 @@ struct ActualWindowBlockView: View {
         reading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?),
         pad: CGFloat
     ) -> some View {
-        let timeText = Text(BlockFormatters.formatTime(reading.capturedAt))
-            .font(.system(size: compact ? 9 : 10, weight: .semibold))
-            .monospacedDigit()
-        let fiveHourText = Text("5h usage \(BlockFormatters.formatPercent(reading.fiveHour))")
-            .font(.system(size: compact ? 9 : 10, weight: .semibold))
-            .monospacedDigit()
-        return HStack(spacing: 6) {
+        HStack(spacing: 6) {
             HStack(spacing: 6) {
-                timeText
-                fiveHourText
+                usageLabel(BlockFormatters.formatTime(reading.capturedAt))
+                usageLabel("5h usage \(BlockFormatters.formatPercent(reading.fiveHour))")
             }
             Spacer(minLength: 8)
             if let sevenDay = Self.meaningfulSevenDay(reading.sevenDay) {
-                Text("7d usage \(BlockFormatters.formatPercent(sevenDay))")
-                    .font(.system(size: compact ? 9 : 10, weight: .semibold))
-                    .monospacedDigit()
+                usageLabel("7d usage \(BlockFormatters.formatPercent(sevenDay))")
             }
         }
         .padding(.horizontal, pad)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A usage label rendered in the shared reading style (semibold, monospaced
+    /// digits), used by both the floating row and the corner annotations.
+    private func usageLabel(_ string: String) -> Text {
+        Text(string)
+            .font(.system(size: compact ? 9 : 10, weight: .semibold))
+            .monospacedDigit()
     }
 
     /// Week overview: bold start time pinned top-left, then the 5h and 7d usage
@@ -243,6 +322,37 @@ struct ActualWindowBlockView: View {
     private static func meaningfulSevenDay(_ value: Double?) -> Double? {
         guard let value, value.rounded() >= 1 else { return nil }
         return value
+    }
+
+    /// Window after the start within which the "opening" reading is captured.
+    private static let openingWindowSeconds: TimeInterval = 4 * 60
+    /// Minimum age past the start before a current window's latest reading is
+    /// shown as a floating row, keeping it clear of the opening annotation.
+    private static let middleLeadSeconds: TimeInterval = 5 * 60
+
+    /// The floating, time-anchored reading for the Day view. A current window
+    /// shows its latest in-window reading once that reading is at least
+    /// `middleLeadSeconds` past the start; a completed window marks the moment 5h
+    /// first reached 100%. Future windows show nothing.
+    private static func floatingReading(
+        history: UsageHistorySeries?,
+        isCurrent: Bool,
+        isPast: Bool,
+        shownStart: Date,
+        shownEnd: Date,
+        visibleStart: Date,
+        usageAnchor: Date
+    ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
+        if isCurrent {
+            guard let latest = history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart),
+                  latest.capturedAt >= shownStart.addingTimeInterval(middleLeadSeconds)
+            else { return nil }
+            return latest
+        }
+        if isPast {
+            return history?.firstFiveHourReaching(100, from: visibleStart, to: shownEnd)
+        }
+        return nil
     }
 
     private var effectiveSegmentStart: Date {
