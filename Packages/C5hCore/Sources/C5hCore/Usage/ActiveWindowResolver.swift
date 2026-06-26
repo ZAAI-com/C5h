@@ -52,6 +52,7 @@ public struct ActiveWindowResolver: Sendable {
                commandRunID: commandRunID,
                now: now
            ) {
+            NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
             return promoted
         }
 
@@ -71,8 +72,10 @@ public struct ActiveWindowResolver: Sendable {
         )
         do {
             try await fetcher.upsertActualWindow5h(fallback, UsageFetcher.dedupTolerance)
+            NSLog("ActiveWindowResolver: pinned estimated \(providerID.rawValue) fallback window [\(fallback.startAt) … \(fallback.endAt)] for command \(commandRunID) (no real window from usage)")
             return fallback
         } catch {
+            NSLog("ActiveWindowResolver: FAILED to pin \(providerID.rawValue) fallback window for command \(commandRunID): \(error)")
             return nil
         }
     }

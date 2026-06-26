@@ -65,6 +65,14 @@ struct SettingsView: View {
                         .font(C5hTypography.captionFont)
                         .foregroundStyle(helperHealth.status.messageStyle)
                 }
+                if helperHealth.outdated {
+                    Label(
+                        "The running helper is an older build than the one on disk. Stop and Start the debug subprocess runner below to load the latest code.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(.orange)
+                }
                 LabeledContent("Last seen", value: lastSeenLabel)
                 LabeledContent("Helper version", value: heartbeat?.helperVersion ?? "—")
                 LabeledContent("PID", value: helperHealth.pid.map(String.init) ?? "—")
@@ -331,11 +339,16 @@ struct SettingsView: View {
         guard let repo = appEnv.helperHeartbeatRepository else { return }
         let latest = try? await repo.latest()
         heartbeat = latest
+        var expectedVersion: String?
+        #if DEBUG
+        expectedVersion = devRunner.expectedVersion
+        #endif
         helperHealth = HelperHealthEvaluator().evaluate(
             heartbeat: latest.map {
-                HelperHeartbeatEvidence(lastSeenAt: $0.lastSeenAt, pid: $0.pid)
+                HelperHeartbeatEvidence(lastSeenAt: $0.lastSeenAt, pid: $0.pid, version: $0.helperVersion)
             },
             now: .now,
+            expectedVersion: expectedVersion,
             isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
         )
     }

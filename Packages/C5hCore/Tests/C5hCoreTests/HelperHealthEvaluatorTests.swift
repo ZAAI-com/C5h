@@ -86,6 +86,55 @@ struct HelperHealthEvaluatorTests {
     }
 
     @Test
+    func outdatedWhenReportedVersionDiffersFromExpected() {
+        let result = evaluator.evaluate(
+            heartbeat: HelperHeartbeatEvidence(
+                lastSeenAt: now.addingTimeInterval(-30),
+                pid: 123,
+                version: "0.0.1+100"
+            ),
+            now: now,
+            expectedVersion: "0.0.1+200",
+            isProcessAlive: { _ in true }
+        )
+
+        #expect(result.status == .running)
+        #expect(result.outdated)
+    }
+
+    @Test
+    func notOutdatedWhenVersionsMatch() {
+        let result = evaluator.evaluate(
+            heartbeat: HelperHeartbeatEvidence(
+                lastSeenAt: now.addingTimeInterval(-30),
+                pid: 123,
+                version: "0.0.1+200"
+            ),
+            now: now,
+            expectedVersion: "0.0.1+200",
+            isProcessAlive: { _ in true }
+        )
+
+        #expect(!result.outdated)
+    }
+
+    @Test
+    func notOutdatedWhenExpectedVersionUnknown() {
+        let result = evaluator.evaluate(
+            heartbeat: HelperHeartbeatEvidence(
+                lastSeenAt: now.addingTimeInterval(-30),
+                pid: 123,
+                version: "0.0.1+100"
+            ),
+            now: now,
+            expectedVersion: nil,
+            isProcessAlive: { _ in true }
+        )
+
+        #expect(!result.outdated)
+    }
+
+    @Test
     func freshHeartbeatWithoutPIDIsUnknown() {
         let result = evaluator.evaluate(
             heartbeat: HelperHeartbeatEvidence(

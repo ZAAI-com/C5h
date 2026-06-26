@@ -15,6 +15,16 @@ final class HelperDevModeRunner {
         process?.isRunning ?? false
     }
 
+    /// Build identity of the on-disk helper binary the runner would launch.
+    /// Compared against the running helper's heartbeat version to detect a
+    /// process running stale code after a rebuild. `nil` when the binary is
+    /// missing.
+    var expectedVersion: String? {
+        let url = Self.helperBinaryURL()
+        guard FileManager.default.isExecutableFile(atPath: url.path) else { return nil }
+        return HelperBuildStamp.version(forBinaryAt: url)
+    }
+
     func start() {
         if isRunning { return }
         let url = Self.helperBinaryURL()
