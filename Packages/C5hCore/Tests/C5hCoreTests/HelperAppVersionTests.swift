@@ -8,10 +8,10 @@ struct HelperAppVersionTests {
     func environmentOverrideReturnsExactVersion() {
         let version = HelperAppVersion.version(
             forHelperAt: URL(fileURLWithPath: "/tmp/C5hHelper"),
-            environment: [HelperAppVersion.environmentKey: " 0.4.0 \n"]
+            environment: [HelperAppVersion.environmentKey: " 1.0.0 \n"]
         )
 
-        #expect(version == "0.4.0")
+        #expect(version == "1.0.0")
     }
 
     @Test("Bundled helper reads containing app Info.plist")
@@ -26,7 +26,7 @@ struct HelperAppVersionTests {
         try FileManager.default.createDirectory(at: helpers, withIntermediateDirectories: true)
 
         let plistData = try PropertyListSerialization.data(
-            fromPropertyList: ["CFBundleShortVersionString": "0.4.0"],
+            fromPropertyList: ["CFBundleShortVersionString": "1.0.0"],
             format: .xml,
             options: 0
         )
@@ -37,7 +37,7 @@ struct HelperAppVersionTests {
 
         let version = HelperAppVersion.version(forHelperAt: helperURL, environment: [:])
 
-        #expect(version == "0.4.0")
+        #expect(version == "1.0.0")
     }
 
     @Test("Missing environment and app bundle returns unknown")
