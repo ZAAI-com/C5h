@@ -30,13 +30,11 @@ struct WeekCalendarScreen: View {
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actual5hRepo = appEnv.actualWindow5hRepository,
-               let scheduledRepo = appEnv.scheduledPromptRepository {
+               let actual5hRepo = appEnv.actualWindow5hRepository {
                 let vm = WeekCalendarViewModel(
                     weekStart: .now,
                     plannedRepository: plannedRepo,
                     actual5hRepository: actual5hRepo,
-                    scheduledRepository: scheduledRepo,
                     usageSnapshotRepository: appEnv.usageSnapshotRepository
                 )
                 viewModel = vm
@@ -148,10 +146,16 @@ struct WeekCalendarScreen: View {
                     Button {
                         withAnimation(C5hAnimation.morph) {
                             if viewModel.selection == nil,
-                               let firstActual = viewModel.actual.first {
+                               let firstActual = viewModel.firstVisibleActual(
+                                   visibleProviders: visibleProviders,
+                                   showActual: showActual
+                               ) {
                                 viewModel.selection = .actual(firstActual)
                             } else if viewModel.selection == nil,
-                                      let firstPlanned = viewModel.planned.first {
+                                      let firstPlanned = viewModel.firstVisiblePlanned(
+                                          visibleProviders: visibleProviders,
+                                          showPlanned: showPlanned
+                                      ) {
                                 viewModel.selection = .planned(firstPlanned)
                             } else {
                                 viewModel.selection = nil

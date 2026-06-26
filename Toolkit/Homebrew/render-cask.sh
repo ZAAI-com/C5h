@@ -37,8 +37,18 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --sha)     SHA="${2:-}"; shift 2 ;;
-        --out)     OUT="${2:-}"; shift 2 ;;
+        --sha)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: --sha requires a value" >&2; usage; exit 2
+            fi
+            SHA="$2"; shift 2
+            ;;
+        --out)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: --out requires a value" >&2; usage; exit 2
+            fi
+            OUT="$2"; shift 2
+            ;;
         -h|--help) usage; exit 0 ;;
         --*)       echo "ERROR: unknown flag $1" >&2; usage; exit 2 ;;
         *)

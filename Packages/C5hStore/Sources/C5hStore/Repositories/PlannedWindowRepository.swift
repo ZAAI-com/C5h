@@ -9,6 +9,8 @@ public protocol PlannedWindowRepository: Sendable {
     func create(_ window: PlannedWindow) async throws
     func update(_ window: PlannedWindow) async throws
     func delete(id: UUID) async throws
+    /// Cancels pending prompts and deletes the planned window in one transaction.
+    func deleteWithPendingPromptCleanup(id: UUID) async throws
 }
 
 public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
@@ -71,6 +73,31 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
 
     public func delete(id: UUID) async throws {
         try await writer.write { db in
+            _ = try PlannedWindowRecord.deleteOne(db, key: id.uuidString)
+        }
+    }
+
+    public func deleteWithPendingPromptCleanup(id: UUID) async throws {
+        try await writer.write { db in
+            try db.execute(
+                sql: """
+                UPDATE scheduled_prompts
+                SET status = CASE
+                        WHEN status IN (?, ?) THEN ?
+                        ELSE status
+                    END,
+                    planned_window_id = NULL,
+                    updated_at = ?
+                WHERE planned_window_id = ?
+                """,
+                arguments: [
+                    ScheduledPromptStatus.scheduled.rawValue,
+                    ScheduledPromptStatus.due.rawValue,
+                    ScheduledPromptStatus.cancelled.rawValue,
+                    DateTimeService.formatUTC(.now),
+                    id.uuidString
+                ]
+            )
             _ = try PlannedWindowRecord.deleteOne(db, key: id.uuidString)
         }
     }

@@ -16,20 +16,17 @@ final class WeekCalendarViewModel {
 
     private let plannedRepo: any PlannedWindowRepository
     private let actual5hRepo: any ActualWindow5hRepository
-    private let scheduledRepo: any ScheduledPromptRepository
     private let usageSnapshotRepo: (any UsageSnapshotRepository)?
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
         actual5hRepository: any ActualWindow5hRepository,
-        scheduledRepository: any ScheduledPromptRepository,
         usageSnapshotRepository: (any UsageSnapshotRepository)? = nil
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
         self.actual5hRepo = actual5hRepository
-        self.scheduledRepo = scheduledRepository
         self.usageSnapshotRepo = usageSnapshotRepository
     }
 
@@ -56,10 +53,77 @@ final class WeekCalendarViewModel {
             self.planned = try await p
             self.actual = try await a
             self.lastError = nil
+            pruneSelectionIfNeeded()
         } catch {
             self.lastError = String(describing: error)
         }
         await loadUsageHistories()
+    }
+
+    private func pruneSelectionIfNeeded() {
+        guard let selection else { return }
+        if !selectionOverlapsCurrentWeek(selection) {
+            self.selection = nil
+            return
+        }
+        switch selection {
+        case .planned(let window):
+            if !planned.contains(where: { $0.id == window.id }) {
+                self.selection = nil
+            }
+        case .actual(let window):
+            if !actual.contains(where: { $0.id == window.id }) {
+                self.selection = nil
+            }
+        }
+    }
+
+    private func selectionOverlapsCurrentWeek(_ selection: CalendarSelection) -> Bool {
+        let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        switch selection {
+        case .planned(let window):
+            return window.startAt < weekEnd && window.endAt > weekStart
+        case .actual(let window):
+            return window.startAt < weekEnd && window.endAt > weekStart
+        }
+    }
+
+    func firstVisibleActual(
+        visibleProviders: Set<ProviderID>,
+        showActual: Bool
+    ) -> ActualWindow5h? {
+        guard showActual else { return nil }
+        for day in days {
+            for segment in actualDisplaySegments {
+                guard visibleProviders.contains(segment.window.providerID) else { continue }
+                guard CalendarPositioning.windowOverlaps(
+                    start: segment.startAt,
+                    durationSeconds: segment.durationSeconds,
+                    day: day
+                ) else { continue }
+                return segment.window
+            }
+        }
+        return nil
+    }
+
+    func firstVisiblePlanned(
+        visibleProviders: Set<ProviderID>,
+        showPlanned: Bool
+    ) -> PlannedWindow? {
+        guard showPlanned else { return nil }
+        for day in days {
+            for window in planned {
+                guard visibleProviders.contains(window.providerID) else { continue }
+                guard CalendarPositioning.windowOverlaps(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds,
+                    day: day
+                ) else { continue }
+                return window
+            }
+        }
+        return nil
     }
 
     private func loadUsageHistories() async {
@@ -115,16 +179,17 @@ final class WeekCalendarViewModel {
 
     func goToPreviousWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        selection = nil
     }
 
     func goToNextWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        selection = nil
     }
 
     func delete(id: UUID) async throws {
         do {
-            try await scheduledRepo.cancelPendingAndDetachPrompts(plannedWindowID: id)
-            try await plannedRepo.delete(id: id)
+            try await plannedRepo.deleteWithPendingPromptCleanup(id: id)
             lastError = nil
             await reload()
         } catch {

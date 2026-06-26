@@ -88,13 +88,14 @@ final class DashboardViewModel {
     /// re-spawning CLIs on rapid tab switches.
     func refreshUsageIfStale() async {
         guard !isRefreshingUsage else { return }
+        isRefreshingUsage = true
+        defer { isRefreshingUsage = false }
+
         let now = Date()
         let throttle = await throttleInterval()
         if let age = await cachedUsageAge(now: now), age < throttle {
             return
         }
-        isRefreshingUsage = true
-        defer { isRefreshingUsage = false }
 
         await withTaskGroup(of: Void.self) { group in
             for providerID in ProviderID.allCases {
