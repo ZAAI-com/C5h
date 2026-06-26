@@ -4,11 +4,25 @@ public struct UsagePoint: Sendable, Hashable {
     public let capturedAt: Date
     public let fiveHour: Double?
     public let sevenDay: Double?
+    /// The 5h window reset time the provider reported at `capturedAt`, when
+    /// available. Used by `UsageResetDetector` to spot a window that reset early.
+    public let fiveHourResetsAt: Date?
+    /// The 7d window reset time the provider reported at `capturedAt`, when
+    /// available. Used by `UsageResetDetector` to spot a weekly reset.
+    public let sevenDayResetsAt: Date?
 
-    public init(capturedAt: Date, fiveHour: Double?, sevenDay: Double?) {
+    public init(
+        capturedAt: Date,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        fiveHourResetsAt: Date? = nil,
+        sevenDayResetsAt: Date? = nil
+    ) {
         self.capturedAt = capturedAt
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
+        self.fiveHourResetsAt = fiveHourResetsAt
+        self.sevenDayResetsAt = sevenDayResetsAt
     }
 }
 
@@ -140,7 +154,9 @@ public struct UsageHistorySeries: Sendable, Hashable {
             return UsagePoint(
                 capturedAt: snapshot.capturedAt,
                 fiveHour: status.fiveHour.usedPercentage,
-                sevenDay: status.sevenDay?.usedPercentage
+                sevenDay: status.sevenDay?.usedPercentage,
+                fiveHourResetsAt: status.fiveHour.resetsAt,
+                sevenDayResetsAt: status.sevenDay?.resetsAt
             )
         case .codex:
             guard let status = try? CodexUsageStatus.parseAny(
@@ -150,7 +166,9 @@ public struct UsageHistorySeries: Sendable, Hashable {
             return UsagePoint(
                 capturedAt: snapshot.capturedAt,
                 fiveHour: status.primary.usedPercentage,
-                sevenDay: status.secondary?.usedPercentage
+                sevenDay: status.secondary?.usedPercentage,
+                fiveHourResetsAt: status.primary.resetsAt,
+                sevenDayResetsAt: status.secondary?.resetsAt
             )
         }
     }
@@ -162,7 +180,9 @@ public struct UsageHistorySeries: Sendable, Hashable {
             if let last = result.last,
                last.capturedAt == point.capturedAt,
                last.fiveHour == point.fiveHour,
-               last.sevenDay == point.sevenDay {
+               last.sevenDay == point.sevenDay,
+               last.fiveHourResetsAt == point.fiveHourResetsAt,
+               last.sevenDayResetsAt == point.sevenDayResetsAt {
                 continue
             }
             result.append(point)

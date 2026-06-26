@@ -169,6 +169,7 @@ struct WeekCalendarScreen: View {
             .overlay(alignment: .trailing) {
                 CalendarInspectorPane(
                     selection: viewModel.selection,
+                    resetEvent: viewModel.selection.flatMap { viewModel.resetEvent(for: $0) },
                     onClose: {
                         withAnimation(C5hAnimation.morph) {
                             viewModel.selection = nil
@@ -237,6 +238,7 @@ struct WeekCalendarView: View {
                                 planned: filteredPlanned(forDay: day),
                                 actual: filteredActual(forDay: day),
                                 histories: viewModel.usageHistories,
+                                resetWindowIDs: resetWindowIDs(forDay: day),
                                 now: now,
                                 layout: dynamicLayout,
                                 columnWidth: columnWidth,
@@ -280,6 +282,16 @@ struct WeekCalendarView: View {
         }
     }
 
+    /// Actual windows on `day` that followed a detected quota reset, for the
+    /// neutral reset glyph. Matches the inspector's reset lookup.
+    private func resetWindowIDs(forDay day: Date) -> Set<UUID> {
+        Set(
+            filteredActual(forDay: day)
+                .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.endAt, providerID: $0.providerID) != nil }
+                .map(\.id)
+        )
+    }
+
     private func headerRow(columnWidth: CGFloat, layout: CalendarLayoutConfig) -> some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: layout.timeRulerWidth)
@@ -305,6 +317,7 @@ private struct WeekDayColumnView: View {
     let planned: [PlannedWindow]
     let actual: [ActualWindow5h]
     let histories: [ProviderID: UsageHistorySeries]
+    let resetWindowIDs: Set<UUID>
     let now: Date
     let layout: CalendarLayoutConfig
     let columnWidth: CGFloat
@@ -342,11 +355,16 @@ private struct WeekDayColumnView: View {
                     .zIndex(1)
                 }
             }
+            let actualPlacementsMap = actualPlacements
             ForEach(actual) { window in
                 if let segment = visibleSegment(
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
+                    let placement = actualPlacementsMap[window.id]
+                        ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
+                    let regionWidth = halfColumnWidth * layout.actualBlockWidthRatio
+                    let laneWidth = regionWidth / CGFloat(placement.laneCount)
                     Button {
                         onSelectActual(window)
                     } label: {
@@ -359,12 +377,14 @@ private struct WeekDayColumnView: View {
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
-                            condensed: true
+                            condensed: true,
+                            widthOverride: placement.laneCount > 1 ? laneWidth : nil,
+                            isReset: resetWindowIDs.contains(window.id)
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
-                        x: actualXOffset(for: window.providerID),
+                        x: actualXOffset(for: window.providerID) + CGFloat(placement.lane) * laneWidth,
                         y: yOffset(for: segment.start)
                     )
                     .zIndex(2)
@@ -385,6 +405,23 @@ private struct WeekDayColumnView: View {
 
     private var halfColumnWidth: CGFloat {
         max(0, (columnWidth - 4) / 2)
+    }
+
+    /// Lane placement per actual window, packed within each provider's half so
+    /// overlapping reset-derived windows render side-by-side without crossing
+    /// into the other provider's column.
+    private var actualPlacements: [UUID: CalendarPositioning.LanePlacement] {
+        var map: [UUID: CalendarPositioning.LanePlacement] = [:]
+        for provider in ProviderID.allCases {
+            let windows = actual.filter { $0.providerID == provider }
+            let packed = CalendarPositioning.packLanes(
+                windows.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+            )
+            for (window, placement) in zip(windows, packed) {
+                map[window.id] = placement
+            }
+        }
+        return map
     }
 
     /// Claude blocks render in the left half, Codex in the right half. This keeps

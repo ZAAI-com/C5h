@@ -76,6 +76,39 @@ struct ActualWindow5hRepositoryUpsertTests {
         #expect(row.commandRunID == stale.commandRunID, "command-run link should be preserved")
     }
 
+    @Test("Overlapping detectedFromUsage 5h windows with different reset times stay distinct")
+    func overlappingDetectedWindowsWithDifferentResetsStayDistinct() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        // A Claude tier change can reset the 5h quota before the prior window has
+        // elapsed, so the new reset-derived window overlaps the old one but ends
+        // at a different time. Both are real, distinct windows and must coexist.
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let first = ActualWindow5h(
+            providerID: .claude,
+            startAt: base,
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.upsertByEndAt(first, tolerance: 60)
+
+        // Reset window: starts ~1h later, overlaps the first, different end time.
+        let resetWindow = ActualWindow5h(
+            providerID: .claude,
+            startAt: base.addingTimeInterval(3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.upsertByEndAt(resetWindow, tolerance: 60)
+
+        let all = try await repo.fetchAll().filter { $0.providerID == .claude }
+        #expect(all.count == 2, "overlapping reset-derived windows with different reset times must stay distinct")
+    }
+
     @Test("Non-overlapping windows for the same provider stay distinct")
     func nonOverlappingInserts() async throws {
         let db = try Database.inMemory()

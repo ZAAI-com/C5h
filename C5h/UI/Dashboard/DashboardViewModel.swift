@@ -8,6 +8,7 @@ import C5hStore
 final class DashboardViewModel {
     var activeWindows: [ActualWindow5h] = []
     var weeklyWindows: [ActualWindow7d] = []
+    var sevenDayResets: [ProviderID: UsageResetEvent] = [:]
     var activeWindowUsagePercentages: [UUID: Double] = [:]
     var upcomingPrompts: [ScheduledPrompt] = []
     var recentRuns: [CommandRun] = []
@@ -67,6 +68,7 @@ final class DashboardViewModel {
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
+            await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
             self.recentRuns = try await commandRepo.fetchRecent(
                 limit: 5,
@@ -112,6 +114,7 @@ final class DashboardViewModel {
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
             self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
+            await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
             await loadUsageHistory(now: now)
             self.lastError = nil
@@ -189,6 +192,39 @@ final class DashboardViewModel {
         } catch {
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
+    }
+
+    /// Detects a recent weekly (7d) reset for each active weekly window by
+    /// scanning the last ~8 days of usage snapshots. Keeps the most recent
+    /// `.sevenDay` event whose observation falls inside the active weekly window,
+    /// so the card only flags a reset relevant to the window being shown.
+    private func loadSevenDayResets(now: Date) async {
+        var result: [ProviderID: UsageResetEvent] = [:]
+        let lookback = DateInterval(
+            start: now.addingTimeInterval(-8 * 86_400),
+            end: now.addingTimeInterval(86_400)
+        )
+        for window in weeklyWindows {
+            let providerID = window.providerID
+            guard let snapshots = try? await usageRepo.fetchInRange(
+                providerID: providerID,
+                interval: lookback
+            ) else { continue }
+            let series = UsageHistorySeries(providerID: providerID, snapshots: snapshots)
+            let events = UsageResetDetector.detect(in: series).filter {
+                $0.kind == .sevenDay
+                    && $0.detectedAt >= window.startAt
+                    && $0.detectedAt <= window.endAt
+            }
+            if let latest = events.max(by: { $0.detectedAt < $1.detectedAt }) {
+                result[providerID] = latest
+            }
+        }
+        self.sevenDayResets = result
+    }
+
+    func recentSevenDayReset(for providerID: ProviderID) -> Bool {
+        sevenDayResets[providerID] != nil
     }
 
     private func loadLatestWeeklyWindows(now: Date) async throws -> [ActualWindow7d] {

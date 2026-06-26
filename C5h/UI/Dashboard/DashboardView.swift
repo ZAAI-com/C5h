@@ -167,6 +167,11 @@ struct DashboardView: View {
                                 Text(dataSourceLabel(for: window))
                                     .font(C5hTypography.captionFont)
                                     .foregroundStyle(C5hColors.fgTertiary)
+                                if viewModel.recentSevenDayReset(for: providerID) {
+                                    Text("Reset detected")
+                                        .font(C5hTypography.captionFont)
+                                        .foregroundStyle(C5hColors.fgTertiary)
+                                }
                             }
                         }
                     }

@@ -111,6 +111,7 @@ struct DayCalendarScreen: View {
         .overlay(alignment: .trailing) {
             CalendarInspectorPane(
                 selection: viewModel.selection,
+                resetEvent: viewModel.selection.flatMap { viewModel.resetEvent(for: $0) },
                 onClose: {
                     withAnimation(C5hAnimation.morph) {
                         viewModel.selection = nil

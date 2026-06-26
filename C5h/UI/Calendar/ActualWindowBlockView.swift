@@ -22,6 +22,14 @@ struct ActualWindowBlockView: View {
     /// a bold end time at the bottom-left. The Day view (Today/Tomorrow) keeps the
     /// default full layout with start/end/current time-anchored usage readings.
     var condensed: Bool = false
+    /// Explicit block width, used when overlapping windows are packed into lanes so
+    /// each lane gets an equal slice. When `nil`, the block keeps its default width
+    /// (`columnWidth * actualBlockWidthRatio`, or the full `columnWidth` when
+    /// `compact`).
+    var widthOverride: CGFloat? = nil
+    /// When true, the window was derived from a detected quota reset (e.g. a Claude
+    /// tier change reset the 5h window early). Marked with a subtle neutral glyph.
+    var isReset: Bool = false
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -38,7 +46,7 @@ struct ActualWindowBlockView: View {
             topTrailingRadius: clipsTop ? 0 : radius,
             style: .continuous
         )
-        let width = compact ? columnWidth : columnWidth * layout.actualBlockWidthRatio
+        let width = widthOverride ?? (compact ? columnWidth : columnWidth * layout.actualBlockWidthRatio)
         let pad: CGFloat = compact ? 3 : 6
         let contentWidth = max(0, width - 2 * pad)
 
@@ -127,6 +135,21 @@ struct ActualWindowBlockView: View {
         .background(shape.fill(brandColor))
         .clipShape(shape)
         .foregroundStyle(.white)
+        .overlay(alignment: .topTrailing) {
+            if isReset {
+                resetGlyph
+            }
+        }
+    }
+
+    /// Subtle, neutral marker that this window followed a quota reset. Deliberately
+    /// plain (no plan name, no text) so it reads as a reset indicator only.
+    private var resetGlyph: some View {
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .font(.system(size: compact ? 8 : 9, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.7))
+            .padding(compact ? 2 : 3)
+            .allowsHitTesting(false)
     }
 
     /// Start time pinned top-left and end time bottom-left, each with its

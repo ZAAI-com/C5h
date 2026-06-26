@@ -10,6 +10,7 @@ final class DayCalendarViewModel {
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
+    var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
     var selection: CalendarSelection?
     var lastError: String?
 
@@ -83,10 +84,26 @@ final class DayCalendarViewModel {
             }
         }
         self.usageHistories = built
+        self.resetEvents = built.mapValues { UsageResetDetector.detect(in: $0) }
     }
 
     func history(for providerID: ProviderID) -> UsageHistorySeries? {
         usageHistories[providerID]
+    }
+
+    /// The 5h reset event whose new window ends at `end` (±60s), used to mark the
+    /// reset-derived window in the calendar. Matches `newResetEnd` to the
+    /// window's end so only the post-reset window carries the marker.
+    func fiveHourResetEvent(forWindowEndingAt end: Date, providerID: ProviderID) -> UsageResetEvent? {
+        (resetEvents[providerID] ?? []).first { event in
+            event.kind == .fiveHour && abs(event.newResetEnd.timeIntervalSince(end)) <= 60
+        }
+    }
+
+    /// The reset event behind a selected actual window, surfaced in the inspector.
+    func resetEvent(for selection: CalendarSelection) -> UsageResetEvent? {
+        guard case let .actual(window) = selection else { return nil }
+        return fiveHourResetEvent(forWindowEndingAt: window.endAt, providerID: window.providerID)
     }
 
     /// Best-effort: fetch fresh usage from each provider so stale

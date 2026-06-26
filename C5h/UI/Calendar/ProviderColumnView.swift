@@ -6,6 +6,9 @@ struct ProviderColumnView: View {
     let plannedWindows: [PlannedWindow]
     let actualWindows: [ActualWindow5h]
     let history: UsageHistorySeries?
+    /// IDs of actual windows that followed a detected quota reset, marked with a
+    /// subtle neutral glyph on their block.
+    var resetWindowIDs: Set<UUID> = []
     let date: Date
     let now: Date
     let layout: CalendarLayoutConfig
@@ -85,8 +88,14 @@ struct ProviderColumnView: View {
                     )
                 }
             }
+            let actualPlacements = actualLanePlacements
             ForEach(actualWindows) { window in
                 if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
+                    let placement = actualPlacements[window.id]
+                        ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
+                    let regionWidth = columnWidth * layout.actualBlockWidthRatio
+                    let laneWidth = regionWidth / CGFloat(placement.laneCount)
+                    let regionStartX = columnWidth - 2 - regionWidth
                     ActualWindowBlockView(
                         window: window,
                         history: history,
@@ -96,10 +105,12 @@ struct ProviderColumnView: View {
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
-                        segmentStart: segment.start
+                        segmentStart: segment.start,
+                        widthOverride: placement.laneCount > 1 ? laneWidth : nil,
+                        isReset: resetWindowIDs.contains(window.id)
                     )
                     .offset(
-                        x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
+                        x: regionStartX + CGFloat(placement.lane) * laneWidth,
                         y: yOffset(for: segment.start)
                     )
                     .zIndex(2)
@@ -143,13 +154,30 @@ struct ProviderColumnView: View {
         case actual(ActualWindow5h)
     }
 
-    /// Resolves a tap location to the window block under it, so taps open a
-    /// block's details instead of quick-planning. A planned block is matched by
-    /// its full rendered frame; an actual block is matched by its vertical span
-    /// only, so the strip of column left of the (narrower, right-offset) actual
-    /// block still counts as being on that window. Planned blocks win ties since
-    /// they live in the left lane the pointer is most likely aiming at.
+    /// Resolves a tap location to the window block whose rendered frame (its
+    /// horizontal extent and vertical span) contains the pointer, so taps open a
+    /// block's details instead of quick-planning. The white area beside a block,
+    /// even at the block's time, is not "inside" the window. Actual blocks are
+    /// checked first because they are drawn on top of the planned lane, so they
+    /// win when a point falls in the lane overlap of both.
     private func windowSelection(at location: CGPoint) -> WindowHit? {
+        let placements = actualLanePlacements
+        let regionWidth = columnWidth * layout.actualBlockWidthRatio
+        let regionStartX = columnWidth - 2 - regionWidth
+        for window in actualWindows {
+            guard let segment = visibleSegment(
+                start: window.startAt,
+                durationSeconds: window.durationSeconds
+            ) else { continue }
+            guard verticalSpan(of: segment).contains(location.y) else { continue }
+            let placement = placements[window.id]
+                ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
+            let laneWidth = regionWidth / CGFloat(placement.laneCount)
+            let laneStartX = regionStartX + CGFloat(placement.lane) * laneWidth
+            if location.x >= laneStartX, location.x <= laneStartX + laneWidth {
+                return .actual(window)
+            }
+        }
         let plannedMinX: CGFloat = 2
         let plannedMaxX = plannedMinX + columnWidth * layout.plannedBlockWidthRatio
         if plannedMinX <= location.x, location.x <= plannedMaxX {
@@ -164,16 +192,19 @@ struct ProviderColumnView: View {
                 }
             }
         }
-        for window in actualWindows {
-            guard let segment = visibleSegment(
-                start: window.startAt,
-                durationSeconds: window.durationSeconds
-            ) else { continue }
-            if verticalSpan(of: segment).contains(location.y) {
-                return .actual(window)
-            }
-        }
         return nil
+    }
+
+    /// Lane placement per actual window so overlapping windows (e.g. a reset that
+    /// opens a new 5h window before the prior one ends) render side-by-side.
+    private var actualLanePlacements: [UUID: CalendarPositioning.LanePlacement] {
+        let intervals = actualWindows.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+        let packed = CalendarPositioning.packLanes(intervals)
+        var map: [UUID: CalendarPositioning.LanePlacement] = [:]
+        for (window, placement) in zip(actualWindows, packed) {
+            map[window.id] = placement
+        }
+        return map
     }
 
     private func verticalSpan(
@@ -241,19 +272,16 @@ struct ProviderColumnView: View {
     }
 
     /// Resolves a pointer Y to the start time of the 5h window a click would
-    /// create: the snapped slot under the cursor when it is in the future and
-    /// free. A future slot that overlaps an existing window yields nil (no
-    /// window is created). A past slot snaps forward to the earliest free future
-    /// slot. Returns nil when no free slot remains before day end.
+    /// create:
+    /// - before now -> nil (do not offer a window in the past),
+    /// - after now and the snapped slot fits free -> that slot (offer here),
+    /// - after now but the snapped slot overlaps a window -> the earliest free
+    ///   future slot (offer at the next possible position).
+    /// Returns nil when no free slot remains before day end.
     private func resolvedPlanStart(forY y: CGFloat) -> Date? {
         let snapped = snappedStart(forY: y)
-        if snapped > now {
-            // Future slot: plan here only if it is free. Never silently relocate
-            // the new window elsewhere, so a click over an existing window does
-            // not spawn a window at the next open slot.
-            return canQuickPlan(at: snapped) ? snapped : nil
-        }
-        // Past slot: snap forward to the earliest free future slot.
+        guard snapped > now else { return nil }
+        if canQuickPlan(at: snapped) { return snapped }
         return nextAvailableStart(after: snapped)
     }
 

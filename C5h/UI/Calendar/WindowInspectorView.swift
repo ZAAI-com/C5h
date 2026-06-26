@@ -15,13 +15,16 @@ enum CalendarSelection: Hashable, Identifiable {
 
 struct WindowInspectorView: View {
     let selection: CalendarSelection
+    let resetEvent: UsageResetEvent?
     let onDelete: ((UUID) -> Void)?
 
     init(
         selection: CalendarSelection,
+        resetEvent: UsageResetEvent? = nil,
         onDelete: ((UUID) -> Void)? = nil
     ) {
         self.selection = selection
+        self.resetEvent = resetEvent
         self.onDelete = onDelete
     }
 
@@ -77,6 +80,11 @@ struct WindowInspectorView: View {
         if let runID = window.commandRunID {
             labelled("Command run", runID.uuidString)
         }
+        if let resetEvent {
+            labelled("Reset detected", format(resetEvent.detectedAt))
+            labelled("Old reset end", format(resetEvent.previousResetEnd))
+            labelled("New reset end", format(resetEvent.newResetEnd))
+        }
     }
 
     private func labelled(_ label: String, _ value: String) -> some View {
@@ -93,6 +101,7 @@ struct WindowInspectorView: View {
 
 struct CalendarInspectorPane: View {
     let selection: CalendarSelection?
+    var resetEvent: UsageResetEvent? = nil
     let onClose: () -> Void
     let onDelete: ((UUID) -> Void)?
 
@@ -119,6 +128,7 @@ struct CalendarInspectorPane: View {
 
                     WindowInspectorView(
                         selection: selection,
+                        resetEvent: resetEvent,
                         onDelete: onDelete
                     )
                 }
