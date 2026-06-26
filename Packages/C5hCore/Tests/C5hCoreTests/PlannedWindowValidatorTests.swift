@@ -43,26 +43,19 @@ struct PlannedWindowValidatorTests {
         let result = PlannedWindowValidator.validate(
             candidate: candidate,
             against: [],
-            activeActualWindows: [active],
-            now: now
+            actualWindows: [active]
         )
         #expect(result.hasConflict)
         #expect(result.conflictingWindowIDs == [active.id])
     }
 
-    @Test("Inactive and different-provider actual windows are ignored")
-    func ignoresInactiveAndDifferentProviderActualWindows() {
+    @Test("Same-provider past actual overlap conflicts regardless of active state")
+    func sameProviderPastActualOverlap() {
         let now = Date(timeIntervalSince1970: 1_730_000_000)
-        let inactive = ActualWindow5h(
+        // Fully in the past: ended an hour ago, so not currently in progress.
+        let past = ActualWindow5h(
             providerID: .codex,
             startAt: now.addingTimeInterval(-6 * 3600),
-            durationSeconds: 5 * 3600,
-            source: .detectedFromUsage,
-            confidence: .estimated
-        )
-        let differentProvider = ActualWindow5h(
-            providerID: .claude,
-            startAt: now.addingTimeInterval(-3600),
             durationSeconds: 5 * 3600,
             source: .detectedFromUsage,
             confidence: .estimated
@@ -75,8 +68,31 @@ struct PlannedWindowValidatorTests {
         let result = PlannedWindowValidator.validate(
             candidate: candidate,
             against: [],
-            activeActualWindows: [inactive, differentProvider],
-            now: now
+            actualWindows: [past]
+        )
+        #expect(result.hasConflict)
+        #expect(result.conflictingWindowIDs == [past.id])
+    }
+
+    @Test("Different-provider actual windows are ignored")
+    func ignoresDifferentProviderActualWindows() {
+        let now = Date(timeIntervalSince1970: 1_730_000_000)
+        let differentProvider = ActualWindow5h(
+            providerID: .claude,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let candidate = PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-30 * 60),
+            durationSeconds: 5 * 3600
+        )
+        let result = PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            actualWindows: [differentProvider]
         )
         #expect(!result.hasConflict)
     }

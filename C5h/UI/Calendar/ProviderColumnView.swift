@@ -30,31 +30,26 @@ struct ProviderColumnView: View {
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
                 if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
-                    Button {
-                        onSelectPlanned(window)
-                    } label: {
-                        PlannedWindowBlockView(
-                            window: window,
-                            now: now,
-                            columnWidth: columnWidth,
-                            layout: layout,
-                            visibleDurationSeconds: segment.durationSeconds,
-                            clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd,
-                            displayStart: draggingPlannedID == window.id ? displayStart : nil,
-                            emphasizeEndTime: true
-                        )
-                        .overlay(alignment: .topTrailing) {
-                            if isActive {
-                                Image(systemName: "arrow.up.and.down")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(C5hColors.tintForProvider(providerID))
-                                    .padding(5)
-                                    .allowsHitTesting(false)
-                            }
+                    PlannedWindowBlockView(
+                        window: window,
+                        now: now,
+                        columnWidth: columnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd,
+                        displayStart: draggingPlannedID == window.id ? displayStart : nil,
+                        emphasizeEndTime: true
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        if isActive {
+                            Image(systemName: "arrow.up.and.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(C5hColors.tintForProvider(providerID))
+                                .padding(5)
+                                .allowsHitTesting(false)
                         }
                     }
-                    .buttonStyle(.plain)
                     .offset(y: yOffset(for: segment.start))
                     .padding(.leading, 2)
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
@@ -92,22 +87,17 @@ struct ProviderColumnView: View {
             }
             ForEach(actualWindows) { window in
                 if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
-                    Button {
-                        onSelectActual(window)
-                    } label: {
-                        ActualWindowBlockView(
-                            window: window,
-                            history: history,
-                            now: now,
-                            columnWidth: columnWidth,
-                            layout: layout,
-                            visibleDurationSeconds: segment.durationSeconds,
-                            clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd,
-                            segmentStart: segment.start
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    ActualWindowBlockView(
+                        window: window,
+                        history: history,
+                        now: now,
+                        columnWidth: columnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd,
+                        segmentStart: segment.start
+                    )
                     .offset(
                         x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
                         y: yOffset(for: segment.start)
@@ -122,16 +112,79 @@ struct ProviderColumnView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
-                hoverY = resolvedPlanStart(forY: location.y) != nil ? location.y : nil
+                // Over an existing window the pointer only selects it, so do not
+                // present a plan ghost there.
+                if windowSelection(at: location) != nil {
+                    hoverY = nil
+                } else {
+                    hoverY = resolvedPlanStart(forY: location.y) != nil ? location.y : nil
+                }
             case .ended:
                 hoverY = nil
             }
         }
         .onTapGesture { location in
+            if let hit = windowSelection(at: location) {
+                switch hit {
+                case .planned(let window): onSelectPlanned(window)
+                case .actual(let window): onSelectActual(window)
+                }
+                hoverY = nil
+                return
+            }
             guard let start = resolvedPlanStart(forY: location.y) else { return }
             onQuickPlan?(start)
             hoverY = nil
         }
+    }
+
+    private enum WindowHit {
+        case planned(PlannedWindow)
+        case actual(ActualWindow5h)
+    }
+
+    /// Resolves a tap location to the window block under it, so taps open a
+    /// block's details instead of quick-planning. A planned block is matched by
+    /// its full rendered frame; an actual block is matched by its vertical span
+    /// only, so the strip of column left of the (narrower, right-offset) actual
+    /// block still counts as being on that window. Planned blocks win ties since
+    /// they live in the left lane the pointer is most likely aiming at.
+    private func windowSelection(at location: CGPoint) -> WindowHit? {
+        let plannedMinX: CGFloat = 2
+        let plannedMaxX = plannedMinX + columnWidth * layout.plannedBlockWidthRatio
+        if plannedMinX <= location.x, location.x <= plannedMaxX {
+            for window in plannedWindows {
+                let displayStart = displayedStart(for: window)
+                guard let segment = visibleSegment(
+                    start: displayStart,
+                    durationSeconds: window.durationSeconds
+                ) else { continue }
+                if verticalSpan(of: segment).contains(location.y) {
+                    return .planned(window)
+                }
+            }
+        }
+        for window in actualWindows {
+            guard let segment = visibleSegment(
+                start: window.startAt,
+                durationSeconds: window.durationSeconds
+            ) else { continue }
+            if verticalSpan(of: segment).contains(location.y) {
+                return .actual(window)
+            }
+        }
+        return nil
+    }
+
+    private func verticalSpan(
+        of segment: (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool)
+    ) -> ClosedRange<CGFloat> {
+        let top = yOffset(for: segment.start)
+        let height = CalendarPositioning.blockHeight(
+            durationSeconds: segment.durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute
+        )
+        return top...(top + height)
     }
 
     @ViewBuilder
@@ -189,11 +242,18 @@ struct ProviderColumnView: View {
 
     /// Resolves a pointer Y to the start time of the 5h window a click would
     /// create: the snapped slot under the cursor when it is in the future and
-    /// free, otherwise the earliest free slot later in the same day. Returns nil
-    /// when no free slot remains before day end.
+    /// free. A future slot that overlaps an existing window yields nil (no
+    /// window is created). A past slot snaps forward to the earliest free future
+    /// slot. Returns nil when no free slot remains before day end.
     private func resolvedPlanStart(forY y: CGFloat) -> Date? {
         let snapped = snappedStart(forY: y)
-        if snapped > now, canQuickPlan(at: snapped) { return snapped }
+        if snapped > now {
+            // Future slot: plan here only if it is free. Never silently relocate
+            // the new window elsewhere, so a click over an existing window does
+            // not spawn a window at the next open slot.
+            return canQuickPlan(at: snapped) ? snapped : nil
+        }
+        // Past slot: snap forward to the earliest free future slot.
         return nextAvailableStart(after: snapped)
     }
 
@@ -257,8 +317,7 @@ struct ProviderColumnView: View {
             .validate(
                 candidate: candidate,
                 against: plannedWindows,
-                activeActualWindows: actualWindows,
-                now: now
+                actualWindows: actualWindows
             )
             .hasConflict
     }

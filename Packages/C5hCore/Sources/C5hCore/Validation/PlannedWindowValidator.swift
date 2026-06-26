@@ -30,17 +30,19 @@ public enum PlannedWindowValidator {
     public static func validate(
         candidate: PlannedWindow,
         against existing: [PlannedWindow],
-        activeActualWindows: [ActualWindow5h],
-        now: Date
+        actualWindows: [ActualWindow5h]
     ) -> PlannedWindowValidationResult {
         let plannedResult = validate(candidate: candidate, against: existing)
         guard candidate.durationSeconds >= 0 else {
             return plannedResult
         }
-        let actualConflicts = activeActualWindows.filter { other in
+        // Any same-provider actual window that overlaps the candidate is a
+        // conflict, regardless of whether it is in the past, in progress, or in
+        // the future. Half-open `[start, end)` overlap, matching the planned-only
+        // overload: touching boundaries are back-to-back, not conflicts.
+        let actualConflicts = actualWindows.filter { other in
             guard other.providerID == candidate.providerID else { return false }
             guard other.durationSeconds >= 0 else { return false }
-            guard other.startAt <= now, now < other.endAt else { return false }
             return candidate.startAt < other.endAt && other.startAt < candidate.endAt
         }
         return PlannedWindowValidationResult(
