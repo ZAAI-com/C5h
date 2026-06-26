@@ -313,12 +313,12 @@ struct ActualWindowBlockView: View {
         return min(max(offset, minOffset), maxOffset)
     }
 
-    /// Returns the 7d value only when there is enough data to be worth showing.
-    /// A missing reading (`nil`) or one that rounds to 0% is treated as "not
-    /// enough data" and hidden, so tiles don't render a meaningless `7d usage 0%`.
+    /// Returns the 7d value whenever the snapshot carried one, including readings
+    /// that round to 0%. Only a missing reading (`nil`, i.e. the provider
+    /// reported no 7d window) is hidden, so we never fabricate a `7d usage 0%`
+    /// from absent data.
     private static func meaningfulSevenDay(_ value: Double?) -> Double? {
-        guard let value, value.rounded() >= 1 else { return nil }
-        return value
+        value
     }
 
     private static func visibleFiveHour(
