@@ -114,7 +114,7 @@ struct ProviderCardView: View {
             Text(id.displayName).font(C5hTypography.titleFont)
             Spacer()
             ProviderStatusBadge(state: healthState)
-            if isStatusLoading || isUsageLoading { ProgressView().scaleEffect(0.6) }
+            if isStatusLoading || isUsageLoading { ProgressView().controlSize(.small) }
         }
     }
 
@@ -234,7 +234,7 @@ struct ProviderCardView: View {
             }
             Spacer(minLength: C5hSpacing.sm)
             if isRunning {
-                ProgressView().scaleEffect(0.55)
+                ProgressView().controlSize(.small)
             }
             if let action {
                 Button(action: action) {
