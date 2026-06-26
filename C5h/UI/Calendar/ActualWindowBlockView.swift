@@ -402,9 +402,10 @@ struct ActualWindowBlockView: View {
     private static let middleLeadSeconds: TimeInterval = 5 * 60
 
     /// The floating, time-anchored reading for the Day view. A current window
-    /// shows its latest in-window reading once that reading is at least
-    /// `middleLeadSeconds` past the start; a completed window marks the moment 5h
-    /// first reached 100%. Future windows show nothing.
+    /// that has hit 100% freezes at the moment 5h first reached 100%; while still
+    /// below 100% it shows its latest in-window reading once that reading is at
+    /// least `middleLeadSeconds` past the start. A completed window marks the
+    /// moment 5h first reached 100%. Future windows show nothing.
     private static func floatingReading(
         history: UsageHistorySeries?,
         isCurrent: Bool,
@@ -415,6 +416,12 @@ struct ActualWindowBlockView: View {
         usageAnchor: Date
     ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
         if isCurrent {
+            // Once the cap is hit, freeze the row at the first 100% moment so it
+            // stops sliding to each new poll. Below 100%, keep showing the live
+            // latest reading.
+            if let hit = history?.firstFiveHourReaching(100, from: visibleStart, to: usageAnchor) {
+                return hit
+            }
             guard let latest = history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart),
                   latest.capturedAt >= shownStart.addingTimeInterval(middleLeadSeconds)
             else { return nil }

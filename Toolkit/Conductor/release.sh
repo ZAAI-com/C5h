@@ -25,6 +25,21 @@ if [ -z "${DEVELOPER_ID_APPLICATION:-}" ]; then
   exit 2
 fi
 
+# Notarization is mandatory for distributable builds. If any credential is
+# missing the build fails fast, so we never silently ship an unnotarized DMG.
+# Set ALLOW_UNNOTARIZED=1 to opt out for local/dev DMGs only.
+NOTARIZE=1
+if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ] || [ -z "${APPLE_APP_PASSWORD:-}" ]; then
+  if [ "${ALLOW_UNNOTARIZED:-0}" = "1" ]; then
+    echo "WARNING: APPLE_ID/APPLE_TEAM_ID/APPLE_APP_PASSWORD missing; building an UNNOTARIZED DMG (ALLOW_UNNOTARIZED=1). Do not distribute this build." >&2
+    NOTARIZE=0
+  else
+    echo "ERROR: notarization requires APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_PASSWORD." >&2
+    echo "       Set ALLOW_UNNOTARIZED=1 to build an unnotarized dev DMG instead." >&2
+    exit 2
+  fi
+fi
+
 mkdir -p build
 
 echo "==> Build helper executable"
@@ -75,7 +90,7 @@ xcodebuild \
   -exportPath "${EXPORT_DIR}" \
   -exportOptionsPlist build/export-options.plist
 
-if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+if [ "${NOTARIZE}" = "1" ]; then
   echo "==> Notarize"
   ditto -c -k --keepParent "${EXPORT_DIR}/${SCHEME}.app" build/notarize.zip
   xcrun notarytool submit build/notarize.zip \
