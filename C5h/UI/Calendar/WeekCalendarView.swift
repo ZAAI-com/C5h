@@ -8,7 +8,7 @@ struct WeekCalendarScreen: View {
     @State private var viewModel: WeekCalendarViewModel?
     @State private var now: Date = .now
     @State private var visibleProviders: Set<ProviderID> = Set(ProviderID.allCases)
-    @State private var showPlanned: Bool = true
+    @State private var showPlanned: Bool = false
     @State private var showActual: Bool = true
 
     var body: some View {
