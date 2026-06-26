@@ -1,10 +1,11 @@
 #!/bin/bash
-# C5h release script — archives, signs, notarizes, and packages a DMG.
+# C5h release script: archives, signs, notarizes, and packages a DMG.
 #
 # Required environment:
 #   DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)"
 #
-# Optional (needed for notarization — script skips notarization if any are unset):
+# Required for notarization (the build fails without them, unless
+# ALLOW_UNNOTARIZED=1 is set for a local/dev DMG):
 #   APPLE_ID="apple-id@example.com"
 #   APPLE_TEAM_ID="ABCDEFGHIJ"
 #   APPLE_APP_PASSWORD="app-specific password"  # for notarytool
@@ -104,11 +105,18 @@ fi
 echo "==> Build DMG"
 hdiutil create -volname "C5h" -srcfolder "${EXPORT_DIR}" -ov -format UDZO "${DMG}"
 
-if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+if [ "${NOTARIZE}" = "1" ]; then
   echo "==> Staple DMG"
   # The .app inside is already stapled above; stapling the DMG too lets Gatekeeper
   # validate the downloaded disk image offline (e.g. a Homebrew cask install).
   xcrun stapler staple "${DMG}"
+
+  echo "==> Verify notarization"
+  # Fail the build if the notarization ticket did not actually take, instead of
+  # silently shipping a DMG that triggers Gatekeeper warnings on install.
+  xcrun stapler validate "${EXPORT_DIR}/${SCHEME}.app"
+  xcrun stapler validate "${DMG}"
+  codesign --verify --deep --strict --verbose=2 "${EXPORT_DIR}/${SCHEME}.app"
 fi
 
 echo "==> Compute SHA256"

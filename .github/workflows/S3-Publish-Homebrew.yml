@@ -70,6 +70,10 @@ jobs:
           mkdir -p "$(brew --repository local/c5hlint)/Casks"
           cp cask.rb "$(brew --repository local/c5hlint)/Casks/${CASK_NAME}.rb"
           brew style "local/c5hlint"
+          # Audit structural issues (sha, url, stanzas) that brew style misses.
+          # The release DMG is already published at this point, so --online also
+          # verifies the live download URL resolves and the sha256 matches.
+          brew audit --cask --online "local/c5hlint/${CASK_NAME}"
 
       - name: Checkout tap repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

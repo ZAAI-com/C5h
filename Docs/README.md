@@ -29,9 +29,6 @@ them.
 
 ## Install
 
-> Distribution via Homebrew and GitHub Releases is rolling out. If a step below
-> isn't live yet, grab the latest from the [Releases](https://github.com/ZAAI-com/C5h/releases) page.
-
 **Homebrew (recommended):**
 
 ```bash
