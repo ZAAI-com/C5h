@@ -17,10 +17,11 @@ struct ActualWindowBlockView: View {
     /// (midnight) start, matching the block's on-screen position. Unused by the
     /// condensed Week layout.
     var segmentStart: Date = .distantPast
-    /// When true, the block uses the condensed Week-overview layout: start time,
-    /// 7d usage, and 5h usage stacked top-left. The Day view (Today/Tomorrow)
-    /// keeps the default full layout with start/end corners and time-anchored
-    /// 5h (left) and 7d (right) readings.
+    /// When true, the block uses the condensed Week-overview layout: a bold start
+    /// time pinned top-left, with the 5h and 7d usage lines sitting directly above
+    /// a bold end time at the bottom-left. The Day view (Today/Tomorrow) keeps the
+    /// default full layout with start/end corners and time-anchored 5h (left) and
+    /// 7d (right) readings.
     var condensed: Bool = false
 
     var body: some View {
@@ -66,6 +67,7 @@ struct ActualWindowBlockView: View {
             if condensed {
                 condensedOverlay(
                     shownStart: shownStart,
+                    shownEnd: shownEnd,
                     endSevenD: condensedSevenD,
                     fiveHour: condensed5h
                 )
@@ -111,7 +113,7 @@ struct ActualWindowBlockView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             if density.showsBottomCorners {
-                cornerText(BlockFormatters.formatTime(shownEnd))
+                cornerText(BlockFormatters.formatTime(shownEnd), weight: .semibold)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -125,9 +127,8 @@ struct ActualWindowBlockView: View {
         pad: CGFloat
     ) -> some View {
         let timeText = Text(BlockFormatters.formatTime(reading.capturedAt))
-            .font(.system(size: compact ? 9 : 10))
+            .font(.system(size: compact ? 9 : 10, weight: .semibold))
             .monospacedDigit()
-            .opacity(0.85)
         let fiveHourText = Text("5h usage \(BlockFormatters.formatPercent(reading.fiveHour))")
             .font(.system(size: compact ? 9 : 10, weight: .semibold))
             .monospacedDigit()
@@ -149,21 +150,24 @@ struct ActualWindowBlockView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Week overview: only start time, end 7d usage, and 5h usage, stacked
-    /// top-left to stay legible in the dense tiles.
+    /// Week overview: bold start time pinned top-left, then the 5h and 7d usage
+    /// lines sitting directly above a bold end time at the bottom-left.
     private func condensedOverlay(
         shownStart: Date,
+        shownEnd: Date,
         endSevenD: Double?,
         fiveHour: (value: Double, asOf: Date)?
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
-            if let v = endSevenD {
-                cornerText("7d \(BlockFormatters.formatPercent(v))")
-            }
+            cornerText(BlockFormatters.formatTime(shownStart), weight: .bold)
+            Spacer(minLength: 0)
             if let p = fiveHour {
                 cornerText("5h \(BlockFormatters.formatPercent(p.value))")
             }
+            if let v = endSevenD {
+                cornerText("7d \(BlockFormatters.formatPercent(v))")
+            }
+            cornerText(BlockFormatters.formatTime(shownEnd), weight: .bold)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

@@ -11,6 +11,10 @@ struct PlannedWindowBlockView: View {
     var clipsBottom: Bool = false
     var compact: Bool = false
     var displayStart: Date? = nil
+    /// When true, the end-time corner label is rendered bold to match the start
+    /// time. The Day view (Today/Tomorrow) sets this so every block time reads
+    /// uniformly; the Week tab leaves it off.
+    var emphasizeEndTime: Bool = false
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -62,7 +66,7 @@ struct PlannedWindowBlockView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             if density.showsBottomCorners {
-                cornerText(BlockFormatters.formatTime(shownEnd))
+                cornerText(BlockFormatters.formatTime(shownEnd), weight: emphasizeEndTime ? .semibold : .regular)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

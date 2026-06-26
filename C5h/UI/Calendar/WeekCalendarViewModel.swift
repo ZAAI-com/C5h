@@ -10,21 +10,25 @@ final class WeekCalendarViewModel {
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
+    var selection: CalendarSelection?
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
     private let actual5hRepo: any ActualWindow5hRepository
+    private let scheduledRepo: any ScheduledPromptRepository
     private let usageSnapshotRepo: (any UsageSnapshotRepository)?
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
         actual5hRepository: any ActualWindow5hRepository,
+        scheduledRepository: any ScheduledPromptRepository,
         usageSnapshotRepository: (any UsageSnapshotRepository)? = nil
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
         self.actual5hRepo = actual5hRepository
+        self.scheduledRepo = scheduledRepository
         self.usageSnapshotRepo = usageSnapshotRepository
     }
 
@@ -92,5 +96,17 @@ final class WeekCalendarViewModel {
 
     func goToNextWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+    }
+
+    func delete(id: UUID) async throws {
+        do {
+            try await scheduledRepo.cancelPendingAndDetachPrompts(plannedWindowID: id)
+            try await plannedRepo.delete(id: id)
+            lastError = nil
+            await reload()
+        } catch {
+            lastError = String(describing: error)
+            throw error
+        }
     }
 }

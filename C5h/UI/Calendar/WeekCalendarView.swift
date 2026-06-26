@@ -30,11 +30,13 @@ struct WeekCalendarScreen: View {
         .task(id: ObjectIdentifier(appEnv)) {
             if viewModel == nil,
                let plannedRepo = appEnv.plannedWindowRepository,
-               let actual5hRepo = appEnv.actualWindow5hRepository {
+               let actual5hRepo = appEnv.actualWindow5hRepository,
+               let scheduledRepo = appEnv.scheduledPromptRepository {
                 let vm = WeekCalendarViewModel(
                     weekStart: .now,
                     plannedRepository: plannedRepo,
                     actual5hRepository: actual5hRepo,
+                    scheduledRepository: scheduledRepo,
                     usageSnapshotRepository: appEnv.usageSnapshotRepository
                 )
                 viewModel = vm
@@ -65,7 +67,19 @@ struct WeekCalendarScreen: View {
             now: now,
             visibleProviders: visibleProviders,
             showPlanned: showPlanned,
-            showActual: showActual
+            showActual: showActual,
+            onSelectPlanned: { window in
+                withAnimation(C5hAnimation.morph) {
+                    let next = CalendarSelection.planned(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
+                }
+            },
+            onSelectActual: { window in
+                withAnimation(C5hAnimation.morph) {
+                    let next = CalendarSelection.actual(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
+                }
+            }
         )
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let err = viewModel.lastError {
@@ -129,6 +143,49 @@ struct WeekCalendarScreen: View {
                     }
                     .help("Show/hide window types")
                 }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        withAnimation(C5hAnimation.morph) {
+                            if viewModel.selection == nil,
+                               let firstActual = viewModel.actual.first {
+                                viewModel.selection = .actual(firstActual)
+                            } else if viewModel.selection == nil,
+                                      let firstPlanned = viewModel.planned.first {
+                                viewModel.selection = .planned(firstPlanned)
+                            } else {
+                                viewModel.selection = nil
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.right")
+                    }
+                    .help("Toggle inspector")
+                }
+            }
+            // Non-blocking right-side glass pane, matching the day view.
+            .inspector(isPresented: Binding(
+                get: { viewModel.selection != nil },
+                set: { newValue in
+                    if !newValue {
+                        withAnimation(C5hAnimation.morph) {
+                            viewModel.selection = nil
+                        }
+                    }
+                }
+            )) {
+                if let sel = viewModel.selection {
+                    WindowInspectorView(
+                        selection: sel,
+                        onDelete: { id in
+                            viewModel.selection = nil
+                            Task { try? await viewModel.delete(id: id) }
+                        }
+                    )
+                    .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
+                } else {
+                    EmptyView()
+                }
             }
     }
 }
@@ -139,6 +196,8 @@ struct WeekCalendarView: View {
     let visibleProviders: Set<ProviderID>
     let showPlanned: Bool
     let showActual: Bool
+    let onSelectPlanned: (PlannedWindow) -> Void
+    let onSelectActual: (ActualWindow5h) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16
@@ -187,7 +246,9 @@ struct WeekCalendarView: View {
                                 layout: dynamicLayout,
                                 columnWidth: columnWidth,
                                 showPlanned: showPlanned,
-                                showActual: showActual
+                                showActual: showActual,
+                                onSelectPlanned: onSelectPlanned,
+                                onSelectActual: onSelectActual
                             )
                         }
                     }
@@ -254,6 +315,8 @@ private struct WeekDayColumnView: View {
     let columnWidth: CGFloat
     let showPlanned: Bool
     let showActual: Bool
+    let onSelectPlanned: (PlannedWindow) -> Void
+    let onSelectActual: (ActualWindow5h) -> Void
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -263,15 +326,20 @@ private struct WeekDayColumnView: View {
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
-                    PlannedWindowBlockView(
-                        window: window,
-                        now: now,
-                        columnWidth: halfColumnWidth,
-                        layout: layout,
-                        visibleDurationSeconds: segment.durationSeconds,
-                        clipsTop: segment.clippedStart,
-                        clipsBottom: segment.clippedEnd
-                    )
+                    Button {
+                        onSelectPlanned(window)
+                    } label: {
+                        PlannedWindowBlockView(
+                            window: window,
+                            now: now,
+                            columnWidth: halfColumnWidth,
+                            layout: layout,
+                            visibleDurationSeconds: segment.durationSeconds,
+                            clipsTop: segment.clippedStart,
+                            clipsBottom: segment.clippedEnd
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
                         y: yOffset(for: segment.start)
@@ -284,17 +352,22 @@ private struct WeekDayColumnView: View {
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
-                    ActualWindowBlockView(
-                        window: window,
-                        history: histories[window.providerID],
-                        now: now,
-                        columnWidth: halfColumnWidth,
-                        layout: layout,
-                        visibleDurationSeconds: segment.durationSeconds,
-                        clipsTop: segment.clippedStart,
-                        clipsBottom: segment.clippedEnd,
-                        condensed: true
-                    )
+                    Button {
+                        onSelectActual(window)
+                    } label: {
+                        ActualWindowBlockView(
+                            window: window,
+                            history: histories[window.providerID],
+                            now: now,
+                            columnWidth: halfColumnWidth,
+                            layout: layout,
+                            visibleDurationSeconds: segment.durationSeconds,
+                            clipsTop: segment.clippedStart,
+                            clipsBottom: segment.clippedEnd,
+                            condensed: true
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .offset(
                         x: actualXOffset(for: window.providerID),
                         y: yOffset(for: segment.start)

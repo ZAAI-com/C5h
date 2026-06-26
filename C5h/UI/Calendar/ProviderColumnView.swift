@@ -41,7 +41,8 @@ struct ProviderColumnView: View {
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
-                            displayStart: draggingPlannedID == window.id ? displayStart : nil
+                            displayStart: draggingPlannedID == window.id ? displayStart : nil,
+                            emphasizeEndTime: true
                         )
                         .overlay(alignment: .topTrailing) {
                             if isActive {

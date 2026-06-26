@@ -26,6 +26,7 @@ struct TimeRulerView: View {
             if let now {
                 Text(BlockFormatters.formatTime(now))
                     .font(C5hTypography.captionFont)
+                    .fontWeight(.semibold)
                     .foregroundStyle(Color.red)
                     .frame(
                         width: layout.timeRulerWidth,
