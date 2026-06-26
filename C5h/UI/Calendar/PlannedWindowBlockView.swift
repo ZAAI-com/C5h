@@ -34,9 +34,9 @@ struct PlannedWindowBlockView: View {
         let width = compact ? columnWidth : columnWidth * layout.plannedBlockWidthRatio
 
         let shownStart = displayStart ?? window.startAt
-        // Bottom label tracks the visible clipped portion when the block is
-        // segmented across midnight; otherwise the full window duration.
-        let shownEnd = shownStart.addingTimeInterval(TimeInterval(duration))
+        // Height uses the clipped visible duration, but the corner labels should
+        // show the planned window's real bounds like actual-window blocks do.
+        let shownEnd = shownStart.addingTimeInterval(TimeInterval(window.durationSeconds))
 
         ZStack {
             cornersOverlay(
