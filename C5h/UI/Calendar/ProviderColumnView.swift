@@ -144,14 +144,21 @@ struct ProviderColumnView: View {
                 durationSeconds: Self.fiveHourSeconds,
                 pixelsPerMinute: layout.pixelsPerMinute
             )
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Plan 5h \(providerID.displayName) window")
+            let end = start.addingTimeInterval(TimeInterval(Self.fiveHourSeconds))
+            ZStack {
+                VStack(spacing: 0) {
+                    ghostCornerText(BlockFormatters.formatTime(start), weight: .semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
+                    ghostCornerText(BlockFormatters.formatTime(end), weight: .semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text("Plan \(providerID.displayName) 5h Window")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("starts \(timeFormatter.string(from: start))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.9))
-                Spacer(minLength: 0)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .padding(6)
             .frame(width: columnWidth - 4, height: height, alignment: .topLeading)
@@ -172,6 +179,12 @@ struct ProviderColumnView: View {
             ))
             .allowsHitTesting(false)
         }
+    }
+
+    private func ghostCornerText(_ string: String, weight: Font.Weight = .regular) -> some View {
+        Text(string)
+            .font(.system(size: 10, weight: weight))
+            .monospacedDigit()
     }
 
     /// Resolves a pointer Y to the start time of the 5h window a click would
@@ -280,9 +293,4 @@ struct ProviderColumnView: View {
         )
     }
 
-    private var timeFormatter: DateFormatter {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }
 }
