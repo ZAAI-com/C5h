@@ -7,6 +7,11 @@ public struct UsagePoint: Sendable, Hashable {
     /// The 5h window reset time the provider reported at `capturedAt`, when
     /// available. Used by `UsageResetDetector` to spot a window that reset early.
     public let fiveHourResetsAt: Date?
+    /// True when `fiveHourResetsAt` represents an active, anchored provider
+    /// window. Codex can report a synthetic "fresh slot" reset end when no 5h
+    /// window has started; those points should render usage but not drive reset
+    /// detection.
+    public let hasActiveFiveHourWindow: Bool
     /// The 7d window reset time the provider reported at `capturedAt`, when
     /// available. Used by `UsageResetDetector` to spot a weekly reset.
     public let sevenDayResetsAt: Date?
@@ -16,12 +21,14 @@ public struct UsagePoint: Sendable, Hashable {
         fiveHour: Double?,
         sevenDay: Double?,
         fiveHourResetsAt: Date? = nil,
+        hasActiveFiveHourWindow: Bool = true,
         sevenDayResetsAt: Date? = nil
     ) {
         self.capturedAt = capturedAt
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.fiveHourResetsAt = fiveHourResetsAt
+        self.hasActiveFiveHourWindow = hasActiveFiveHourWindow
         self.sevenDayResetsAt = sevenDayResetsAt
     }
 }
@@ -156,6 +163,7 @@ public struct UsageHistorySeries: Sendable, Hashable {
                 fiveHour: status.fiveHour.usedPercentage,
                 sevenDay: status.sevenDay?.usedPercentage,
                 fiveHourResetsAt: status.fiveHour.resetsAt,
+                hasActiveFiveHourWindow: true,
                 sevenDayResetsAt: status.sevenDay?.resetsAt
             )
         case .codex:
@@ -168,6 +176,7 @@ public struct UsageHistorySeries: Sendable, Hashable {
                 fiveHour: status.primary.usedPercentage,
                 sevenDay: status.secondary?.usedPercentage,
                 fiveHourResetsAt: status.primary.resetsAt,
+                hasActiveFiveHourWindow: status.hasActivePrimaryWindow,
                 sevenDayResetsAt: status.secondary?.resetsAt
             )
         }
@@ -182,6 +191,7 @@ public struct UsageHistorySeries: Sendable, Hashable {
                last.fiveHour == point.fiveHour,
                last.sevenDay == point.sevenDay,
                last.fiveHourResetsAt == point.fiveHourResetsAt,
+               last.hasActiveFiveHourWindow == point.hasActiveFiveHourWindow,
                last.sevenDayResetsAt == point.sevenDayResetsAt {
                 continue
             }

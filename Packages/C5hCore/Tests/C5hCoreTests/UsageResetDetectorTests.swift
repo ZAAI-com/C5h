@@ -52,6 +52,48 @@ struct UsageResetDetectorTests {
         #expect(event?.detectedAt == Date(timeIntervalSince1970: r1 - 8_600))
     }
 
+    @Test("Codex synthetic sliding 5h ends are not resets")
+    func codexSyntheticSlidingFiveHourEndsAreIgnored() {
+        let firstCapture = Date(timeIntervalSince1970: r1 - 20_000)
+        let secondCapture = firstCapture.addingTimeInterval(120)
+        let first = codexSnapshot(
+            fiveHourPercent: 1,
+            fiveHourResetsAt: firstCapture.addingTimeInterval(18_000).timeIntervalSince1970,
+            capturedAt: firstCapture
+        )
+        let second = codexSnapshot(
+            fiveHourPercent: 1,
+            fiveHourResetsAt: secondCapture.addingTimeInterval(18_000).timeIntervalSince1970,
+            capturedAt: secondCapture
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [first, second])
+
+        #expect(series.points.map(\.hasActiveFiveHourWindow) == [false, false])
+        let events = UsageResetDetector.detect(in: series).filter { $0.kind == .fiveHour }
+        #expect(events.isEmpty)
+    }
+
+    @Test("Codex synthetic to anchored 5h window is not a reset")
+    func codexSyntheticToAnchoredFiveHourWindowIsIgnored() {
+        let firstCapture = Date(timeIntervalSince1970: r1 - 20_000)
+        let secondCapture = firstCapture.addingTimeInterval(120)
+        let first = codexSnapshot(
+            fiveHourPercent: 1,
+            fiveHourResetsAt: firstCapture.addingTimeInterval(18_000).timeIntervalSince1970,
+            capturedAt: firstCapture
+        )
+        let second = codexSnapshot(
+            fiveHourPercent: 3,
+            fiveHourResetsAt: firstCapture.addingTimeInterval(17_000).timeIntervalSince1970,
+            capturedAt: secondCapture
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [first, second])
+
+        #expect(series.points.map(\.hasActiveFiveHourWindow) == [false, true])
+        let events = UsageResetDetector.detect(in: series).filter { $0.kind == .fiveHour }
+        #expect(events.isEmpty)
+    }
+
     @Test("7d sharp percentage drop against an unchanged end is detected")
     func sevenDaySharpDropIsDetected() {
         let prev = claudeSnapshot(
@@ -114,6 +156,33 @@ struct UsageResetDetectorTests {
         let json = #"{"rate_limits":{"five_hour":{"used_percentage":\#(fiveHourPercent),"resets_at":\#(Int(fiveHourResetsAt))}\#(sevenDayFragment)}}"#
         return UsageSnapshot(
             providerID: .claude,
+            capturedAt: capturedAt,
+            rawJSON: json,
+            normalizedJSON: ""
+        )
+    }
+
+    private func codexSnapshot(
+        fiveHourPercent: Double,
+        fiveHourResetsAt: TimeInterval,
+        sevenDayPercent: Double? = nil,
+        sevenDayResetsAt: TimeInterval = 1_778_893_200,
+        capturedAt: Date
+    ) -> UsageSnapshot {
+        let sevenDayFragment: String
+        if let sevenDayPercent {
+            sevenDayFragment = ",\"secondary\":{\"usedPercent\":\(sevenDayPercent),"
+                + "\"windowDurationMins\":10080,"
+                + "\"resetsAt\":\(Int(sevenDayResetsAt))}"
+        } else {
+            sevenDayFragment = ""
+        }
+        let json = "{\"rateLimits\":{\"primary\":{\"usedPercent\":\(fiveHourPercent),"
+            + "\"windowDurationMins\":300,"
+            + "\"resetsAt\":\(Int(fiveHourResetsAt))}"
+            + "\(sevenDayFragment),\"planType\":\"plus\"}}"
+        return UsageSnapshot(
+            providerID: .codex,
             capturedAt: capturedAt,
             rawJSON: json,
             normalizedJSON: ""

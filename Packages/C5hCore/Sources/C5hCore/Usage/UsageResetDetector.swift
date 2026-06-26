@@ -78,6 +78,8 @@ public enum UsageResetDetector {
         prev: UsagePoint,
         curr: UsagePoint
     ) -> UsageResetEvent? {
+        guard prev.hasActiveFiveHourWindow,
+              curr.hasActiveFiveHourWindow else { return nil }
         guard let prevEnd = prev.fiveHourResetsAt,
               let currEnd = curr.fiveHourResetsAt else { return nil }
         // The reset end must have moved meaningfully...
