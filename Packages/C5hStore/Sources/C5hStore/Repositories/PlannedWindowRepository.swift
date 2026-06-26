@@ -81,6 +81,7 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
     ) throws {
         let startStr = DateTimeService.formatUTC(window.startAt)
         let endStr = DateTimeService.formatUTC(window.endAt)
+        let nowStr = DateTimeService.formatUTC(.now)
         let conflict = try PlannedWindowRecord
             .filter(Column("provider_id") == window.providerID.rawValue)
             .filter(Column("id") != window.id.uuidString)
@@ -93,6 +94,22 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
         if conflict != nil {
             throw C5hError.schedulerError(
                 "\(window.providerID.displayName) planned windows cannot overlap"
+            )
+        }
+
+        let activeActualConflict = try ActualWindow5hRecord
+            .filter(Column("provider_id") == window.providerID.rawValue)
+            .filter(sql: """
+                datetime(start_at) <= datetime(?) AND
+                datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?) AND
+                datetime(start_at) < datetime(?) AND
+                datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
+                """, arguments: [nowStr, nowStr, endStr, startStr])
+            .fetchOne(db)
+
+        if activeActualConflict != nil {
+            throw C5hError.schedulerError(
+                "\(window.providerID.displayName) planned windows cannot overlap an active actual window"
             )
         }
     }

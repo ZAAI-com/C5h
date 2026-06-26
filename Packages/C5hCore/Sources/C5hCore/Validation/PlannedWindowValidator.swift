@@ -26,4 +26,25 @@ public enum PlannedWindowValidator {
             conflictingWindowIDs: conflicts.map { $0.id }
         )
     }
+
+    public static func validate(
+        candidate: PlannedWindow,
+        against existing: [PlannedWindow],
+        activeActualWindows: [ActualWindow5h],
+        now: Date
+    ) -> PlannedWindowValidationResult {
+        let plannedResult = validate(candidate: candidate, against: existing)
+        guard candidate.durationSeconds >= 0 else {
+            return plannedResult
+        }
+        let actualConflicts = activeActualWindows.filter { other in
+            guard other.providerID == candidate.providerID else { return false }
+            guard other.durationSeconds >= 0 else { return false }
+            guard other.startAt <= now, now < other.endAt else { return false }
+            return candidate.startAt < other.endAt && other.startAt < candidate.endAt
+        }
+        return PlannedWindowValidationResult(
+            conflictingWindowIDs: plannedResult.conflictingWindowIDs + actualConflicts.map { $0.id }
+        )
+    }
 }

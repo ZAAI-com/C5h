@@ -241,7 +241,12 @@ struct ProviderColumnView: View {
             durationSeconds: Self.fiveHourSeconds
         )
         return !PlannedWindowValidator
-            .validate(candidate: candidate, against: plannedWindows)
+            .validate(
+                candidate: candidate,
+                against: plannedWindows,
+                activeActualWindows: actualWindows,
+                now: now
+            )
             .hasConflict
     }
 

@@ -25,6 +25,62 @@ struct PlannedWindowValidatorTests {
         #expect(result.conflictingWindowIDs == [existing.id])
     }
 
+    @Test("Same-provider active actual overlap detected")
+    func sameProviderActiveActualOverlap() {
+        let now = Date(timeIntervalSince1970: 1_730_000_000)
+        let active = ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let candidate = PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(10 * 60),
+            durationSeconds: 5 * 3600
+        )
+        let result = PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            activeActualWindows: [active],
+            now: now
+        )
+        #expect(result.hasConflict)
+        #expect(result.conflictingWindowIDs == [active.id])
+    }
+
+    @Test("Inactive and different-provider actual windows are ignored")
+    func ignoresInactiveAndDifferentProviderActualWindows() {
+        let now = Date(timeIntervalSince1970: 1_730_000_000)
+        let inactive = ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-6 * 3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let differentProvider = ActualWindow5h(
+            providerID: .claude,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let candidate = PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-5 * 3600 - 30 * 60),
+            durationSeconds: 5 * 3600
+        )
+        let result = PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            activeActualWindows: [inactive, differentProvider],
+            now: now
+        )
+        #expect(!result.hasConflict)
+    }
+
     @Test("Different-provider overlap is ignored")
     func differentProvider() {
         let base = Date(timeIntervalSince1970: 1_730_000_000)
