@@ -105,29 +105,24 @@ struct DayCalendarScreen: View {
             }
         }
         .toolbar { actionToolbar(viewModel: viewModel) }
-        // Non-blocking right-side glass pane (replaces the old .sheet inspector).
-        .inspector(isPresented: Binding(
-            get: { viewModel.selection != nil },
-            set: { newValue in
-                if !newValue {
+        // Keep the inspector inside the detail content instead of using
+        // SwiftUI's native trailing column, which can temporarily collapse the
+        // root NavigationSplitView sidebar while solving widths.
+        .overlay(alignment: .trailing) {
+            CalendarInspectorPane(
+                selection: viewModel.selection,
+                onClose: {
                     withAnimation(C5hAnimation.morph) {
                         viewModel.selection = nil
                     }
-                }
-            }
-        )) {
-            if let sel = viewModel.selection {
-                WindowInspectorView(
-                    selection: sel,
-                    onDelete: { id in
+                },
+                onDelete: { id in
+                    withAnimation(C5hAnimation.morph) {
                         viewModel.selection = nil
-                        Task { try? await viewModel.delete(id: id) }
                     }
-                )
-                .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
-            } else {
-                EmptyView()
-            }
+                    Task { try? await viewModel.delete(id: id) }
+                }
+            )
         }
     }
 

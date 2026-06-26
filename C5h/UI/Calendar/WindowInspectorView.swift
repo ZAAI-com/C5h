@@ -16,7 +16,6 @@ enum CalendarSelection: Hashable, Identifiable {
 struct WindowInspectorView: View {
     let selection: CalendarSelection
     let onDelete: ((UUID) -> Void)?
-    @Environment(\.dismiss) private var dismiss
 
     init(
         selection: CalendarSelection,
@@ -89,5 +88,46 @@ struct WindowInspectorView: View {
 
     private func format(_ date: Date) -> String {
         date.c5hDateTime
+    }
+}
+
+struct CalendarInspectorPane: View {
+    let selection: CalendarSelection?
+    let onClose: () -> Void
+    let onDelete: ((UUID) -> Void)?
+
+    private let width: CGFloat = 360
+
+    var body: some View {
+        if let selection {
+            HStack(spacing: 0) {
+                Divider()
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.glass)
+                        .help("Close inspector")
+                    }
+                    .padding(.horizontal, C5hSpacing.md)
+                    .padding(.top, C5hSpacing.sm)
+                    .padding(.bottom, C5hSpacing.xs)
+
+                    WindowInspectorView(
+                        selection: selection,
+                        onDelete: onDelete
+                    )
+                }
+                .background(.thinMaterial)
+            }
+            .frame(width: width)
+            .frame(maxHeight: .infinity)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+            .zIndex(10)
+        }
     }
 }
