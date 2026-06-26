@@ -31,6 +31,7 @@ final class AppEnvironment {
     private(set) var cliPathResolver: (any CLIPathResolving)?
     private(set) var commandRunner: (any CommandRunning)?
     private(set) var providerRegistry: ProviderRegistry?
+    private(set) var schedulerDriver: AppSchedulerDriver?
     private(set) var schedulerTicker: SchedulerTicker?
     private(set) var providerStatuses: [ProviderID: ProviderStatus] = [:]
     private(set) var providerStatusLoading: Set<ProviderID> = []
@@ -110,6 +111,7 @@ final class AppEnvironment {
                     usageSnapshotRepository: usageRepo,
                     registry: registry
                 )
+                self.schedulerDriver = driver
                 let scheduler = SchedulerService(driver: driver)
                 let ticker = SchedulerTicker(scheduler: scheduler)
                 self.schedulerTicker = ticker
@@ -209,9 +211,18 @@ final class AppEnvironment {
             let prompt = await currentWakePrompt(for: id)
             let adapter = try providerAdapter(for: id)
             let input = TriggerPromptInput(prompt: prompt, projectPath: nil, mode: .newSession)
-            _ = try await adapter.runPromptCommand(input)
+            let run = try await adapter.runPromptCommand(input)
             providerPromptLastFiredAt[id] = .now
             providerPromptLastError[id] = nil
+            // Anchor a 5h window for this manual trigger the same way the
+            // scheduler does. A resolver failure must not surface as a prompt
+            // failure (the command already ran); log and move on, mirroring
+            // SchedulerService.tick.
+            do {
+                _ = try await schedulerDriver?.resolveActualWindow(for: id, commandRun: run)
+            } catch {
+                NSLog("AppEnvironment: resolveActualWindow failed for manual \(id.rawValue) trigger: \(error)")
+            }
         } catch {
             providerPromptLastError[id] = String(describing: error)
         }

@@ -33,7 +33,7 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
     public func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h] {
         let startStr = DateTimeService.formatUTC(interval.start)
         let endStr = DateTimeService.formatUTC(interval.end)
-        // Overlap match — see PlannedWindowRepository.fetchWindows for rationale.
+        // Overlap match (see PlannedWindowRepository.fetchWindows for rationale).
         let records = try await writer.read { db in
             try ActualWindow5hRecord
                 .filter(sql: """
@@ -79,24 +79,30 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 .order(Column("start_at").desc)
                 .fetchOne(db)
 
-            // Fallback: when no row matches by endAt±tolerance, look for any
-            // same-provider window whose interval overlaps the incoming one.
-            // This collapses stale `[now, +5h, c5hTriggered]` placeholder rows
+            // Fallback: when no row matches by endAt±tolerance, look for a stale
+            // same-provider `c5hTriggered` placeholder whose interval overlaps the
+            // incoming row. This collapses `[now, +5h, c5hTriggered]` placeholders
             // (written before we knew the real `resetsAt`) onto the corrected
-            // window detected from upstream usage, instead of letting both
-            // coexist.
+            // window detected from upstream usage. The fallback is deliberately
+            // limited to that case: two overlapping `detectedFromUsage` windows
+            // with different reset/end times are distinct reset-derived windows
+            // (e.g. a Claude tier change resets the 5h quota early), so they must
+            // stay as separate rows instead of being merged away.
             let existing: ActualWindow5hRecord?
             if let endAtMatch {
                 existing = endAtMatch
-            } else {
+            } else if window.source == .detectedFromUsage {
                 existing = try ActualWindow5hRecord
                     .filter(Column("provider_id") == providerValue)
+                    .filter(Column("source") == ActualWindowSource.c5hTriggered.rawValue)
                     .filter(sql: """
                         datetime(start_at) < datetime(?) AND
                         datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
                         """, arguments: [newEndStr, newStartStr])
                     .order(Column("start_at").desc)
                     .fetchOne(db)
+            } else {
+                existing = nil
             }
 
             if let existing {
@@ -108,7 +114,7 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 // Preserve a stronger user-visible tag: if the row was already
                 // promoted to `c5hTriggered`/`exact` by a triggered command, a
                 // routine `detectedFromUsage`/`estimated` refresh shouldn't
-                // downgrade the labels — only correct the times.
+                // downgrade the labels, only correct the times.
                 if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
                     // keep updated.source / updated.confidence / updated.commandRunID
                 } else {

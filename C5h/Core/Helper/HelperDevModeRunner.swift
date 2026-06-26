@@ -15,6 +15,15 @@ final class HelperDevModeRunner {
         process?.isRunning ?? false
     }
 
+    /// Modification date of the helper binary the runner would launch. Compared
+    /// against the running helper's start time to detect stale debug code after
+    /// a rebuild. `nil` when the binary is missing.
+    var expectedBinaryModifiedAt: Date? {
+        let url = Self.helperBinaryURL()
+        guard FileManager.default.isExecutableFile(atPath: url.path) else { return nil }
+        return HelperBuildStamp.modificationDate(forBinaryAt: url)
+    }
+
     func start() {
         if isRunning { return }
         let url = Self.helperBinaryURL()
@@ -36,7 +45,7 @@ final class HelperDevModeRunner {
             process = try DisclaimingSpawn.launch(
                 executableURL: url,
                 arguments: [],
-                environment: EnvironmentResolver.defaultEnvironment(),
+                environment: Self.helperEnvironment(),
                 stdout: .fileHandle(stdoutHandle),
                 stderr: .fileHandle(stderrHandle)
             )
@@ -60,6 +69,13 @@ final class HelperDevModeRunner {
         let handle = try FileHandle(forWritingTo: url)
         try handle.truncate(atOffset: 0)
         return handle
+    }
+
+    private static func helperEnvironment() -> [String: String] {
+        var environment = EnvironmentResolver.defaultEnvironment()
+        environment[HelperAppVersion.environmentKey] = HelperAppVersion.version(from: .main)
+            ?? HelperAppVersion.unknown
+        return environment
     }
 
     private static func helperBinaryURL() -> URL {

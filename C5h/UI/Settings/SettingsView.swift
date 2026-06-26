@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import C5hCore
 import C5hStore
@@ -5,7 +6,14 @@ import C5hStore
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var heartbeat: HelperHeartbeat?
+    @State private var helperHealth = HelperHealthEvaluation(
+        status: .neverSeen,
+        lastSeenAt: nil,
+        ageSeconds: nil,
+        pid: nil
+    )
     @State private var registration = HelperRegistrationService()
+    @State private var usageRefreshThrottleSeconds = AppSettingsKeys.defaultUsageRefreshThrottleSeconds
     #if DEBUG
     @State private var devRunner = HelperDevModeRunner()
     #endif
@@ -27,27 +35,47 @@ struct SettingsView: View {
                 }
             }
             Section("LaunchAgent") {
-                LabeledContent("Status", value: registration.status.label)
+                LabeledContent("Registration", value: registration.status.label)
                 if case .error(let message) = registration.status {
                     Label(message, systemImage: "exclamationmark.octagon.fill")
                         .font(C5hTypography.captionFont)
                         .foregroundStyle(.red)
+                } else if registration.status == .unsupported {
+                    Text("Debug builds use the debug subprocess runner below. LaunchAgent registration is for signed Release builds.")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(C5hColors.fgTertiary)
                 }
                 HStack {
                     Button("Refresh status") { registration.refresh() }
                         .buttonStyle(.glass)
                     Button("Register") { registration.register() }
                         .buttonStyle(.glass)
+                        .disabled(registration.status == .unsupported)
                     Button("Unregister") { Task { await registration.unregister() } }
                         .buttonStyle(.glass)
+                        .disabled(registration.status == .unsupported)
                     Button("Open Login Items…") { openLoginItemsSettings() }
                         .buttonStyle(.glass)
                 }
             }
-            Section("Heartbeat") {
-                LabeledContent("Last seen", value: heartbeat?.lastSeenAt.formatted(date: .omitted, time: .standard) ?? "—")
+            Section("Helper health") {
+                LabeledContent("Status", value: helperHealth.status.label)
+                if let message = helperHealthMessage {
+                    Label(message, systemImage: helperHealth.status.systemImage)
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(helperHealth.status.messageStyle)
+                }
+                if helperHealth.outdated {
+                    Label(
+                        "The running helper is an older build than the one on disk. Stop and Start the debug subprocess runner below to load the latest code.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(.orange)
+                }
+                LabeledContent("Last seen", value: lastSeenLabel)
                 LabeledContent("Helper version", value: heartbeat?.helperVersion ?? "—")
-                LabeledContent("PID", value: heartbeat?.pid.map(String.init) ?? "—")
+                LabeledContent("PID", value: helperHealth.pid.map(String.init) ?? "—")
                 Button("Refresh") { Task { await reloadHeartbeat() } }
                     .buttonStyle(.glass)
             }
@@ -68,6 +96,18 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
+            Section("Usage refresh") {
+                Picker("Refresh no more often than", selection: $usageRefreshThrottleSeconds) {
+                    Text("1 minute").tag(60)
+                    Text("5 minutes").tag(300)
+                    Text("15 minutes").tag(900)
+                    Text("30 minutes").tag(1800)
+                    Text("1 hour").tag(3600)
+                }
+                Text("The dashboard always shows the last fetched usage. This sets how often C5h re-runs the Claude and Codex CLIs in the background to refresh it.")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgTertiary)
+            }
             Section("Time zone") {
                 LabeledContent("Identifier", value: TimeZone.current.identifier)
                 LabeledContent("Abbreviation", value: TimeZone.current.abbreviation() ?? "—")
@@ -78,7 +118,10 @@ struct SettingsView: View {
             }
             Section("Bundle") {
                 LabeledContent("Bundle id", value: Bundle.main.bundleIdentifier ?? "—")
-                LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                LabeledContent("Version", value: bundleValue("CFBundleShortVersionString", fallback: "—"))
+                LabeledContent("Build number", value: bundleValue("CFBundleVersion", fallback: "—"))
+                LabeledContent("Build time", value: buildTimeLabel)
+                LabeledContent("Source revision", value: sourceRevisionLabel)
             }
             Section("Logs maintenance") {
                 Button("Sweep logs older than 30 days") {
@@ -123,7 +166,27 @@ struct SettingsView: View {
         }
         .task {
             await reloadHeartbeat()
+            await loadUsageRefreshThrottle()
         }
+        .onChange(of: usageRefreshThrottleSeconds) { _, newValue in
+            Task { await saveUsageRefreshThrottle(newValue) }
+        }
+    }
+
+    private func loadUsageRefreshThrottle() async {
+        guard let repo = appEnv.appSettingsRepository else { return }
+        let stored = (try? await repo.get(
+            AppSettingsKeys.usageRefreshThrottleSeconds,
+            as: Int.self
+        )) ?? nil
+        if let stored {
+            usageRefreshThrottleSeconds = stored
+        }
+    }
+
+    private func saveUsageRefreshThrottle(_ seconds: Int) async {
+        guard let repo = appEnv.appSettingsRepository else { return }
+        try? await repo.set(AppSettingsKeys.usageRefreshThrottleSeconds, value: seconds)
     }
 
     @State private var lastSweepResult: LogRetentionResult?
@@ -136,12 +199,10 @@ struct SettingsView: View {
         actionTitle: String = "Open in Finder",
         action: @escaping (URL) -> Void
     ) -> some View {
-        LabeledContent {
+        VStack(alignment: .leading, spacing: C5hSpacing.xs) {
             HStack(spacing: C5hSpacing.sm) {
-                Text(url?.path ?? "—")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Text(title)
+                Spacer(minLength: C5hSpacing.sm)
                 Button(actionTitle) {
                     if let url {
                         action(url)
@@ -150,8 +211,9 @@ struct SettingsView: View {
                 .buttonStyle(.glass)
                 .disabled(url == nil)
             }
-        } label: {
-            Text(title)
+            Text(url?.path ?? "—")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
         }
     }
 
@@ -162,6 +224,75 @@ struct SettingsView: View {
         let h = abs / 3600
         let m = (abs % 3600) / 60
         return String(format: "GMT%@%02d:%02d", sign, h, m)
+    }
+
+    private var buildTimeLabel: String {
+        let raw = bundleValue("C5hBuildTime", fallback: "—")
+        guard raw != "—" else { return raw }
+
+        let parser = ISO8601DateFormatter()
+        if let date = parser.date(from: raw) {
+            return date.formatted(date: .abbreviated, time: .standard)
+        }
+        return raw
+    }
+
+    private var sourceRevisionLabel: String {
+        let commit = bundleValue("C5hGitCommit", fallback: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !commit.isEmpty, commit != "-" else { return "-" }
+
+        let isDirty = bundleValue("C5hGitDirty", fallback: "NO")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() == "YES"
+        return isDirty ? "\(commit)-dirty" : commit
+    }
+
+    private func bundleValue(_ key: String, fallback: String) -> String {
+        guard let value = Bundle.main.infoDictionary?[key] as? String,
+              !value.isEmpty
+        else {
+            return fallback
+        }
+        return value
+    }
+
+    private var lastSeenLabel: String {
+        guard let lastSeenAt = helperHealth.lastSeenAt else { return "—" }
+        let formatted = lastSeenAt.c5hDateTime
+        guard let ageSeconds = helperHealth.ageSeconds else { return formatted }
+        return "\(formatted) (\(durationLabel(seconds: ageSeconds)) ago)"
+    }
+
+    private var helperHealthMessage: String? {
+        switch helperHealth.status {
+        case .neverSeen:
+            "No helper heartbeat has been recorded yet."
+        case .running:
+            nil
+        case .stale:
+            "Last heartbeat is older than \(Int(HelperHealthEvaluator.defaultStaleAfterSeconds)) seconds."
+        case .stopped:
+            "The last heartbeat is fresh, but its process is no longer running."
+        case .unknown:
+            "The last heartbeat is fresh, but it did not record a PID."
+        }
+    }
+
+    private func durationLabel(seconds: TimeInterval) -> String {
+        let seconds = max(0, Int(seconds.rounded()))
+        if seconds < 60 {
+            return "\(seconds)s"
+        }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+        let hours = minutes / 60
+        if hours < 24 {
+            return "\(hours)h"
+        }
+        return "\(hours / 24)d"
     }
 
     private func openFolder(_ url: URL) {
@@ -206,7 +337,53 @@ struct SettingsView: View {
 
     private func reloadHeartbeat() async {
         guard let repo = appEnv.helperHeartbeatRepository else { return }
-        heartbeat = try? await repo.latest()
+        let latest = try? await repo.latest()
+        heartbeat = latest
+        var expectedBinaryModifiedAt: Date?
+        #if DEBUG
+        expectedBinaryModifiedAt = devRunner.expectedBinaryModifiedAt
+        #endif
+        helperHealth = HelperHealthEvaluator().evaluate(
+            heartbeat: latest.map {
+                HelperHeartbeatEvidence(startedAt: $0.startedAt, lastSeenAt: $0.lastSeenAt, pid: $0.pid)
+            },
+            now: .now,
+            expectedBinaryModifiedAt: expectedBinaryModifiedAt,
+            isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
+        )
     }
 
+}
+
+private extension HelperHealthStatus {
+    var label: String {
+        switch self {
+        case .neverSeen: "Never seen"
+        case .running: "Running"
+        case .stale: "Stale"
+        case .stopped: "Stopped"
+        case .unknown: "Unknown"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .neverSeen: "questionmark.circle.fill"
+        case .running: "checkmark.circle.fill"
+        case .stale: "clock.badge.exclamationmark.fill"
+        case .stopped: "xmark.circle.fill"
+        case .unknown: "exclamationmark.triangle.fill"
+        }
+    }
+
+    var messageStyle: Color {
+        switch self {
+        case .neverSeen, .unknown:
+            C5hColors.fgTertiary
+        case .running:
+            C5hColors.fgSecondary
+        case .stale, .stopped:
+            .orange
+        }
+    }
 }

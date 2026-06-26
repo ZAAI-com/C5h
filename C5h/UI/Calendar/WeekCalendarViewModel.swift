@@ -10,6 +10,8 @@ final class WeekCalendarViewModel {
     var planned: [PlannedWindow] = []
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
+    var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
+    var selection: CalendarSelection?
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
@@ -51,10 +53,77 @@ final class WeekCalendarViewModel {
             self.planned = try await p
             self.actual = try await a
             self.lastError = nil
+            pruneSelectionIfNeeded()
         } catch {
             self.lastError = String(describing: error)
         }
         await loadUsageHistories()
+    }
+
+    private func pruneSelectionIfNeeded() {
+        guard let selection else { return }
+        if !selectionOverlapsCurrentWeek(selection) {
+            self.selection = nil
+            return
+        }
+        switch selection {
+        case .planned(let window):
+            if !planned.contains(where: { $0.id == window.id }) {
+                self.selection = nil
+            }
+        case .actual(let window):
+            if !actual.contains(where: { $0.id == window.id }) {
+                self.selection = nil
+            }
+        }
+    }
+
+    private func selectionOverlapsCurrentWeek(_ selection: CalendarSelection) -> Bool {
+        let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        switch selection {
+        case .planned(let window):
+            return window.startAt < weekEnd && window.endAt > weekStart
+        case .actual(let window):
+            return window.startAt < weekEnd && window.endAt > weekStart
+        }
+    }
+
+    func firstVisibleActual(
+        visibleProviders: Set<ProviderID>,
+        showActual: Bool
+    ) -> ActualWindow5h? {
+        guard showActual else { return nil }
+        for day in days {
+            for segment in actualDisplaySegments {
+                guard visibleProviders.contains(segment.window.providerID) else { continue }
+                guard CalendarPositioning.windowOverlaps(
+                    start: segment.startAt,
+                    durationSeconds: segment.durationSeconds,
+                    day: day
+                ) else { continue }
+                return segment.window
+            }
+        }
+        return nil
+    }
+
+    func firstVisiblePlanned(
+        visibleProviders: Set<ProviderID>,
+        showPlanned: Bool
+    ) -> PlannedWindow? {
+        guard showPlanned else { return nil }
+        for day in days {
+            for window in planned {
+                guard visibleProviders.contains(window.providerID) else { continue }
+                guard CalendarPositioning.windowOverlaps(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds,
+                    day: day
+                ) else { continue }
+                return window
+            }
+        }
+        return nil
     }
 
     private func loadUsageHistories() async {
@@ -80,17 +149,52 @@ final class WeekCalendarViewModel {
             }
         }
         self.usageHistories = built
+        self.resetEvents = built.mapValues { UsageResetDetector.detect(in: $0) }
     }
 
     func history(for providerID: ProviderID) -> UsageHistorySeries? {
         usageHistories[providerID]
     }
 
+    var actualDisplaySegments: [ActualWindow5hDisplaySegment] {
+        ActualWindow5hDisplayResolver.segments(
+            for: actual,
+            resetEvents: resetEvents.values.flatMap { $0 }
+        )
+    }
+
+    /// The 5h reset event whose new window ends at `end` (±60s), used to mark the
+    /// reset-derived window in the calendar.
+    func fiveHourResetEvent(forWindowEndingAt end: Date, providerID: ProviderID) -> UsageResetEvent? {
+        (resetEvents[providerID] ?? []).first { event in
+            event.kind == .fiveHour && abs(event.newResetEnd.timeIntervalSince(end)) <= 60
+        }
+    }
+
+    /// The reset event behind a selected actual window, surfaced in the inspector.
+    func resetEvent(for selection: CalendarSelection) -> UsageResetEvent? {
+        guard case let .actual(window) = selection else { return nil }
+        return fiveHourResetEvent(forWindowEndingAt: window.endAt, providerID: window.providerID)
+    }
+
     func goToPreviousWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        selection = nil
     }
 
     func goToNextWeek() {
         weekStart = Calendar.current.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart
+        selection = nil
+    }
+
+    func delete(id: UUID) async throws {
+        do {
+            try await plannedRepo.deleteWithPendingPromptCleanup(id: id)
+            lastError = nil
+            await reload()
+        } catch {
+            lastError = String(describing: error)
+            throw error
+        }
     }
 }

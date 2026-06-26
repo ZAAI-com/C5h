@@ -178,6 +178,332 @@ struct UsageHistorySeriesTests {
         #expect(latest?.asOf.timeIntervalSince1970 == 1_000)
     }
 
+    @Test("fiveHourPercent is anchored to time, not the global latest point")
+    func fiveHourPercentAtTime() {
+        let t0 = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 30,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let t1 = claudeSnapshot(
+            fiveHourPercent: 42,
+            sevenDayPercent: 40,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let t2 = claudeSnapshot(
+            fiveHourPercent: 92,
+            sevenDayPercent: 50,
+            capturedAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [t0, t1, t2])
+
+        // Before any point: nil.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 500)) == nil)
+
+        // At t0 and between t0/t1: the t0 reading.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 1_000))?.value == 10)
+        let between = series.fiveHourPercent(at: Date(timeIntervalSince1970: 2_500))
+        #expect(between?.value == 42)
+        #expect(between?.asOf.timeIntervalSince1970 == 2_000)
+
+        // At/after t2: the t2 reading. Distinct from earlier anchors — the bug
+        // was every window collapsing to this single latest value.
+        #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 9_999))?.value == 92)
+    }
+
+    @Test("fiveHourPercent skips points without a 5h value")
+    func fiveHourPercentSkipsMissing() {
+        let withFive = claudeSnapshot(
+            fiveHourPercent: 7,
+            sevenDayPercent: 8,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let synthetic = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: nil,
+            sevenDay: 9
+        )
+        let parsed = UsageHistorySeries(providerID: .claude, snapshots: [withFive])
+        let combined = UsageHistorySeries(
+            providerID: .claude,
+            points: parsed.points + [synthetic]
+        )
+
+        // Anchoring at t=2_000 (which has no 5h) falls back to the t=1_000 reading.
+        let result = combined.fiveHourPercent(at: Date(timeIntervalSince1970: 2_000))
+        #expect(result?.value == 7)
+        #expect(result?.asOf.timeIntervalSince1970 == 1_000)
+    }
+
+    @Test("usageReading ignores stale samples before lower bound")
+    func usageReadingIgnoresStaleSamplesBeforeLowerBound() {
+        let stale = claudeSnapshot(
+            fiveHourPercent: 15,
+            sevenDayPercent: 25,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [stale])
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 3_000),
+            notBefore: Date(timeIntervalSince1970: 2_000)
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("usageReading returns in-window 5h and same-snapshot 7d")
+    func usageReadingReturnsSameSnapshotValues() {
+        let reading = claudeSnapshot(
+            fiveHourPercent: 31,
+            sevenDayPercent: 44,
+            capturedAt: Date(timeIntervalSince1970: 1_500)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [reading])
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 1_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_500)
+        #expect(result?.fiveHour == 31)
+        #expect(result?.sevenDay == 44)
+    }
+
+    @Test("usageReading skips samples without 5h")
+    func usageReadingSkipsMissingFiveHour() {
+        let withFive = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 1_000),
+            fiveHour: 12,
+            sevenDay: 22
+        )
+        let withoutFive = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: nil,
+            sevenDay: 33
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            points: [withFive, withoutFive]
+        )
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 500)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_000)
+        #expect(result?.fiveHour == 12)
+        #expect(result?.sevenDay == 22)
+    }
+
+    @Test("usageReading returns latest valid in-window sample")
+    func usageReadingReturnsLatestValidInWindowSample() {
+        let beforeWindow = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 900)
+        )
+        let early = claudeSnapshot(
+            fiveHourPercent: 21,
+            sevenDayPercent: 31,
+            capturedAt: Date(timeIntervalSince1970: 1_100)
+        )
+        let latest = claudeSnapshot(
+            fiveHourPercent: 42,
+            sevenDayPercent: 52,
+            capturedAt: Date(timeIntervalSince1970: 1_800)
+        )
+        let future = claudeSnapshot(
+            fiveHourPercent: 99,
+            sevenDayPercent: 99,
+            capturedAt: Date(timeIntervalSince1970: 2_500)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [future, beforeWindow, latest, early]
+        )
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 1_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_800)
+        #expect(result?.fiveHour == 42)
+        #expect(result?.sevenDay == 52)
+    }
+
+    @Test("openingReading returns the earliest sample within the window")
+    func openingReadingReturnsEarliestInWindow() {
+        let opening = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let slightlyLater = claudeSnapshot(
+            fiveHourPercent: 21,
+            sevenDayPercent: 31,
+            capturedAt: Date(timeIntervalSince1970: 1_100)
+        )
+        let outside = claudeSnapshot(
+            fiveHourPercent: 99,
+            sevenDayPercent: 99,
+            capturedAt: Date(timeIntervalSince1970: 1_300)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [outside, opening, slightlyLater]
+        )
+
+        let result = series.openingReading(
+            at: Date(timeIntervalSince1970: 1_000),
+            within: 200
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_000)
+        #expect(result?.fiveHour == 10)
+        #expect(result?.sevenDay == 20)
+    }
+
+    @Test("openingReading returns nil when no sample falls in the window")
+    func openingReadingReturnsNilOutsideWindow() {
+        let snapshot = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [snapshot])
+
+        let result = series.openingReading(
+            at: Date(timeIntervalSince1970: 5_000),
+            within: 200
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("openingReading does not require a 5h value")
+    func openingReadingAllows7dOnlySample() {
+        let sevenDayOnly = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 1_000),
+            fiveHour: nil,
+            sevenDay: 30
+        )
+        let series = UsageHistorySeries(providerID: .claude, points: [sevenDayOnly])
+
+        let result = series.openingReading(
+            at: Date(timeIntervalSince1970: 1_000),
+            within: 200
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_000)
+        #expect(result?.fiveHour == nil)
+        #expect(result?.sevenDay == 30)
+    }
+
+    @Test("firstFiveHourReaching returns the first sample at or above threshold")
+    func firstFiveHourReachingReturnsFirstAtThreshold() {
+        let below = claudeSnapshot(
+            fiveHourPercent: 50,
+            sevenDayPercent: 10,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let firstFull = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let stillFull = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 25,
+            capturedAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [below, firstFull, stillFull]
+        )
+
+        let result = series.firstFiveHourReaching(
+            100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(result?.fiveHour == 100)
+        #expect(result?.sevenDay == 20)
+    }
+
+    @Test("firstFiveHourReaching rounds the 5h value before comparing")
+    func firstFiveHourReachingRounds() {
+        let nearlyFull = claudeSnapshot(
+            fiveHourPercent: 99.6,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 1_500)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [nearlyFull])
+
+        let result = series.firstFiveHourReaching(
+            100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_500)
+    }
+
+    @Test("firstFiveHourReaching returns nil when the threshold is never reached")
+    func firstFiveHourReachingNeverReached() {
+        let low = claudeSnapshot(
+            fiveHourPercent: 60,
+            sevenDayPercent: 10,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [low])
+
+        let result = series.firstFiveHourReaching(
+            100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("firstFiveHourReaching ignores samples outside the range")
+    func firstFiveHourReachingIgnoresOutOfRange() {
+        let beforeRange = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 10,
+            capturedAt: Date(timeIntervalSince1970: 100)
+        )
+        let inRange = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let afterRange = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 30,
+            capturedAt: Date(timeIntervalSince1970: 9_000)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [beforeRange, inRange, afterRange]
+        )
+
+        let result = series.firstFiveHourReaching(
+            100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(result?.sevenDay == 20)
+    }
+
     // MARK: - Helpers
 
     private func claudeSnapshot(

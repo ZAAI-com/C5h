@@ -4,8 +4,11 @@ import C5hCore
 struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
-    let actualWindows: [ActualWindow5h]
+    let actualSegments: [ActualWindow5hDisplaySegment]
     let history: UsageHistorySeries?
+    /// IDs of actual windows that followed a detected quota reset, marked with a
+    /// subtle neutral glyph on their block.
+    var resetWindowIDs: Set<UUID> = []
     let date: Date
     let now: Date
     let layout: CalendarLayoutConfig
@@ -30,30 +33,26 @@ struct ProviderColumnView: View {
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
                 if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
-                    Button {
-                        onSelectPlanned(window)
-                    } label: {
-                        PlannedWindowBlockView(
-                            window: window,
-                            now: now,
-                            columnWidth: columnWidth,
-                            layout: layout,
-                            visibleDurationSeconds: segment.durationSeconds,
-                            clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd,
-                            displayStart: draggingPlannedID == window.id ? displayStart : nil
-                        )
-                        .overlay(alignment: .topTrailing) {
-                            if isActive {
-                                Image(systemName: "arrow.up.and.down")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(C5hColors.tintForProvider(providerID))
-                                    .padding(5)
-                                    .allowsHitTesting(false)
-                            }
+                    PlannedWindowBlockView(
+                        window: window,
+                        now: now,
+                        columnWidth: columnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd,
+                        displayStart: draggingPlannedID == window.id ? displayStart : nil,
+                        emphasizeEndTime: true
+                    )
+                    .overlay(alignment: .topTrailing) {
+                        if isActive {
+                            Image(systemName: "arrow.up.and.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(C5hColors.tintForProvider(providerID))
+                                .padding(5)
+                                .allowsHitTesting(false)
                         }
                     }
-                    .buttonStyle(.plain)
                     .offset(y: yOffset(for: segment.start))
                     .padding(.leading, 2)
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
@@ -89,29 +88,32 @@ struct ProviderColumnView: View {
                     )
                 }
             }
-            ForEach(actualWindows) { window in
-                if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
-                    Button {
-                        onSelectActual(window)
-                    } label: {
-                        ActualWindowBlockView(
-                            window: window,
-                            history: history,
-                            now: now,
-                            columnWidth: columnWidth,
-                            layout: layout,
-                            visibleDurationSeconds: segment.durationSeconds,
-                            clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd,
-                            displayStart: segment.start,
-                            displayEnd: segment.start.addingTimeInterval(
-                                TimeInterval(segment.durationSeconds)
-                            )
-                        )
-                    }
-                    .buttonStyle(.plain)
+            let actualPlacements = actualLanePlacements
+            ForEach(actualSegments) { actualSegment in
+                let window = actualSegment.window
+                if let segment = visibleSegment(start: actualSegment.startAt, durationSeconds: actualSegment.durationSeconds) {
+                    let placement = actualPlacements[actualSegment.id]
+                        ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
+                    let regionWidth = columnWidth * layout.actualBlockWidthRatio
+                    let laneWidth = regionWidth / CGFloat(placement.laneCount)
+                    let regionStartX = columnWidth - 2 - regionWidth
+                    ActualWindowBlockView(
+                        window: window,
+                        history: history,
+                        now: now,
+                        columnWidth: columnWidth,
+                        layout: layout,
+                        visibleDurationSeconds: segment.durationSeconds,
+                        clipsTop: segment.clippedStart,
+                        clipsBottom: segment.clippedEnd,
+                        segmentStart: segment.start,
+                        displayStart: actualSegment.startAt,
+                        displayEnd: actualSegment.endAt,
+                        widthOverride: placement.laneCount > 1 ? laneWidth : nil,
+                        isReset: resetWindowIDs.contains(actualSegment.id)
+                    )
                     .offset(
-                        x: columnWidth * (1 - layout.actualBlockWidthRatio) - 2,
+                        x: regionStartX + CGFloat(placement.lane) * laneWidth,
                         y: yOffset(for: segment.start)
                     )
                     .zIndex(2)
@@ -124,16 +126,98 @@ struct ProviderColumnView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
-                hoverY = hoveredStart(forY: location.y) != nil ? location.y : nil
+                // Over an existing window the pointer only selects it, so do not
+                // present a plan ghost there.
+                if windowSelection(at: location) != nil {
+                    hoverY = nil
+                } else {
+                    hoverY = resolvedPlanStart(forY: location.y) != nil ? location.y : nil
+                }
             case .ended:
                 hoverY = nil
             }
         }
         .onTapGesture { location in
-            guard let start = hoveredStart(forY: location.y) else { return }
+            if let hit = windowSelection(at: location) {
+                switch hit {
+                case .planned(let window): onSelectPlanned(window)
+                case .actual(let window): onSelectActual(window)
+                }
+                hoverY = nil
+                return
+            }
+            guard let start = resolvedPlanStart(forY: location.y) else { return }
             onQuickPlan?(start)
             hoverY = nil
         }
+    }
+
+    private enum WindowHit {
+        case planned(PlannedWindow)
+        case actual(ActualWindow5h)
+    }
+
+    /// Resolves a tap location to the window block whose rendered frame (its
+    /// horizontal extent and vertical span) contains the pointer, so taps open a
+    /// block's details instead of quick-planning. The white area beside a block,
+    /// even at the block's time, is not "inside" the window. Actual blocks are
+    /// checked first because they are drawn on top of the planned lane, so they
+    /// win when a point falls in the lane overlap of both.
+    private func windowSelection(at location: CGPoint) -> WindowHit? {
+        let placements = actualLanePlacements
+        let regionWidth = columnWidth * layout.actualBlockWidthRatio
+        let regionStartX = columnWidth - 2 - regionWidth
+        for actualSegment in actualSegments {
+            guard let segment = visibleSegment(
+                start: actualSegment.startAt,
+                durationSeconds: actualSegment.durationSeconds
+            ) else { continue }
+            guard verticalSpan(of: segment).contains(location.y) else { continue }
+            let placement = placements[actualSegment.id]
+                ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
+            let laneWidth = regionWidth / CGFloat(placement.laneCount)
+            let laneStartX = regionStartX + CGFloat(placement.lane) * laneWidth
+            if location.x >= laneStartX, location.x <= laneStartX + laneWidth {
+                return .actual(actualSegment.window)
+            }
+        }
+        let plannedMinX: CGFloat = 2
+        let plannedMaxX = plannedMinX + columnWidth * layout.plannedBlockWidthRatio
+        if plannedMinX <= location.x, location.x <= plannedMaxX {
+            for window in plannedWindows {
+                let displayStart = displayedStart(for: window)
+                guard let segment = visibleSegment(
+                    start: displayStart,
+                    durationSeconds: window.durationSeconds
+                ) else { continue }
+                if verticalSpan(of: segment).contains(location.y) {
+                    return .planned(window)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Lane placement per actual display segment.
+    private var actualLanePlacements: [UUID: CalendarPositioning.LanePlacement] {
+        let intervals = actualSegments.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+        let packed = CalendarPositioning.packLanes(intervals)
+        var map: [UUID: CalendarPositioning.LanePlacement] = [:]
+        for (segment, placement) in zip(actualSegments, packed) {
+            map[segment.id] = placement
+        }
+        return map
+    }
+
+    private func verticalSpan(
+        of segment: (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool)
+    ) -> ClosedRange<CGFloat> {
+        let top = yOffset(for: segment.start)
+        let height = CalendarPositioning.blockHeight(
+            durationSeconds: segment.durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute
+        )
+        return top...(top + height)
     }
 
     @ViewBuilder
@@ -141,19 +225,26 @@ struct ProviderColumnView: View {
         if hoveredPlannedID == nil,
            draggingPlannedID == nil,
            let hoverY,
-           let start = hoveredStart(forY: hoverY) {
+           let start = resolvedPlanStart(forY: hoverY) {
             let height = CalendarPositioning.blockHeight(
                 durationSeconds: Self.fiveHourSeconds,
                 pixelsPerMinute: layout.pixelsPerMinute
             )
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Plan 5h \(providerID.displayName) window")
+            let end = start.addingTimeInterval(TimeInterval(Self.fiveHourSeconds))
+            ZStack {
+                VStack(spacing: 0) {
+                    ghostCornerText(BlockFormatters.formatTime(start), weight: .semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 0)
+                    ghostCornerText(BlockFormatters.formatTime(end), weight: .semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text("Plan \(providerID.displayName) 5h Window")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("starts \(timeFormatter.string(from: start))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.9))
-                Spacer(minLength: 0)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .padding(6)
             .frame(width: columnWidth - 4, height: height, alignment: .topLeading)
@@ -176,13 +267,38 @@ struct ProviderColumnView: View {
         }
     }
 
-    /// Maps a pointer Y to the planned-window start time, snapped to the
-    /// provider grid. Returns nil for past or conflicting slots.
-    private func hoveredStart(forY y: CGFloat) -> Date? {
+    private func ghostCornerText(_ string: String, weight: Font.Weight = .regular) -> some View {
+        Text(string)
+            .font(.system(size: 10, weight: weight))
+            .monospacedDigit()
+    }
+
+    /// Resolves a pointer Y to the start time of the 5h window a click would
+    /// create:
+    /// - before now -> nil (do not offer a window in the past),
+    /// - after now and the snapped slot fits free -> that slot (offer here),
+    /// - after now but the snapped slot overlaps a window -> the earliest free
+    ///   future slot (offer at the next possible position).
+    /// Returns nil when no free slot remains before day end.
+    private func resolvedPlanStart(forY y: CGFloat) -> Date? {
         let snapped = snappedStart(forY: y)
         guard snapped > now else { return nil }
-        guard canQuickPlan(at: snapped) else { return nil }
-        return snapped
+        if canQuickPlan(at: snapped) { return snapped }
+        return nextAvailableStart(after: snapped)
+    }
+
+    /// Walks the provider grid forward from `snapped`, returning the first slot
+    /// that is in the future and free, bounded by the day's latest valid start.
+    private func nextAvailableStart(after snapped: Date) -> Date? {
+        let step = TimeInterval(providerID.plannedWindowSnapMinutes * 60)
+        let interval = CalendarPositioning.dayInterval(for: date)
+        let latestStart = interval.end.addingTimeInterval(-step)
+        var candidate = snapped.addingTimeInterval(step)
+        while candidate <= latestStart {
+            if candidate > now, canQuickPlan(at: candidate) { return candidate }
+            candidate = candidate.addingTimeInterval(step)
+        }
+        return nil
     }
 
     private func displayedStart(for window: PlannedWindow) -> Date {
@@ -228,7 +344,11 @@ struct ProviderColumnView: View {
             durationSeconds: Self.fiveHourSeconds
         )
         return !PlannedWindowValidator
-            .validate(candidate: candidate, against: plannedWindows)
+            .validate(
+                candidate: candidate,
+                against: plannedWindows,
+                actualWindows: actualSegments.map(\.window)
+            )
             .hasConflict
     }
 
@@ -262,9 +382,4 @@ struct ProviderColumnView: View {
         )
     }
 
-    private var timeFormatter: DateFormatter {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }
 }

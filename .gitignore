@@ -17,6 +17,9 @@ Icon?
 *.sln
 *.sw?
 
+# Conductor - personal repository overrides
+.conductor/settings.local.toml
+
 # Xcode — user-specific state
 **/xcuserdata/
 *.xcuserstate

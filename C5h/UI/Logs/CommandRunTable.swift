@@ -8,7 +8,7 @@ struct CommandRunTable: View {
     var body: some View {
         Table(runs, selection: $selection) {
             TableColumn("Started") { run in
-                Text(run.startedAt.c5hLogTimestamp)
+                Text(run.startedAt.c5hDateTime)
                     .font(C5hTypography.monoFont)
                     .lineLimit(1)
             }

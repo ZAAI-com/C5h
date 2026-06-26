@@ -54,9 +54,9 @@ struct CommandRunDetailView: View {
             }
             HStack(spacing: C5hSpacing.lg) {
                 labelled("Command name", run.commandName.rawValue)
-                labelled("Started", run.startedAt.c5hLogTimestamp)
+                labelled("Started", run.startedAt.c5hDateTime)
                 if let ended = run.endedAt {
-                    labelled("Ended", ended.c5hLogTimestamp)
+                    labelled("Ended", ended.c5hDateTime)
                 }
                 if let code = run.exitCode {
                     labelled("Exit", "\(code)")

@@ -1,0 +1,103 @@
+name: S3 - Publish Homebrew (Cask)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (strict semver, no v prefix, e.g. 0.5.0)"
+        required: true
+        type: string
+
+env:
+  TAP_REPO: zaai-com/homebrew-tap
+  CASK_NAME: c5h
+
+permissions:
+  contents: read
+
+jobs:
+  publish-homebrew:
+    name: Render cask and push to tap
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Validate version
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Version must be strict semver, no leading zeros (e.g. 0.5.0). Got: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download release DMG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download "${{ steps.version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "C5h-${{ steps.version.outputs.version }}.dmg" \
+            --dir assets
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          set -euo pipefail
+          DMG="assets/C5h-${{ steps.version.outputs.version }}.dmg"
+          echo "sha=$(shasum -a 256 "$DMG" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Render cask
+        run: |
+          bash Toolkit/Homebrew/render-cask.sh \
+            "${{ steps.version.outputs.version }}" \
+            --sha "${{ steps.sha.outputs.sha }}" \
+            --out cask.rb
+
+      - name: Lint rendered cask
+        run: |
+          set -euo pipefail
+          # Lint inside a throwaway tap so cask-context rubocop config applies
+          # (linting a loose .rb file triggers irrelevant Sorbet/frozen-string cops).
+          brew tap-new local/c5hlint --no-git
+          mkdir -p "$(brew --repository local/c5hlint)/Casks"
+          cp cask.rb "$(brew --repository local/c5hlint)/Casks/${CASK_NAME}.rb"
+          brew style "local/c5hlint"
+          # Audit structural issues (sha, url, stanzas) that brew style misses.
+          # The release DMG is already published at this point, so --online also
+          # verifies the live download URL resolves and the sha256 matches.
+          brew audit --cask --online "local/c5hlint/${CASK_NAME}"
+
+      - name: Checkout tap repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: ${{ env.TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_REPO_COMMIT_TOKEN }}
+          path: tap
+          persist-credentials: true
+
+      - name: Stage rendered cask into tap
+        run: |
+          mkdir -p tap/Casks
+          cp cask.rb "tap/Casks/${CASK_NAME}.rb"
+
+      - name: Commit and push to tap
+        run: |
+          set -euo pipefail
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "Casks/${CASK_NAME}.rb"
+          if git diff --cached --quiet; then
+            echo "Cask unchanged, skipping commit"
+          else
+            git commit -m "Update c5h to ${{ steps.version.outputs.version }}"
+            git push origin HEAD
+          fi

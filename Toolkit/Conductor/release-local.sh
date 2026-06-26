@@ -38,6 +38,36 @@ echo "==> Install to /Applications"
 rm -rf "${APP_DST}"
 cp -R "${APP_SRC}" "${APP_DST}"
 
+echo "==> Validate helper bundle"
+HELPER_DST="${APP_DST}/Contents/Helpers/C5hHelper"
+LAUNCH_AGENT_DST="${APP_DST}/Contents/Library/LaunchAgents/com.zaai.c5h.helper.plist"
+
+if [ ! -x "${HELPER_DST}" ]; then
+  echo "ERROR: helper executable missing or not executable at ${HELPER_DST}" >&2
+  echo "Check the Xcode build phase named 'Embed C5hHelper + LaunchAgent'." >&2
+  exit 1
+fi
+
+if [ ! -f "${LAUNCH_AGENT_DST}" ]; then
+  echo "ERROR: LaunchAgent plist missing at ${LAUNCH_AGENT_DST}" >&2
+  echo "Check Resources/com.zaai.c5h.helper.plist and the helper embed build phase." >&2
+  exit 1
+fi
+
+plutil -lint "${LAUNCH_AGENT_DST}" >/dev/null
+
+if ! codesign --verify --strict --verbose=2 "${HELPER_DST}"; then
+  echo "ERROR: helper code signature failed verification." >&2
+  echo "Check the helper embed build phase and local signing identity." >&2
+  exit 1
+fi
+
+if ! codesign --verify --deep --strict --verbose=2 "${APP_DST}"; then
+  echo "ERROR: installed app code signature failed verification." >&2
+  echo "Rebuild the Release app and confirm the helper is signed before app signing." >&2
+  exit 1
+fi
+
 echo "==> Launch"
 open "${APP_DST}"
 

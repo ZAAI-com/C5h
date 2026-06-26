@@ -79,6 +79,90 @@ struct PlannedWindowRepositoryTests {
         }
     }
 
+    @Test("Same-provider active actual overlapping create is rejected")
+    func rejectsActiveActualOverlapOnCreate() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        let now = Date()
+        let active = ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await actualRepo.create(active)
+
+        do {
+            try await plannedRepo.create(PlannedWindow(
+                providerID: .codex,
+                startAt: now.addingTimeInterval(10 * 60)
+            ))
+            Issue.record("Same-provider planned window should not overlap an active actual window")
+        } catch {
+            #expect(String(describing: error).contains("active actual window"))
+        }
+    }
+
+    @Test("Same-provider active actual overlapping update is rejected")
+    func rejectsActiveActualOverlapOnUpdate() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        let now = Date()
+        let active = ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await actualRepo.create(active)
+
+        var planned = PlannedWindow(
+            providerID: .codex,
+            startAt: active.endAt.addingTimeInterval(3600)
+        )
+        try await plannedRepo.create(planned)
+
+        planned.startAt = now.addingTimeInterval(10 * 60)
+        do {
+            try await plannedRepo.update(planned)
+            Issue.record("Same-provider planned-window update should not overlap an active actual window")
+        } catch {
+            #expect(String(describing: error).contains("active actual window"))
+        }
+    }
+
+    @Test("Same-provider historical actual overlap is allowed")
+    func allowsHistoricalActualOverlap() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        let now = Date()
+        let historicalStart = now.addingTimeInterval(-6 * 3600)
+        let historical = ActualWindow5h(
+            providerID: .claude,
+            startAt: historicalStart,
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await actualRepo.create(historical)
+
+        try await plannedRepo.create(PlannedWindow(
+            providerID: .claude,
+            startAt: historicalStart.addingTimeInterval(30 * 60)
+        ))
+    }
+
     @Test("Same-provider overlapping update is rejected")
     func rejectsSameProviderOverlapOnUpdate() async throws {
         let db = try Database.inMemory()

@@ -1,10 +1,11 @@
 #!/bin/bash
-# C5h release script — archives, signs, notarizes, and packages a DMG.
+# C5h release script: archives, signs, notarizes, and packages a DMG.
 #
 # Required environment:
 #   DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAMID)"
 #
-# Optional (needed for notarization — script skips notarization if any are unset):
+# Required for notarization (the build fails without them, unless
+# ALLOW_UNNOTARIZED=1 is set for a local/dev DMG):
 #   APPLE_ID="apple-id@example.com"
 #   APPLE_TEAM_ID="ABCDEFGHIJ"
 #   APPLE_APP_PASSWORD="app-specific password"  # for notarytool
@@ -25,10 +26,34 @@ if [ -z "${DEVELOPER_ID_APPLICATION:-}" ]; then
   exit 2
 fi
 
+# Notarization is mandatory for distributable builds. If any credential is
+# missing the build fails fast, so we never silently ship an unnotarized DMG.
+# Set ALLOW_UNNOTARIZED=1 to opt out for local/dev DMGs only.
+NOTARIZE=1
+if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ] || [ -z "${APPLE_APP_PASSWORD:-}" ]; then
+  if [ "${ALLOW_UNNOTARIZED:-0}" = "1" ]; then
+    echo "WARNING: APPLE_ID/APPLE_TEAM_ID/APPLE_APP_PASSWORD missing; building an UNNOTARIZED DMG (ALLOW_UNNOTARIZED=1). Do not distribute this build." >&2
+    NOTARIZE=0
+  else
+    echo "ERROR: notarization requires APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_PASSWORD." >&2
+    echo "       Set ALLOW_UNNOTARIZED=1 to build an unnotarized dev DMG instead." >&2
+    exit 2
+  fi
+fi
+
 mkdir -p build
 
-echo "==> Build helper executable"
-swift build --package-path Packages/C5hHelper -c release
+echo "==> Build universal helper executable"
+# The main app archives universal (arm64 + x86_64), so the embedded helper must
+# match. Build each slice explicitly and combine with lipo so the shipped helper
+# runs natively on both architectures.
+swift build --package-path Packages/C5hHelper -c release --arch arm64
+swift build --package-path Packages/C5hHelper -c release --arch x86_64
+lipo -create \
+  Packages/C5hHelper/.build/arm64-apple-macosx/release/C5hHelper \
+  Packages/C5hHelper/.build/x86_64-apple-macosx/release/C5hHelper \
+  -output build/C5hHelper-universal
+lipo -info build/C5hHelper-universal
 
 echo "==> Archive main app"
 xcodebuild \
@@ -45,7 +70,7 @@ xcodebuild \
 echo "==> Embed helper binary"
 HELPER_DST="${ARCHIVE}/Products/Applications/${SCHEME}.app/Contents/Helpers"
 mkdir -p "${HELPER_DST}"
-cp Packages/C5hHelper/.build/release/C5hHelper "${HELPER_DST}/C5hHelper"
+cp build/C5hHelper-universal "${HELPER_DST}/C5hHelper"
 codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" \
   "${HELPER_DST}/C5hHelper"
 
@@ -57,6 +82,14 @@ cp Resources/com.zaai.c5h.helper.plist "${LA_DST}/"
 echo "==> Re-sign main app bundle (helper changed)"
 codesign --force --options runtime --deep --sign "${DEVELOPER_ID_APPLICATION}" \
   "${ARCHIVE}/Products/Applications/${SCHEME}.app"
+
+echo "==> Verify universal slices"
+# Run on every build (notarized or not) so an architecture or signing regression
+# fails fast instead of shipping an inconsistent bundle.
+APP="${ARCHIVE}/Products/Applications/${SCHEME}.app"
+lipo "${APP}/Contents/MacOS/${SCHEME}" -verify_arch arm64 x86_64
+lipo "${APP}/Contents/Helpers/C5hHelper" -verify_arch arm64 x86_64
+codesign --verify --deep --strict --verbose=2 "${APP}"
 
 echo "==> Export"
 cat > build/export-options.plist <<EOF
@@ -75,7 +108,7 @@ xcodebuild \
   -exportPath "${EXPORT_DIR}" \
   -exportOptionsPlist build/export-options.plist
 
-if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+if [ "${NOTARIZE}" = "1" ]; then
   echo "==> Notarize"
   ditto -c -k --keepParent "${EXPORT_DIR}/${SCHEME}.app" build/notarize.zip
   xcrun notarytool submit build/notarize.zip \
@@ -89,4 +122,21 @@ fi
 echo "==> Build DMG"
 hdiutil create -volname "C5h" -srcfolder "${EXPORT_DIR}" -ov -format UDZO "${DMG}"
 
-echo "Done: ${DMG}"
+if [ "${NOTARIZE}" = "1" ]; then
+  echo "==> Staple DMG"
+  # The .app inside is already stapled above; stapling the DMG too lets Gatekeeper
+  # validate the downloaded disk image offline (e.g. a Homebrew cask install).
+  xcrun stapler staple "${DMG}"
+
+  echo "==> Verify notarization"
+  # Fail the build if the notarization ticket did not actually take, instead of
+  # silently shipping a DMG that triggers Gatekeeper warnings on install.
+  xcrun stapler validate "${EXPORT_DIR}/${SCHEME}.app"
+  xcrun stapler validate "${DMG}"
+  codesign --verify --deep --strict --verbose=2 "${EXPORT_DIR}/${SCHEME}.app"
+fi
+
+echo "==> Compute SHA256"
+shasum -a 256 "${DMG}" | awk '{print $1}' > "${DMG}.sha256"
+
+echo "Done: ${DMG} (sha256: $(cat "${DMG}.sha256"))"

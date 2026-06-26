@@ -15,14 +15,16 @@ enum CalendarSelection: Hashable, Identifiable {
 
 struct WindowInspectorView: View {
     let selection: CalendarSelection
+    let resetEvent: UsageResetEvent?
     let onDelete: ((UUID) -> Void)?
-    @Environment(\.dismiss) private var dismiss
 
     init(
         selection: CalendarSelection,
+        resetEvent: UsageResetEvent? = nil,
         onDelete: ((UUID) -> Void)? = nil
     ) {
         self.selection = selection
+        self.resetEvent = resetEvent
         self.onDelete = onDelete
     }
 
@@ -59,7 +61,8 @@ struct WindowInspectorView: View {
     private func plannedContent(_ window: PlannedWindow) -> some View {
         Text("Planned window").font(C5hTypography.titleFont)
         labelled("Provider", window.providerID.displayName)
-        labelled("When", "\(format(window.startAt)) → \(format(window.endAt))")
+        labelled("Start", format(window.startAt))
+        labelled("End", format(window.endAt))
         labelled("Status", window.status.rawValue)
         if let project = window.projectPath {
             labelled("Project", project)
@@ -70,11 +73,17 @@ struct WindowInspectorView: View {
     private func actualContent(_ window: ActualWindow5h) -> some View {
         Text("Actual window").font(C5hTypography.titleFont)
         labelled("Provider", window.providerID.displayName)
-        labelled("When", "\(format(window.startAt)) → \(format(window.endAt))")
+        labelled("Start", format(window.startAt))
+        labelled("End", format(window.endAt))
         labelled("Source", window.source.rawValue)
         labelled("Confidence", window.confidence.rawValue)
         if let runID = window.commandRunID {
             labelled("Command run", runID.uuidString)
+        }
+        if let resetEvent {
+            labelled("Reset detected", format(resetEvent.detectedAt))
+            labelled("Old reset end", format(resetEvent.previousResetEnd))
+            labelled("New reset end", format(resetEvent.newResetEnd))
         }
     }
 
@@ -86,6 +95,49 @@ struct WindowInspectorView: View {
     }
 
     private func format(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .standard)
+        date.c5hDateTime
+    }
+}
+
+struct CalendarInspectorPane: View {
+    let selection: CalendarSelection?
+    var resetEvent: UsageResetEvent? = nil
+    let onClose: () -> Void
+    let onDelete: ((UUID) -> Void)?
+
+    private let width: CGFloat = 360
+
+    var body: some View {
+        if let selection {
+            HStack(spacing: 0) {
+                Divider()
+                VStack(spacing: 0) {
+                    HStack {
+                        Spacer()
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.glass)
+                        .help("Close inspector")
+                    }
+                    .padding(.horizontal, C5hSpacing.md)
+                    .padding(.top, C5hSpacing.sm)
+                    .padding(.bottom, C5hSpacing.xs)
+
+                    WindowInspectorView(
+                        selection: selection,
+                        resetEvent: resetEvent,
+                        onDelete: onDelete
+                    )
+                }
+                .background(.thinMaterial)
+            }
+            .frame(width: width)
+            .frame(maxHeight: .infinity)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+            .zIndex(10)
+        }
     }
 }

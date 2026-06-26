@@ -36,15 +36,19 @@ struct DayCalendarView: View {
                     ScrollView {
                         ZStack(alignment: .topLeading) {
                             HStack(alignment: .top, spacing: 0) {
-                                TimeRulerView(layout: dynamicLayout)
-                                    .id("ruler")
+                                TimeRulerView(
+                                    layout: dynamicLayout,
+                                    now: Calendar.current.isDate(viewModel.date, inSameDayAs: now) ? now : nil
+                                )
+                                .id("ruler")
                                 ForEach(providers) { providerID in
                                     let cw = viewModel.windows(for: providerID)
                                     ProviderColumnView(
                                         providerID: providerID,
                                         plannedWindows: cw.planned,
-                                        actualWindows: cw.actual,
+                                        actualSegments: cw.actual,
                                         history: viewModel.history(for: providerID),
+                                        resetWindowIDs: resetWindowIDs(for: cw.actual, providerID: providerID),
                                         date: viewModel.date,
                                         now: now,
                                         layout: dynamicLayout,
@@ -57,7 +61,11 @@ struct DayCalendarView: View {
                                         }
                                     )
                                 }
-                                TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
+                                TimeRulerView(
+                                    layout: dynamicLayout,
+                                    labelAlignment: .leading,
+                                    now: Calendar.current.isDate(viewModel.date, inSameDayAs: now) ? now : nil
+                                )
                             }
                             if Calendar.current.isDate(viewModel.date, inSameDayAs: now) {
                                 nowLine(layout: dynamicLayout)
@@ -97,6 +105,16 @@ struct DayCalendarView: View {
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .background(.background, ignoresSafeAreaEdges: .all)
+    }
+
+    /// Actual windows that followed a detected quota reset, for the neutral
+    /// reset glyph. Uses the same matching as the inspector so both stay in sync.
+    private func resetWindowIDs(for segments: [ActualWindow5hDisplaySegment], providerID: ProviderID) -> Set<UUID> {
+        Set(
+            segments
+                .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.window.endAt, providerID: providerID) != nil }
+                .map(\.id)
+        )
     }
 
     @ViewBuilder

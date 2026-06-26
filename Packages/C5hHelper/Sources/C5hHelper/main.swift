@@ -5,7 +5,9 @@ import C5hStore
 @main
 struct HelperMain {
     static func main() async {
-        let helperVersion = "0.0.1"
+        let helperBinaryURL = Bundle.main.executableURL
+            ?? URL(fileURLWithPath: CommandLine.arguments.first ?? "")
+        let helperVersion = HelperAppVersion.version(forHelperAt: helperBinaryURL)
 
         let appSupport: URL
         do {
@@ -265,7 +267,8 @@ struct HelperSchedulerDriver: SchedulerDriver {
         )
         return await resolver.resolveTriggeredWindow(
             providerID: providerID,
-            commandRunID: commandRun.id
+            commandRunID: commandRun.id,
+            now: commandRun.startedAt
         )
     }
 

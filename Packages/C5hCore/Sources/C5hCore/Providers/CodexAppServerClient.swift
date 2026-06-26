@@ -5,7 +5,7 @@ import Darwin
 /// (newline-delimited JSON, not LSP-style Content-Length framing) to read the
 /// account rate limits the Codex CLI itself receives from chatgpt.com.
 ///
-/// The Codex CLI brokers OAuth + token refresh — we never read `~/.codex/auth.json`
+/// The Codex CLI brokers OAuth + token refresh: we never read `~/.codex/auth.json`
 /// ourselves, so no TCC dialog. TCC attribution flows to the `codex` binary via
 /// `DisclaimingSpawn`.
 public struct CodexAppServerClient: Sendable {
@@ -15,6 +15,10 @@ public struct CodexAppServerClient: Sendable {
     public let executableURL: URL
     public let environment: [String: String]
     public let timeoutSeconds: TimeInterval
+    /// Cold-starting `codex app-server` (first spawn, or after the binary is
+    /// paged out) can take longer than a single rate-limits read, so the
+    /// `initialize` handshake gets its own, more generous budget.
+    public let initializeTimeoutSeconds: TimeInterval
     public let clientName: String
     public let clientVersion: String
 
@@ -22,12 +26,14 @@ public struct CodexAppServerClient: Sendable {
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
         timeoutSeconds: TimeInterval = 15,
+        initializeTimeoutSeconds: TimeInterval = 30,
         clientName: String = "C5h",
-        clientVersion: String = "0.4.0"
+        clientVersion: String = "1.0.0"
     ) {
         self.executableURL = executableURL
         self.environment = environment
         self.timeoutSeconds = timeoutSeconds
+        self.initializeTimeoutSeconds = initializeTimeoutSeconds
         self.clientName = clientName
         self.clientVersion = clientVersion
     }
@@ -42,7 +48,26 @@ public struct CodexAppServerClient: Sendable {
         }.value
     }
 
+    /// Runs the app-server exchange, retrying once on a fast failure. Transient
+    /// launch errors and network blips (codex reaches chatgpt.com to read rate
+    /// limits) often fail the first attempt but succeed right after, so a single
+    /// bounded retry cuts spurious failures. A slow failure already spent its
+    /// timeout budget, so it is not retried (that would just double the wait).
     private func fetchRateLimitsResultBlocking() throws -> String {
+        let start = Date()
+        do {
+            return try attemptFetchBlocking()
+        } catch let error as C5hError {
+            let elapsed = Date().timeIntervalSince(start)
+            guard case .processLaunchFailed = error,
+                  elapsed < timeoutSeconds,
+                  !Task.isCancelled else { throw error }
+            usleep(500_000)
+            return try attemptFetchBlocking()
+        }
+    }
+
+    private func attemptFetchBlocking() throws -> String {
         let launched: LaunchedProcess
         do {
             launched = try DisclaimingSpawn.launch(
@@ -52,7 +77,7 @@ public struct CodexAppServerClient: Sendable {
                 workingDirectory: nil,
                 stdin: .pipe,
                 stdout: .pipe,
-                stderr: .devNull
+                stderr: .pipe
             )
         } catch {
             throw C5hError.processLaunchFailed(String(describing: error))
@@ -72,11 +97,18 @@ public struct CodexAppServerClient: Sendable {
             _ = launched.waitBlocking()
             try? stdinHandle.close()
             try? stdoutHandle.close()
+            try? launched.stderrHandle?.close()
         }
 
         let stdoutFD = stdoutHandle.fileDescriptor
-        let flags = fcntl(stdoutFD, F_GETFL, 0)
-        if flags >= 0 { _ = fcntl(stdoutFD, F_SETFL, flags | O_NONBLOCK) }
+        setNonBlocking(stdoutFD)
+
+        // Capture stderr (instead of routing it to /dev/null) so an opaque "no
+        // response" becomes an actionable message. Draining it every loop also
+        // keeps a chatty app-server from blocking on a full stderr pipe.
+        let stderrFD = launched.stderrHandle?.fileDescriptor
+        if let stderrFD { setNonBlocking(stderrFD) }
+        var stderrTail = ""
 
         let initializeID = 1
         let rateLimitsID = 2
@@ -94,10 +126,19 @@ public struct CodexAppServerClient: Sendable {
         ], to: stdinHandle)
 
         var buffer = ""
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        let initializeDeadline = Date().addingTimeInterval(initializeTimeoutSeconds)
 
-        guard try readResponse(id: initializeID, buffer: &buffer, fd: stdoutFD, deadline: deadline) != nil else {
-            throw C5hError.processLaunchFailed("codex app-server: no initialize response")
+        guard try readResponse(
+            id: initializeID,
+            buffer: &buffer,
+            fd: stdoutFD,
+            stderrFD: stderrFD,
+            stderrTail: &stderrTail,
+            deadline: initializeDeadline
+        ) != nil else {
+            throw C5hError.processLaunchFailed(
+                "codex app-server: no initialize response\(stderrDetail(stderrTail))"
+            )
         }
 
         try writeMessage([
@@ -107,8 +148,18 @@ public struct CodexAppServerClient: Sendable {
             "params": [:] as [String: String]
         ], to: stdinHandle)
 
-        guard let result = try readResponse(id: rateLimitsID, buffer: &buffer, fd: stdoutFD, deadline: deadline) else {
-            throw C5hError.processLaunchFailed("codex app-server: no rate-limits response within timeout")
+        let rateLimitsDeadline = Date().addingTimeInterval(timeoutSeconds)
+        guard let result = try readResponse(
+            id: rateLimitsID,
+            buffer: &buffer,
+            fd: stdoutFD,
+            stderrFD: stderrFD,
+            stderrTail: &stderrTail,
+            deadline: rateLimitsDeadline
+        ) else {
+            throw C5hError.processLaunchFailed(
+                "codex app-server: no rate-limits response within timeout\(stderrDetail(stderrTail))"
+            )
         }
         return result
     }
@@ -127,11 +178,16 @@ public struct CodexAppServerClient: Sendable {
         id targetID: Int,
         buffer: inout String,
         fd: Int32,
+        stderrFD: Int32?,
+        stderrTail: inout String,
         deadline: Date
     ) throws -> String? {
         while Date() < deadline {
             if Task.isCancelled {
                 throw CancellationError()
+            }
+            if let stderrFD {
+                drainStderr(stderrFD, into: &stderrTail)
             }
             if let line = takeLine(from: &buffer) {
                 if let result = try matchResult(in: line, id: targetID) {
@@ -171,6 +227,42 @@ public struct CodexAppServerClient: Sendable {
         return line
     }
 
+    private func setNonBlocking(_ fd: Int32) {
+        let flags = fcntl(fd, F_GETFL, 0)
+        if flags >= 0 { _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK) }
+    }
+
+    /// Drains whatever is currently buffered on the child's stderr (non-blocking)
+    /// into `tail`, keeping only the most recent bytes so a noisy app-server
+    /// cannot grow this without bound.
+    private func drainStderr(_ fd: Int32, into tail: inout String) {
+        var bytes = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = Darwin.read(fd, &bytes, bytes.count)
+            guard count > 0 else { break }
+            tail.append(String(decoding: bytes.prefix(count), as: UTF8.self))
+            if tail.count > Self.maxStderrTailCharacters {
+                tail = String(tail.suffix(Self.maxStderrTailCharacters))
+            }
+        }
+    }
+
+    private func stderrDetail(_ tail: String) -> String {
+        let trimmed = tail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "" : " (stderr: \(trimmed))"
+    }
+
+    private static let maxStderrTailCharacters = 2000
+
+    /// JSON-RPC permits string or number ids; accept either so a codex build that
+    /// echoes `"id":"1"` is not mistaken for a missing response. Internal so the
+    /// id-matching contract can be unit tested without a live app-server.
+    static func idMatches(_ value: Any?, _ targetID: Int) -> Bool {
+        if let intID = value as? Int { return intID == targetID }
+        if let strID = value as? String { return strID == String(targetID) }
+        return false
+    }
+
     private func matchResult(in line: String, id targetID: Int) throws -> String? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
@@ -178,7 +270,7 @@ public struct CodexAppServerClient: Sendable {
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        guard let idValue = obj["id"] as? Int, idValue == targetID else {
+        guard Self.idMatches(obj["id"], targetID) else {
             return nil
         }
         if let err = obj["error"] as? [String: Any] {
