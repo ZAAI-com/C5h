@@ -136,6 +136,11 @@ struct ActualWindowBlockView: View {
         }
         .frame(width: width, height: height, alignment: .topLeading)
         .background(shape.fill(brandColor))
+        .overlay {
+            shape
+                .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
         .clipShape(shape)
         .foregroundStyle(.white)
         .overlay(alignment: .topTrailing) {
