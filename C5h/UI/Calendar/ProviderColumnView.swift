@@ -122,13 +122,13 @@ struct ProviderColumnView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
-                hoverY = hoveredStart(forY: location.y) != nil ? location.y : nil
+                hoverY = resolvedPlanStart(forY: location.y) != nil ? location.y : nil
             case .ended:
                 hoverY = nil
             }
         }
         .onTapGesture { location in
-            guard let start = hoveredStart(forY: location.y) else { return }
+            guard let start = resolvedPlanStart(forY: location.y) else { return }
             onQuickPlan?(start)
             hoverY = nil
         }
@@ -139,7 +139,7 @@ struct ProviderColumnView: View {
         if hoveredPlannedID == nil,
            draggingPlannedID == nil,
            let hoverY,
-           let start = hoveredStart(forY: hoverY) {
+           let start = resolvedPlanStart(forY: hoverY) {
             let height = CalendarPositioning.blockHeight(
                 durationSeconds: Self.fiveHourSeconds,
                 pixelsPerMinute: layout.pixelsPerMinute
@@ -174,13 +174,28 @@ struct ProviderColumnView: View {
         }
     }
 
-    /// Maps a pointer Y to the planned-window start time, snapped to the
-    /// provider grid. Returns nil for past or conflicting slots.
-    private func hoveredStart(forY y: CGFloat) -> Date? {
+    /// Resolves a pointer Y to the start time of the 5h window a click would
+    /// create: the snapped slot under the cursor when it is in the future and
+    /// free, otherwise the earliest free slot later in the same day. Returns nil
+    /// when no free slot remains before day end.
+    private func resolvedPlanStart(forY y: CGFloat) -> Date? {
         let snapped = snappedStart(forY: y)
-        guard snapped > now else { return nil }
-        guard canQuickPlan(at: snapped) else { return nil }
-        return snapped
+        if snapped > now, canQuickPlan(at: snapped) { return snapped }
+        return nextAvailableStart(after: snapped)
+    }
+
+    /// Walks the provider grid forward from `snapped`, returning the first slot
+    /// that is in the future and free, bounded by the day's latest valid start.
+    private func nextAvailableStart(after snapped: Date) -> Date? {
+        let step = TimeInterval(providerID.plannedWindowSnapMinutes * 60)
+        let interval = CalendarPositioning.dayInterval(for: date)
+        let latestStart = interval.end.addingTimeInterval(-step)
+        var candidate = snapped.addingTimeInterval(step)
+        while candidate <= latestStart {
+            if candidate > now, canQuickPlan(at: candidate) { return candidate }
+            candidate = candidate.addingTimeInterval(step)
+        }
+        return nil
     }
 
     private func displayedStart(for window: PlannedWindow) -> Date {

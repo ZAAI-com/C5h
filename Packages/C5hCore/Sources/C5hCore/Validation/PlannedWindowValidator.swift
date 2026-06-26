@@ -13,19 +13,14 @@ public enum PlannedWindowValidator {
         guard candidate.durationSeconds >= 0 else {
             return PlannedWindowValidationResult(conflictingWindowIDs: [])
         }
-        let candidateInterval = DateInterval(
-            start: candidate.startAt,
-            duration: TimeInterval(candidate.durationSeconds)
-        )
+        // Half-open `[start, end)` overlap, matching PlannedWindowRepository's
+        // overlap SQL and CalendarPositioning.packLanes: touching boundaries
+        // (one window's start == another's end) are back-to-back, not conflicts.
         let conflicts = existing.filter { other in
             guard other.id != candidate.id else { return false }
             guard other.providerID == candidate.providerID else { return false }
             guard other.durationSeconds >= 0 else { return false }
-            let otherInterval = DateInterval(
-                start: other.startAt,
-                duration: TimeInterval(other.durationSeconds)
-            )
-            return otherInterval.intersects(candidateInterval)
+            return candidate.startAt < other.endAt && other.startAt < candidate.endAt
         }
         return PlannedWindowValidationResult(
             conflictingWindowIDs: conflicts.map { $0.id }
