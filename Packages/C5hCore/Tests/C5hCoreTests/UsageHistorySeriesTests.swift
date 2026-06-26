@@ -235,6 +235,106 @@ struct UsageHistorySeriesTests {
         #expect(result?.asOf.timeIntervalSince1970 == 1_000)
     }
 
+    @Test("usageReading ignores stale samples before lower bound")
+    func usageReadingIgnoresStaleSamplesBeforeLowerBound() {
+        let stale = claudeSnapshot(
+            fiveHourPercent: 15,
+            sevenDayPercent: 25,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [stale])
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 3_000),
+            notBefore: Date(timeIntervalSince1970: 2_000)
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("usageReading returns in-window 5h and same-snapshot 7d")
+    func usageReadingReturnsSameSnapshotValues() {
+        let reading = claudeSnapshot(
+            fiveHourPercent: 31,
+            sevenDayPercent: 44,
+            capturedAt: Date(timeIntervalSince1970: 1_500)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [reading])
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 1_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_500)
+        #expect(result?.fiveHour == 31)
+        #expect(result?.sevenDay == 44)
+    }
+
+    @Test("usageReading skips samples without 5h")
+    func usageReadingSkipsMissingFiveHour() {
+        let withFive = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 1_000),
+            fiveHour: 12,
+            sevenDay: 22
+        )
+        let withoutFive = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: nil,
+            sevenDay: 33
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            points: [withFive, withoutFive]
+        )
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 500)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_000)
+        #expect(result?.fiveHour == 12)
+        #expect(result?.sevenDay == 22)
+    }
+
+    @Test("usageReading returns latest valid in-window sample")
+    func usageReadingReturnsLatestValidInWindowSample() {
+        let beforeWindow = claudeSnapshot(
+            fiveHourPercent: 10,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 900)
+        )
+        let early = claudeSnapshot(
+            fiveHourPercent: 21,
+            sevenDayPercent: 31,
+            capturedAt: Date(timeIntervalSince1970: 1_100)
+        )
+        let latest = claudeSnapshot(
+            fiveHourPercent: 42,
+            sevenDayPercent: 52,
+            capturedAt: Date(timeIntervalSince1970: 1_800)
+        )
+        let future = claudeSnapshot(
+            fiveHourPercent: 99,
+            sevenDayPercent: 99,
+            capturedAt: Date(timeIntervalSince1970: 2_500)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [future, beforeWindow, latest, early]
+        )
+
+        let result = series.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 1_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_800)
+        #expect(result?.fiveHour == 42)
+        #expect(result?.sevenDay == 52)
+    }
+
     // MARK: - Helpers
 
     private func claudeSnapshot(

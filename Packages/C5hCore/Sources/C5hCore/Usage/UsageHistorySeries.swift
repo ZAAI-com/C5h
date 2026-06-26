@@ -13,8 +13,8 @@ public struct UsagePoint: Sendable, Hashable {
 }
 
 /// Sorted, in-memory time series of (5h%, 7d%) values for one provider, built
-/// by parsing `UsageSnapshot.rawJSON`. UI uses this to render "7d% at time T"
-/// on each calendar window box and "latest 5h%" in the box center.
+/// by parsing `UsageSnapshot.rawJSON`. UI uses this to render usage readings
+/// at the time they were captured.
 public struct UsageHistorySeries: Sendable, Hashable {
     public let providerID: ProviderID
     public let points: [UsagePoint]
@@ -64,6 +64,22 @@ public struct UsageHistorySeries: Sendable, Hashable {
         for point in points.reversed() where point.capturedAt <= time {
             if let value = point.fiveHour {
                 return (value, point.capturedAt)
+            }
+        }
+        return nil
+    }
+
+    /// Latest sample with a 5h reading inside `[lowerBound, time]`. The 7d
+    /// value, when present, comes from the same snapshot so the UI renders one
+    /// coherent usage row rather than mixing readings from different captures.
+    public func usageReading(
+        atOrBefore time: Date,
+        notBefore lowerBound: Date
+    ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
+        for point in points.reversed()
+            where point.capturedAt <= time && point.capturedAt >= lowerBound {
+            if let fiveHour = point.fiveHour {
+                return (point.capturedAt, fiveHour, point.sevenDay)
             }
         }
         return nil

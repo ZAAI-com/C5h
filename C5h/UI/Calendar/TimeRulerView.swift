@@ -5,7 +5,7 @@ struct TimeRulerView: View {
     let layout: CalendarLayoutConfig
     var labelAlignment: HorizontalAlignment = .trailing
     /// When set, draws a red current-time label at the now-line, alongside the
-    /// fixed hour labels. Used only by the left ruler when showing today.
+    /// fixed hour labels.
     var now: Date? = nil
 
     private static let labeledHours = [0, 3, 6, 9, 12, 15, 18, 21, 24]

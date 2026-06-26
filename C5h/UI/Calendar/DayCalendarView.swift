@@ -60,7 +60,11 @@ struct DayCalendarView: View {
                                         }
                                     )
                                 }
-                                TimeRulerView(layout: dynamicLayout, labelAlignment: .leading)
+                                TimeRulerView(
+                                    layout: dynamicLayout,
+                                    labelAlignment: .leading,
+                                    now: Calendar.current.isDate(viewModel.date, inSameDayAs: now) ? now : nil
+                                )
                             }
                             if Calendar.current.isDate(viewModel.date, inSameDayAs: now) {
                                 nowLine(layout: dynamicLayout)

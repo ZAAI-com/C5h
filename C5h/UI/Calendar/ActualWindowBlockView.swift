@@ -47,26 +47,27 @@ struct ActualWindowBlockView: View {
         // block position/height still follow the visible segment.
         let shownStart = window.startAt
         let shownEnd = window.endAt
-        // The 7d reading and the time it was captured, anchored to the window
-        // end. Hidden for windows whose end is still in the future, matching the
-        // 5h guard below.
-        let sevenD = shownEnd > now
+        let visibleStart = effectiveSegmentStart
+        let usageAnchor = min(shownEnd, now)
+        let condensedSevenD = shownEnd > now
             ? nil
-            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd))
-        // Anchor the 5h reading to this window's own time (capped at `now` so an
-        // in-progress window still shows the current value); hide for windows
-        // that start in the future, matching the 7d guard above.
-        let fiveHourAnchor = min(shownEnd, now)
-        let windowed5h: (value: Double, asOf: Date)? = shownStart > now
+            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
+        let condensed5h: (value: Double, asOf: Date)? = shownStart > now
             ? nil
-            : history?.fiveHourPercent(at: fiveHourAnchor)
+            : history?.fiveHourPercent(at: usageAnchor)
+        // Day view usage must come from this visible window segment. A stale
+        // sample from before the block starts is intentionally hidden until a
+        // fresh in-window usage refresh arrives.
+        let usageReading = shownStart > now
+            ? nil
+            : history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart)
 
         Group {
             if condensed {
                 condensedOverlay(
                     shownStart: shownStart,
-                    endSevenD: sevenD?.value,
-                    fiveHour: windowed5h
+                    endSevenD: condensedSevenD,
+                    fiveHour: condensed5h
                 )
                 .padding(pad)
             } else {
@@ -78,30 +79,15 @@ struct ActualWindowBlockView: View {
                     )
                     .padding(pad)
                     if density.showsCenter {
-                        if let p = windowed5h {
-                            anchoredLabel(
-                                time: p.asOf,
-                                text: "5h usage \(BlockFormatters.formatPercent(p.value))",
-                                leading: true,
+                        if let reading = usageReading {
+                            usageRow(
+                                reading: reading,
                                 pad: pad
                             )
-                            .offset(y: fiveHourOffset(
-                                asOf: p.asOf,
+                            .offset(y: usageRowOffset(
+                                capturedAt: reading.capturedAt,
                                 height: height,
                                 duration: duration,
-                                pad: pad
-                            ))
-                        }
-                        if let s = sevenD {
-                            anchoredLabel(
-                                time: s.asOf,
-                                text: "7d usage \(BlockFormatters.formatPercent(s.value))",
-                                leading: false,
-                                pad: pad
-                            )
-                            .offset(y: anchoredOffset(
-                                forAsOf: s.asOf,
-                                height: height,
                                 pad: pad
                             ))
                         }
@@ -132,34 +118,35 @@ struct ActualWindowBlockView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// Day view: a usage reading pinned to the left (5h) or right (7d) edge,
-    /// showing the capture time next to the reading. Positioned vertically by
-    /// the caller via `.offset` so the reading sits at its time on the scale.
-    private func anchoredLabel(
-        time: Date,
-        text: String,
-        leading: Bool,
+    /// Day view: one usage row, with the 5h reading on the left and the 7d
+    /// reading from the same snapshot on the right when it is meaningful.
+    private func usageRow(
+        reading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?),
         pad: CGFloat
     ) -> some View {
-        let timeText = Text(BlockFormatters.formatTime(time))
+        let timeText = Text(BlockFormatters.formatTime(reading.capturedAt))
             .font(.system(size: compact ? 9 : 10))
             .monospacedDigit()
             .opacity(0.85)
-        let mainText = Text(text)
+        let fiveHourText = Text("5h usage \(BlockFormatters.formatPercent(reading.fiveHour))")
             .font(.system(size: compact ? 9 : 10, weight: .semibold))
             .monospacedDigit()
         return HStack(spacing: 6) {
-            if leading {
+            HStack(spacing: 6) {
                 timeText
-                mainText
-            } else {
-                mainText
-                timeText
+                fiveHourText
+            }
+            Spacer(minLength: 8)
+            if let sevenDay = Self.meaningfulSevenDay(reading.sevenDay) {
+                Text("7d usage \(BlockFormatters.formatPercent(sevenDay))")
+                    .font(.system(size: compact ? 9 : 10, weight: .semibold))
+                    .monospacedDigit()
             }
         }
-        .fixedSize()
         .padding(.horizontal, pad)
-        .frame(maxWidth: .infinity, alignment: leading ? .leading : .trailing)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Week overview: only start time, end 7d usage, and 5h usage, stacked
@@ -205,7 +192,7 @@ struct ActualWindowBlockView: View {
         pad: CGFloat
     ) -> CGFloat {
         let ppm = layout.pixelsPerMinute
-        let top = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm)
+        let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
         let raw = CalendarPositioning.yOffset(for: asOf, pixelsPerMinute: ppm) - top
         let h = labelLineHeight
         let minOffset = pad + h
@@ -214,19 +201,20 @@ struct ActualWindowBlockView: View {
     }
 
     /// Like `anchoredOffset`, but for the in-progress window (one that contains
-    /// `now`) nudges the 5h label off the red now-line to whichever side has
-    /// more vertical room, so the reading never sits on top of the line.
-    private func fiveHourOffset(
-        asOf: Date,
+    /// `now`) nudges the usage row above the red now-line when possible, falling
+    /// below only when the upper side has no room.
+    private func usageRowOffset(
+        capturedAt: Date,
         height: CGFloat,
         duration: Int,
         pad: CGFloat
     ) -> CGFloat {
-        let offset = anchoredOffset(forAsOf: asOf, height: height, pad: pad)
-        let segmentEnd = segmentStart.addingTimeInterval(TimeInterval(duration))
-        guard segmentStart <= now, now < segmentEnd else { return offset }
+        let offset = anchoredOffset(forAsOf: capturedAt, height: height, pad: pad)
+        let visibleStart = effectiveSegmentStart
+        let segmentEnd = visibleStart.addingTimeInterval(TimeInterval(duration))
+        guard visibleStart <= now, now < segmentEnd else { return offset }
         let ppm = layout.pixelsPerMinute
-        let top = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm)
+        let top = CalendarPositioning.yOffset(for: visibleStart, pixelsPerMinute: ppm)
         let nowY = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
         let h = labelLineHeight
         let gap: CGFloat = 4
@@ -234,20 +222,27 @@ struct ActualWindowBlockView: View {
         guard straddles else { return offset }
         let minOffset = pad + h
         let maxOffset = max(minOffset, height - pad - 2 * h)
-        if (height - nowY) >= nowY {
-            return min(nowY + gap, maxOffset)
+        let above = nowY - h - gap
+        if above >= minOffset {
+            return above
         }
-        return max(nowY - h - gap, minOffset)
+        let below = nowY + gap
+        if below <= maxOffset {
+            return below
+        }
+        return min(max(offset, minOffset), maxOffset)
     }
 
-    /// Returns the 7d reading only when there is enough data to be worth showing.
+    /// Returns the 7d value only when there is enough data to be worth showing.
     /// A missing reading (`nil`) or one that rounds to 0% is treated as "not
     /// enough data" and hidden, so tiles don't render a meaningless `7d usage 0%`.
-    private static func meaningfulSevenDay(
-        _ reading: (value: Double, asOf: Date)?
-    ) -> (value: Double, asOf: Date)? {
-        guard let reading, reading.value.rounded() >= 1 else { return nil }
-        return reading
+    private static func meaningfulSevenDay(_ value: Double?) -> Double? {
+        guard let value, value.rounded() >= 1 else { return nil }
+        return value
+    }
+
+    private var effectiveSegmentStart: Date {
+        segmentStart == .distantPast ? window.startAt : segmentStart
     }
 
     private var brandColor: Color {
