@@ -36,8 +36,11 @@ struct DayCalendarView: View {
                     ScrollView {
                         ZStack(alignment: .topLeading) {
                             HStack(alignment: .top, spacing: 0) {
-                                TimeRulerView(layout: dynamicLayout)
-                                    .id("ruler")
+                                TimeRulerView(
+                                    layout: dynamicLayout,
+                                    now: Calendar.current.isDate(viewModel.date, inSameDayAs: now) ? now : nil
+                                )
+                                .id("ruler")
                                 ForEach(providers) { providerID in
                                     let cw = viewModel.windows(for: providerID)
                                     ProviderColumnView(

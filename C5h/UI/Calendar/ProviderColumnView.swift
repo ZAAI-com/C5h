@@ -102,7 +102,8 @@ struct ProviderColumnView: View {
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd
+                            clipsBottom: segment.clippedEnd,
+                            segmentStart: segment.start
                         )
                     }
                     .buttonStyle(.plain)
