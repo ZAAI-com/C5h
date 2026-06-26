@@ -32,6 +32,23 @@ jobs:
             exit 1
           fi
 
+      - name: Require notarization credentials
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ vars.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=
+          for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required release credentials:$missing"
+            exit 1
+          fi
+
       - name: Select latest Xcode
         run: |
           latest=$(printf '%s\n' /Applications/Xcode_*.app | sort -V | tail -n1)

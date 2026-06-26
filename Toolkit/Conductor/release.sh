@@ -43,8 +43,17 @@ fi
 
 mkdir -p build
 
-echo "==> Build helper executable"
-swift build --package-path Packages/C5hHelper -c release
+echo "==> Build universal helper executable"
+# The main app archives universal (arm64 + x86_64), so the embedded helper must
+# match. Build each slice explicitly and combine with lipo so the shipped helper
+# runs natively on both architectures.
+swift build --package-path Packages/C5hHelper -c release --arch arm64
+swift build --package-path Packages/C5hHelper -c release --arch x86_64
+lipo -create \
+  Packages/C5hHelper/.build/arm64-apple-macosx/release/C5hHelper \
+  Packages/C5hHelper/.build/x86_64-apple-macosx/release/C5hHelper \
+  -output build/C5hHelper-universal
+lipo -info build/C5hHelper-universal
 
 echo "==> Archive main app"
 xcodebuild \
@@ -61,7 +70,7 @@ xcodebuild \
 echo "==> Embed helper binary"
 HELPER_DST="${ARCHIVE}/Products/Applications/${SCHEME}.app/Contents/Helpers"
 mkdir -p "${HELPER_DST}"
-cp Packages/C5hHelper/.build/release/C5hHelper "${HELPER_DST}/C5hHelper"
+cp build/C5hHelper-universal "${HELPER_DST}/C5hHelper"
 codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" \
   "${HELPER_DST}/C5hHelper"
 
@@ -73,6 +82,14 @@ cp Resources/com.zaai.c5h.helper.plist "${LA_DST}/"
 echo "==> Re-sign main app bundle (helper changed)"
 codesign --force --options runtime --deep --sign "${DEVELOPER_ID_APPLICATION}" \
   "${ARCHIVE}/Products/Applications/${SCHEME}.app"
+
+echo "==> Verify universal slices"
+# Run on every build (notarized or not) so an architecture or signing regression
+# fails fast instead of shipping an inconsistent bundle.
+APP="${ARCHIVE}/Products/Applications/${SCHEME}.app"
+lipo "${APP}/Contents/MacOS/${SCHEME}" -verify_arch arm64 x86_64
+lipo "${APP}/Contents/Helpers/C5hHelper" -verify_arch arm64 x86_64
+codesign --verify --deep --strict --verbose=2 "${APP}"
 
 echo "==> Export"
 cat > build/export-options.plist <<EOF
