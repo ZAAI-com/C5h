@@ -4,7 +4,7 @@ import C5hCore
 struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
-    let actualWindows: [ActualWindow5h]
+    let actualSegments: [ActualWindow5hDisplaySegment]
     let history: UsageHistorySeries?
     /// IDs of actual windows that followed a detected quota reset, marked with a
     /// subtle neutral glyph on their block.
@@ -89,9 +89,10 @@ struct ProviderColumnView: View {
                 }
             }
             let actualPlacements = actualLanePlacements
-            ForEach(actualWindows) { window in
-                if let segment = visibleSegment(start: window.startAt, durationSeconds: window.durationSeconds) {
-                    let placement = actualPlacements[window.id]
+            ForEach(actualSegments) { actualSegment in
+                let window = actualSegment.window
+                if let segment = visibleSegment(start: actualSegment.startAt, durationSeconds: actualSegment.durationSeconds) {
+                    let placement = actualPlacements[actualSegment.id]
                         ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
                     let regionWidth = columnWidth * layout.actualBlockWidthRatio
                     let laneWidth = regionWidth / CGFloat(placement.laneCount)
@@ -106,8 +107,10 @@ struct ProviderColumnView: View {
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
                         segmentStart: segment.start,
+                        displayStart: actualSegment.startAt,
+                        displayEnd: actualSegment.endAt,
                         widthOverride: placement.laneCount > 1 ? laneWidth : nil,
-                        isReset: resetWindowIDs.contains(window.id)
+                        isReset: resetWindowIDs.contains(actualSegment.id)
                     )
                     .offset(
                         x: regionStartX + CGFloat(placement.lane) * laneWidth,
@@ -164,18 +167,18 @@ struct ProviderColumnView: View {
         let placements = actualLanePlacements
         let regionWidth = columnWidth * layout.actualBlockWidthRatio
         let regionStartX = columnWidth - 2 - regionWidth
-        for window in actualWindows {
+        for actualSegment in actualSegments {
             guard let segment = visibleSegment(
-                start: window.startAt,
-                durationSeconds: window.durationSeconds
+                start: actualSegment.startAt,
+                durationSeconds: actualSegment.durationSeconds
             ) else { continue }
             guard verticalSpan(of: segment).contains(location.y) else { continue }
-            let placement = placements[window.id]
+            let placement = placements[actualSegment.id]
                 ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
             let laneWidth = regionWidth / CGFloat(placement.laneCount)
             let laneStartX = regionStartX + CGFloat(placement.lane) * laneWidth
             if location.x >= laneStartX, location.x <= laneStartX + laneWidth {
-                return .actual(window)
+                return .actual(actualSegment.window)
             }
         }
         let plannedMinX: CGFloat = 2
@@ -195,14 +198,13 @@ struct ProviderColumnView: View {
         return nil
     }
 
-    /// Lane placement per actual window so overlapping windows (e.g. a reset that
-    /// opens a new 5h window before the prior one ends) render side-by-side.
+    /// Lane placement per actual display segment.
     private var actualLanePlacements: [UUID: CalendarPositioning.LanePlacement] {
-        let intervals = actualWindows.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+        let intervals = actualSegments.map { DateInterval(start: $0.startAt, end: $0.endAt) }
         let packed = CalendarPositioning.packLanes(intervals)
         var map: [UUID: CalendarPositioning.LanePlacement] = [:]
-        for (window, placement) in zip(actualWindows, packed) {
-            map[window.id] = placement
+        for (segment, placement) in zip(actualSegments, packed) {
+            map[segment.id] = placement
         }
         return map
     }
@@ -345,7 +347,7 @@ struct ProviderColumnView: View {
             .validate(
                 candidate: candidate,
                 against: plannedWindows,
-                actualWindows: actualWindows
+                actualWindows: actualSegments.map(\.window)
             )
             .hasConflict
     }

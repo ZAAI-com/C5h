@@ -270,10 +270,10 @@ struct WeekCalendarView: View {
         }
     }
 
-    private func filteredActual(forDay day: Date) -> [ActualWindow5h] {
+    private func filteredActual(forDay day: Date) -> [ActualWindow5hDisplaySegment] {
         guard showActual else { return [] }
-        return viewModel.actual.filter {
-            visibleProviders.contains($0.providerID)
+        return viewModel.actualDisplaySegments.filter {
+            visibleProviders.contains($0.window.providerID)
                 && CalendarPositioning.windowOverlaps(
                     start: $0.startAt,
                     durationSeconds: $0.durationSeconds,
@@ -287,7 +287,12 @@ struct WeekCalendarView: View {
     private func resetWindowIDs(forDay day: Date) -> Set<UUID> {
         Set(
             filteredActual(forDay: day)
-                .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.endAt, providerID: $0.providerID) != nil }
+                .filter {
+                    viewModel.fiveHourResetEvent(
+                        forWindowEndingAt: $0.window.endAt,
+                        providerID: $0.window.providerID
+                    ) != nil
+                }
                 .map(\.id)
         )
     }
@@ -315,7 +320,7 @@ struct WeekCalendarView: View {
 private struct WeekDayColumnView: View {
     let day: Date
     let planned: [PlannedWindow]
-    let actual: [ActualWindow5h]
+    let actual: [ActualWindow5hDisplaySegment]
     let histories: [ProviderID: UsageHistorySeries]
     let resetWindowIDs: Set<UUID>
     let now: Date
@@ -356,12 +361,13 @@ private struct WeekDayColumnView: View {
                 }
             }
             let actualPlacementsMap = actualPlacements
-            ForEach(actual) { window in
+            ForEach(actual) { actualSegment in
+                let window = actualSegment.window
                 if let segment = visibleSegment(
-                    start: window.startAt,
-                    durationSeconds: window.durationSeconds
+                    start: actualSegment.startAt,
+                    durationSeconds: actualSegment.durationSeconds
                 ) {
-                    let placement = actualPlacementsMap[window.id]
+                    let placement = actualPlacementsMap[actualSegment.id]
                         ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
                     let regionWidth = halfColumnWidth * layout.actualBlockWidthRatio
                     let laneWidth = regionWidth / CGFloat(placement.laneCount)
@@ -377,9 +383,11 @@ private struct WeekDayColumnView: View {
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
+                            displayStart: actualSegment.startAt,
+                            displayEnd: actualSegment.endAt,
                             condensed: true,
                             widthOverride: placement.laneCount > 1 ? laneWidth : nil,
-                            isReset: resetWindowIDs.contains(window.id)
+                            isReset: resetWindowIDs.contains(actualSegment.id)
                         )
                     }
                     .buttonStyle(.plain)
@@ -413,12 +421,12 @@ private struct WeekDayColumnView: View {
     private var actualPlacements: [UUID: CalendarPositioning.LanePlacement] {
         var map: [UUID: CalendarPositioning.LanePlacement] = [:]
         for provider in ProviderID.allCases {
-            let windows = actual.filter { $0.providerID == provider }
+            let windows = actual.filter { $0.window.providerID == provider }
             let packed = CalendarPositioning.packLanes(
                 windows.map { DateInterval(start: $0.startAt, end: $0.endAt) }
             )
-            for (window, placement) in zip(windows, packed) {
-                map[window.id] = placement
+            for (segment, placement) in zip(windows, packed) {
+                map[segment.id] = placement
             }
         }
         return map

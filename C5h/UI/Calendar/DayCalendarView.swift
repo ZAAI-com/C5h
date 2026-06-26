@@ -46,7 +46,7 @@ struct DayCalendarView: View {
                                     ProviderColumnView(
                                         providerID: providerID,
                                         plannedWindows: cw.planned,
-                                        actualWindows: cw.actual,
+                                        actualSegments: cw.actual,
                                         history: viewModel.history(for: providerID),
                                         resetWindowIDs: resetWindowIDs(for: cw.actual, providerID: providerID),
                                         date: viewModel.date,
@@ -109,10 +109,10 @@ struct DayCalendarView: View {
 
     /// Actual windows that followed a detected quota reset, for the neutral
     /// reset glyph. Uses the same matching as the inspector so both stay in sync.
-    private func resetWindowIDs(for windows: [ActualWindow5h], providerID: ProviderID) -> Set<UUID> {
+    private func resetWindowIDs(for segments: [ActualWindow5hDisplaySegment], providerID: ProviderID) -> Set<UUID> {
         Set(
-            windows
-                .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.endAt, providerID: providerID) != nil }
+            segments
+                .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.window.endAt, providerID: providerID) != nil }
                 .map(\.id)
         )
     }

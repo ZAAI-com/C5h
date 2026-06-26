@@ -146,9 +146,15 @@ final class DayCalendarViewModel {
         }
     }
 
-    func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5h]) {
-        (planned.filter { $0.providerID == providerID },
-         actual.filter { $0.providerID == providerID })
+    func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {
+        let providerActual = actual.filter { $0.providerID == providerID }
+        return (
+            planned.filter { $0.providerID == providerID },
+            ActualWindow5hDisplayResolver.segments(
+                for: providerActual,
+                resetEvents: resetEvents[providerID] ?? []
+            )
+        )
     }
 
     func goToPreviousDay() {

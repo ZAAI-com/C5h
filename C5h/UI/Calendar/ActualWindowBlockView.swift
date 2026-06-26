@@ -17,6 +17,11 @@ struct ActualWindowBlockView: View {
     /// (midnight) start, matching the block's on-screen position. Unused by the
     /// condensed Week layout.
     var segmentStart: Date = .distantPast
+    /// Display-only bounds used when a reset clips an earlier persisted window.
+    /// Storage still keeps the provider-reported window; the calendar labels the
+    /// segment users can see.
+    var displayStart: Date? = nil
+    var displayEnd: Date? = nil
     /// When true, the block uses the condensed Week-overview layout: a bold start
     /// time pinned top-left, with the 5h and 7d usage lines sitting directly above
     /// a bold end time at the bottom-left. The Day view (Today/Tomorrow) keeps the
@@ -50,12 +55,10 @@ struct ActualWindowBlockView: View {
         let pad: CGFloat = compact ? 3 : 6
         let contentWidth = max(0, width - 2 * pad)
 
-        // Always label corners with the window's real bounds, even when this is
-        // a clipped segment of a cross-midnight window. The rounded-corner
-        // clipping (clipsTop/clipsBottom) already signals the continuation, and
-        // block position/height still follow the visible segment.
-        let shownStart = window.startAt
-        let shownEnd = window.endAt
+        // Cross-midnight clipping keeps real bounds; reset clipping supplies
+        // display bounds so the earlier window stops where the new one starts.
+        let shownStart = displayStart ?? window.startAt
+        let shownEnd = displayEnd ?? window.endAt
         let visibleStart = effectiveSegmentStart
         let usageAnchor = min(shownEnd, now)
         let isPast = shownEnd <= now

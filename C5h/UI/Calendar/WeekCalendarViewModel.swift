@@ -92,6 +92,13 @@ final class WeekCalendarViewModel {
         usageHistories[providerID]
     }
 
+    var actualDisplaySegments: [ActualWindow5hDisplaySegment] {
+        ActualWindow5hDisplayResolver.segments(
+            for: actual,
+            resetEvents: resetEvents.values.flatMap { $0 }
+        )
+    }
+
     /// The 5h reset event whose new window ends at `end` (±60s), used to mark the
     /// reset-derived window in the calendar.
     func fiveHourResetEvent(forWindowEndingAt end: Date, providerID: ProviderID) -> UsageResetEvent? {
