@@ -43,24 +43,40 @@ public struct ActiveWindowResolver: Sendable {
         commandRunID: UUID,
         now: Date = .now
     ) async -> ActualWindow5h? {
-        // A snapshot failure is non-fatal: fall through to the pinned fallback
-        // below rather than leaving the trigger with no window at all.
-        if let snapshot = try? await snapshotFetch(providerID),
-           let promoted = try? await promoteFromSnapshot(
-               snapshot,
-               providerID: providerID,
-               commandRunID: commandRunID,
-               now: now
-           ) {
-            NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
-            return promoted
+        // Prefer the provider's real current window from a fresh usage snapshot.
+        if let snapshot = try? await snapshotFetch(providerID) {
+            if let promoted = try? await promoteFromSnapshot(
+                snapshot,
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
+                return promoted
+            }
+            // The fresh snapshot reported no active 5h window, so there is
+            // genuinely none to anchor to: fall through to the pinned fallback.
+        } else if let reused = try? await reuseActiveWindow(
+            providerID: providerID,
+            commandRunID: commandRunID,
+            now: now
+        ) {
+            // Usage was unavailable (e.g. the usage CLI timed out). Attach the
+            // trigger to the existing active window that already covers `now`
+            // instead of pinning a `[now, +5h]` estimate. The run happened
+            // inside that window, so an offset estimate would never merge (its
+            // end is shifted by however far into the window the trigger landed,
+            // beyond the dedup tolerance) and would linger as a duplicate row.
+            NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) (usage unavailable)")
+            return reused
         }
 
-        // No real 5h window could be derived. Anchor an estimated window pinned
-        // to the trigger time. It is written once per trigger and does not
-        // slide, so it does not reintroduce the phantom-window behavior the
-        // passive polling path guards against; a later detected-from-usage poll
-        // merges/upgrades it to the real bounds via the upsert dedup tolerance.
+        // No real 5h window could be derived or reused. Anchor an estimated
+        // window pinned to the trigger time. It is written once per trigger and
+        // does not slide, so it does not reintroduce the phantom-window behavior
+        // the passive polling path guards against; a later detected-from-usage
+        // poll merges/upgrades it to the real bounds via the upsert dedup
+        // tolerance.
         let fallback = ActualWindow5h(
             providerID: providerID,
             startAt: now,
@@ -108,6 +124,30 @@ public struct ActiveWindowResolver: Sendable {
         }
         active.source = .c5hTriggered
         active.confidence = .exact
+        active.commandRunID = commandRunID
+        active.updatedAt = now
+        try await updateActualWindow(active)
+        return active
+    }
+
+    /// When upstream usage is unavailable, attach the trigger to an existing
+    /// active window (persisted by an earlier poll) that already covers `now`,
+    /// rather than pinning a fresh `[now, +5h]` estimate. The triggered run
+    /// happened inside that window, so promoting it to `c5hTriggered` keeps the
+    /// calendar to one accurate row and avoids a phantom whose bounds are offset
+    /// from the real window's (and therefore never merge). Confidence is left
+    /// untouched: with no fresh snapshot we cannot upgrade it to `exact`. Returns
+    /// `nil` when no active window covers `now`, so the caller pins the estimated
+    /// fallback instead.
+    private func reuseActiveWindow(
+        providerID: ProviderID,
+        commandRunID: UUID,
+        now: Date
+    ) async throws -> ActualWindow5h? {
+        guard var active = try await activeWindowFetch(providerID, now) else {
+            return nil
+        }
+        active.source = .c5hTriggered
         active.commandRunID = commandRunID
         active.updatedAt = now
         try await updateActualWindow(active)

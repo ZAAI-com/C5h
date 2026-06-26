@@ -61,8 +61,13 @@ struct PlannedWindowBlockView: View {
         shownEnd: Date,
         density: BlockDensity
     ) -> some View {
-        VStack(spacing: 0) {
-            cornerText(BlockFormatters.formatTime(shownStart), weight: .semibold)
+        // A minimal block shows only the top label. When it is the tail of a
+        // window that began on a previous day (clipped at the top), the start
+        // time is not on the displayed day, so show the end (the only boundary
+        // that is) instead.
+        let showsEndOnly = density == .minimal && clipsTop
+        return VStack(spacing: 0) {
+            cornerText(BlockFormatters.formatTime(showsEndOnly ? shownEnd : shownStart), weight: .semibold)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             if density.showsBottomCorners {

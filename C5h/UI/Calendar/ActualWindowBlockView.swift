@@ -173,10 +173,15 @@ struct ActualWindowBlockView: View {
         contentWidth: CGFloat,
         density: BlockDensity
     ) -> some View {
-        VStack(spacing: 0) {
+        // A minimal block shows only this top label. When it is the tail of a
+        // window that began on a previous day (clipped at the top), the start
+        // time is not on the displayed day, so show the end (the only boundary
+        // that is) instead.
+        let showsEndOnly = density == .minimal && clipsTop
+        return VStack(spacing: 0) {
             usageReadingRow(
-                timeText: BlockFormatters.formatTime(shownStart),
-                showsResetGlyph: marksResetStart,
+                timeText: BlockFormatters.formatTime(showsEndOnly ? shownEnd : shownStart),
+                showsResetGlyph: showsEndOnly ? marksResetEnd : marksResetStart,
                 fiveHour: density.showsBottomCorners ? openReading?.fiveHour : nil,
                 sevenDay: density.showsBottomCorners ? openReading?.sevenDay : nil,
                 showFiveHourWhenZero: false,
