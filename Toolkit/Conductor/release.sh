@@ -124,7 +124,7 @@ xcodebuild \
   -exportOptionsPlist build/export-options.plist
 
 if [ "${NOTARIZE}" = "1" ]; then
-  echo "==> Notarize"
+  echo "==> Notarize app"
   ditto -c -k --keepParent "${EXPORT_DIR}/${SCHEME}.app" build/notarize.zip
   xcrun notarytool submit build/notarize.zip \
     --apple-id "${APPLE_ID}" \
@@ -135,12 +135,27 @@ if [ "${NOTARIZE}" = "1" ]; then
 fi
 
 echo "==> Build DMG"
-hdiutil create -volname "C5h" -srcfolder "${EXPORT_DIR}" -ov -format UDZO "${DMG}"
+# Stage only the .app so the disk image root does not also ship the exporter's
+# DistributionSummary.plist / ExportOptions.plist / Packaging.log side files.
+DMG_STAGE="build/dmg-${VERSION}"
+rm -rf "${DMG_STAGE}"
+mkdir -p "${DMG_STAGE}"
+cp -R "${EXPORT_DIR}/${SCHEME}.app" "${DMG_STAGE}/"
+hdiutil create -volname "C5h" -srcfolder "${DMG_STAGE}" -ov -format UDZO "${DMG}"
 
 if [ "${NOTARIZE}" = "1" ]; then
+  echo "==> Notarize DMG"
+  # The DMG needs its own notarization ticket before it can be stapled; the app
+  # ticket stapled above does not cover the disk image itself.
+  xcrun notarytool submit "${DMG}" \
+    --apple-id "${APPLE_ID}" \
+    --team-id "${APPLE_TEAM_ID}" \
+    --password "${APPLE_APP_PASSWORD}" \
+    --wait
+
   echo "==> Staple DMG"
-  # The .app inside is already stapled above; stapling the DMG too lets Gatekeeper
-  # validate the downloaded disk image offline (e.g. a Homebrew cask install).
+  # Stapling the DMG lets Gatekeeper validate the downloaded disk image offline
+  # (e.g. a Homebrew cask install).
   xcrun stapler staple "${DMG}"
 
   echo "==> Verify notarization"
