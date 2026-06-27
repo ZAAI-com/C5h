@@ -35,11 +35,18 @@ struct HelperMain {
             NSLog("C5hHelper: cannot create logs dir at \(helperLogsDir.path): \(error)")
             exit(1)
         }
-        guard freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.out.log").path, "a", stdout) != nil else {
+        // Keep the Debug helper's logs separate from the production helper's so a
+        // dev build sharing the same data directory doesn't interleave log files.
+        #if DEBUG
+        let helperLabel = "com.zaai.c5h.debug.helper"
+        #else
+        let helperLabel = "com.zaai.c5h.helper"
+        #endif
+        guard freopen(helperLogsDir.appendingPathComponent("\(helperLabel).out.log").path, "a", stdout) != nil else {
             NSLog("C5hHelper: failed to redirect stdout to \(helperLogsDir.path)")
             exit(1)
         }
-        guard freopen(helperLogsDir.appendingPathComponent("com.zaai.c5h.helper.err.log").path, "a", stderr) != nil else {
+        guard freopen(helperLogsDir.appendingPathComponent("\(helperLabel).err.log").path, "a", stderr) != nil else {
             NSLog("C5hHelper: failed to redirect stderr to \(helperLogsDir.path)")
             exit(1)
         }
