@@ -62,6 +62,11 @@ jobs:
             --out cask.rb
 
       - name: Lint rendered cask
+        env:
+          # Authenticate brew's GitHub API calls (livecheck/url checks) so the
+          # audit does not hit the 60/hour unauthenticated rate limit on shared
+          # runner IPs.
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           # Lint inside a throwaway tap so cask-context rubocop config applies
