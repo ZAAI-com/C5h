@@ -159,7 +159,8 @@ final class WeekCalendarViewModel {
     var actualDisplaySegments: [ActualWindow5hDisplaySegment] {
         ActualWindow5hDisplayResolver.segments(
             for: actual,
-            resetEvents: resetEvents.values.flatMap { $0 }
+            resetEvents: resetEvents.values.flatMap { $0 },
+            histories: usageHistories
         )
     }
 

@@ -109,6 +109,7 @@ struct ProviderColumnView: View {
                         segmentStart: segment.start,
                         displayStart: actualSegment.startAt,
                         displayEnd: actualSegment.endAt,
+                        marksResetEnd: actualSegment.marksResetEnd,
                         widthOverride: placement.laneCount > 1 ? laneWidth : nil,
                         isReset: resetWindowIDs.contains(actualSegment.id)
                     )

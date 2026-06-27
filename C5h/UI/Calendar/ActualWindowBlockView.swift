@@ -22,6 +22,10 @@ struct ActualWindowBlockView: View {
     /// segment users can see.
     var displayStart: Date? = nil
     var displayEnd: Date? = nil
+    /// True only when `displayEnd` is a detected quota *reset* boundary; drives
+    /// the neutral reset glyph at the end corner. A rolloff-clipped end (the limit
+    /// went inactive with no reset) leaves this false.
+    var marksResetEnd: Bool = false
     /// When true, the block uses the condensed Week-overview layout: a bold start
     /// time pinned top-left, with the 5h and 7d usage lines sitting directly above
     /// a bold end time at the bottom-left. The Day view (Today/Tomorrow) keeps the
@@ -60,7 +64,6 @@ struct ActualWindowBlockView: View {
         let shownStart = displayStart ?? window.startAt
         let shownEnd = displayEnd ?? window.endAt
         let marksResetStart = isReset
-        let marksResetEnd = displayEnd.map { $0 < window.endAt } ?? false
         let visibleStart = effectiveSegmentStart
         let usageAnchor = min(shownEnd, now)
         let isPast = shownEnd <= now
