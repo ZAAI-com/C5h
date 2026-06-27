@@ -46,7 +46,7 @@ struct UsageResetDetectorTests {
 
         let events = UsageResetDetector.detect(in: series).filter { $0.kind == .fiveHour }
         #expect(events.count == 1)
-        let event = try? #require(events.first)
+        let event = events.first
         #expect(event?.previousResetEnd == Date(timeIntervalSince1970: r1))
         #expect(event?.newResetEnd == Date(timeIntervalSince1970: newEnd))
         #expect(event?.detectedAt == Date(timeIntervalSince1970: r1 - 8_600))
