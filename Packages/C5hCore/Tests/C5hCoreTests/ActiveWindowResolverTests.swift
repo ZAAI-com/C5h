@@ -21,8 +21,8 @@ struct ActiveWindowResolverTests {
         )
     }
 
-    @Test("Pins an estimated triggered window to the trigger time when usage fetch fails")
-    func synthesizesFallbackWhenSnapshotFails() async throws {
+    @Test("Writes nothing when the snapshot fails and no active window can be reused")
+    func writesNothingWhenNoRealWindowAndNoneToReuse() async throws {
         let recorder = Recorder()
         let triggerTime = Date(timeIntervalSince1970: 1_000_000)
         let commandRunID = UUID()
@@ -39,24 +39,21 @@ struct ActiveWindowResolverTests {
             now: triggerTime
         )
 
-        let window = try #require(result)
-        #expect(window.source == .c5hTriggered)
-        #expect(window.confidence == .estimated)
-        #expect(window.commandRunID == commandRunID)
-        #expect(window.startAt == triggerTime)
-        #expect(window.durationSeconds == 5 * 3600)
-
+        // No fresh window and nothing to reuse: the resolver records nothing
+        // rather than pinning a phantom `[now, +5h]` block.
+        #expect(result == nil)
         let upserts = await recorder.upserted5h
-        #expect(upserts.count == 1)
+        #expect(upserts.isEmpty)
         let updates = await recorder.updated
         #expect(updates.isEmpty)
     }
 
-    @Test("Pins an estimated triggered window when Codex reports a synthetic slot")
-    func synthesizesFallbackForCodexSyntheticSlot() async throws {
+    @Test("Writes nothing for a Codex synthetic slot when no active window can be reused")
+    func writesNothingForCodexSyntheticSlotWithNoActiveWindow() async throws {
         let recorder = Recorder()
         // `codex app-server` returns resetsAt = capturedAt + 5h before any real
-        // window anchors, so derived5h is nil and the resolver must fall back.
+        // window anchors, so derived5h is nil and there is no real window to
+        // anchor or reuse.
         let triggerTime = Date(timeIntervalSince1970: 1_779_408_036)
         let syntheticResetsAt = Int(triggerTime.addingTimeInterval(18_000).timeIntervalSince1970)
         let commandRunID = UUID()
@@ -71,7 +68,50 @@ struct ActiveWindowResolverTests {
         let resolver = ActiveWindowResolver(
             fetcher: makeFetcher(recorder: recorder),
             snapshotFetch: { _ in snapshot },
-            activeWindowFetch: { _, _ in Issue.record("should not promote a synthetic slot"); return nil },
+            activeWindowFetch: { _, _ in nil },
+            updateActualWindow: { window in await recorder.addUpdate(window) }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .codex,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        #expect(result == nil)
+        let updates = await recorder.updated
+        #expect(updates.isEmpty)
+    }
+
+    @Test("Reuses the active window when the snapshot reports no usable window")
+    func reusesActiveWindowWhenSnapshotReportsNoWindow() async throws {
+        let recorder = Recorder()
+        // The fresh snapshot succeeds but carries only a synthetic Codex slot
+        // (derived5h is nil), yet a real window detected earlier already covers
+        // the trigger. The run must attach to that real window, not spawn a
+        // phantom `[now, +5h]` block beside it. (Regression: the overlapping
+        // duplicate windows bug.)
+        let triggerTime = Date(timeIntervalSince1970: 1_779_408_036)
+        let syntheticResetsAt = Int(triggerTime.addingTimeInterval(18_000).timeIntervalSince1970)
+        let commandRunID = UUID()
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: triggerTime,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":1,"windowDurationMins":300,"resetsAt":\(syntheticResetsAt)},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1779838110},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let existing = ActualWindow5h(
+            providerID: .codex,
+            startAt: triggerTime.addingTimeInterval(-3000),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { _, _ in existing },
             updateActualWindow: { window in await recorder.addUpdate(window) }
         )
 
@@ -82,11 +122,15 @@ struct ActiveWindowResolverTests {
         )
 
         let window = try #require(result)
+        #expect(window.id == existing.id)
         #expect(window.source == .c5hTriggered)
-        #expect(window.confidence == .estimated)
-        #expect(window.startAt == triggerTime)
+        #expect(window.commandRunID == commandRunID)
+        #expect(window.startAt == existing.startAt)
+
         let updates = await recorder.updated
-        #expect(updates.isEmpty)
+        #expect(updates.count == 1)
+        let upserts = await recorder.upserted5h
+        #expect(upserts.isEmpty)
     }
 
     @Test("Reuses the active window covering now when the usage fetch fails")
