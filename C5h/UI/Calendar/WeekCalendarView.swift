@@ -389,6 +389,7 @@ private struct WeekDayColumnView: View {
                             clipsBottom: segment.clippedEnd,
                             displayStart: actualSegment.startAt,
                             displayEnd: actualSegment.endAt,
+                            marksResetEnd: actualSegment.marksResetEnd,
                             condensed: true,
                             widthOverride: placement.laneCount > 1 ? laneWidth : nil,
                             isReset: resetWindowIDs.contains(actualSegment.id)

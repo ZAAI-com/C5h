@@ -152,7 +152,8 @@ final class DayCalendarViewModel {
             planned.filter { $0.providerID == providerID },
             ActualWindow5hDisplayResolver.segments(
                 for: providerActual,
-                resetEvents: resetEvents[providerID] ?? []
+                resetEvents: resetEvents[providerID] ?? [],
+                histories: usageHistories
             )
         )
     }
