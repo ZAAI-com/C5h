@@ -14,11 +14,11 @@ permissions:
 jobs:
   release:
     name: Build, sign, notarize, and publish DMG
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
 
@@ -63,7 +63,11 @@ jobs:
         run: |
           set -euo pipefail
           KEYCHAIN_NAME="c5h-build.keychain"
-          CERT_FILE="$(mktemp -t c5h-cert.XXXXXX)"
+          CERT_DIR="$(mktemp -d -t c5h-cert)"
+          # Use a .p12 extension and an explicit -f pkcs12 below: without both,
+          # `security import` cannot infer the format and fails with
+          # "SecKeychainItemImport: Unknown format in import" even for a valid p12.
+          CERT_FILE="$CERT_DIR/cert.p12"
 
           security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$KEYCHAIN_NAME"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_NAME"
@@ -72,6 +76,7 @@ jobs:
 
           printf '%s' "$APPLE_DEVELOPER_CERTIFICATE_P12" | base64 -D > "$CERT_FILE"
           security import "$CERT_FILE" \
+            -f pkcs12 \
             -k "$KEYCHAIN_NAME" \
             -P "$APPLE_DEVELOPER_CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign \
@@ -80,7 +85,7 @@ jobs:
             -S apple-tool:,apple:,codesign: \
             -s -k "$APPLE_KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_NAME" >/dev/null
-          rm -f "$CERT_FILE"
+          rm -rf "$CERT_DIR"
 
       - name: Build, sign, notarize, and DMG
         env:
