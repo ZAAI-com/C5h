@@ -55,6 +55,19 @@ lipo -create \
   -output build/C5hHelper-universal
 lipo -info build/C5hHelper-universal
 
+# SPM dependency bundle targets (e.g. GRDB's GRDB_GRDB resource bundle) do not
+# inherit the app target's DEVELOPMENT_TEAM and fail archive signing without it,
+# so the team is passed on the command line. Prefer APPLE_TEAM_ID; otherwise fall
+# back to the 10-character team embedded in the Developer ID identity ("(TEAMID)").
+TEAM_ID="${APPLE_TEAM_ID:-}"
+if [ -z "$TEAM_ID" ]; then
+  TEAM_ID="$(printf '%s' "$DEVELOPER_ID_APPLICATION" | sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p')"
+fi
+if [ -z "$TEAM_ID" ]; then
+  echo "ERROR: could not determine the signing team; set APPLE_TEAM_ID or include it in DEVELOPER_ID_APPLICATION." >&2
+  exit 2
+fi
+
 echo "==> Archive main app"
 xcodebuild \
   -workspace "${WORKSPACE}" \
@@ -64,6 +77,8 @@ xcodebuild \
   -archivePath "${ARCHIVE}" \
   archive \
   CODE_SIGN_IDENTITY="${DEVELOPER_ID_APPLICATION}" \
+  CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM="${TEAM_ID}" \
   ENABLE_HARDENED_RUNTIME=YES \
   MARKETING_VERSION="${VERSION}"
 
