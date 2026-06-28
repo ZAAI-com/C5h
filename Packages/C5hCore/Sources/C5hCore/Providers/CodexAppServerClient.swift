@@ -28,7 +28,7 @@ public struct CodexAppServerClient: Sendable {
         timeoutSeconds: TimeInterval = 15,
         initializeTimeoutSeconds: TimeInterval = 30,
         clientName: String = "C5h",
-        clientVersion: String = "1.1.0"
+        clientVersion: String = "1.2.0"
     ) {
         self.executableURL = executableURL
         self.environment = environment
