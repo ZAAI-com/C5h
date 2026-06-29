@@ -116,19 +116,32 @@ public enum ActualWindow5hDisplayResolver {
     ) -> Date? {
         guard let points = history?.points, !points.isEmpty else { return nil }
         let end = window.endAt
-        func confirms(_ point: UsagePoint) -> Bool {
-            point.hasActiveFiveHourWindow
-                && (point.fiveHourResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false)
-        }
         // The latest in-window point that confirms this is the active 5h window.
-        guard let confirmIndex = points.lastIndex(where: { $0.capturedAt < end && confirms($0) }) else {
+        guard let confirmIndex = points.lastIndex(where: {
+            $0.capturedAt < end
+                && confirmsActiveFiveHourWindow($0, endingAt: end, tolerance: tolerance)
+        }) else {
             return nil
         }
         let confirmedAt = points[confirmIndex].capturedAt
         // Because that was the latest confirming point, the first later point
         // still before the window's natural end is necessarily non-confirming:
         // the moment the window rolled off.
-        return points.first { $0.capturedAt > confirmedAt && $0.capturedAt < end }?.capturedAt
+        let rolledOffAt = points.first {
+            $0.capturedAt > confirmedAt && $0.capturedAt < end
+        }?.capturedAt
+        return rolledOffAt
+    }
+
+    /// True when `point` confirms `end` is the active 5h window: it reports an
+    /// active window whose reset end is within `tolerance` of `end`.
+    private static func confirmsActiveFiveHourWindow(
+        _ point: UsagePoint,
+        endingAt end: Date,
+        tolerance: TimeInterval
+    ) -> Bool {
+        point.hasActiveFiveHourWindow
+            && (point.fiveHourResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false)
     }
 
     private static func resetWindow(
