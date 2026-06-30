@@ -144,7 +144,10 @@ struct ActualWindowBlockView: View {
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(shape.fill(brandColor))
+        .background(alignment: .top) {
+            shape.fill(brandColor)
+            nowLine(height: height)
+        }
         .overlay {
             shape
                 .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
@@ -152,6 +155,24 @@ struct ActualWindowBlockView: View {
         }
         .clipShape(shape)
         .foregroundStyle(.white)
+    }
+
+    /// The red current-time line, drawn in the block's background layer so it sits
+    /// above the colored fill but behind the white text. Shown only while `now`
+    /// falls within the block's visible vertical span, which happens only on the
+    /// day rendered as today.
+    @ViewBuilder
+    private func nowLine(height: CGFloat) -> some View {
+        let ppm = layout.pixelsPerMinute
+        let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+        let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+        if y >= 0, y <= height {
+            Rectangle()
+                .fill(Color.red)
+                .frame(height: 1)
+                .offset(y: y)
+                .allowsHitTesting(false)
+        }
     }
 
     /// Subtle, neutral marker for a quota reset boundary. Deliberately plain (no

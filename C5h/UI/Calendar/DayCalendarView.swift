@@ -67,14 +67,9 @@ struct DayCalendarView: View {
                                     now: Calendar.current.isDate(viewModel.date, inSameDayAs: now) ? now : nil
                                 )
                             }
-                            if Calendar.current.isDate(viewModel.date, inSameDayAs: now) {
-                                nowLine(layout: dynamicLayout)
-                                    .offset(y: CalendarPositioning.yOffset(
-                                        for: now,
-                                        pixelsPerMinute: dynamicLayout.pixelsPerMinute
-                                    ))
-                                    .allowsHitTesting(false)
-                            }
+                            // The current-time line is drawn per provider column
+                            // (in ProviderColumnView) so it can sit below the window
+                            // blocks and pass behind their text.
                         }
                         .padding(.vertical, Self.gridVerticalPadding)
                         .background(.background)
@@ -115,15 +110,6 @@ struct DayCalendarView: View {
                 .filter { viewModel.fiveHourResetEvent(forWindowEndingAt: $0.window.endAt, providerID: providerID) != nil }
                 .map(\.id)
         )
-    }
-
-    @ViewBuilder
-    private func nowLine(layout: CalendarLayoutConfig) -> some View {
-        Rectangle()
-            .fill(Color.red)
-            .frame(height: 1)
-            .padding(.leading, layout.timeRulerWidth)
-            .padding(.trailing, layout.timeRulerWidth)
     }
 
     private func providerHeader(providerID: ProviderID) -> some View {
