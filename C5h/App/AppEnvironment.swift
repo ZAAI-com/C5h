@@ -120,11 +120,39 @@ final class AppEnvironment {
 
             self.loadState = .ready
             Task { await self.refreshAllProviderStatuses() }
+            #if !DEBUG
+            Task { await self.restartHelperIfOutdated() }
+            #endif
         } catch {
             self.loadState = .failed(String(describing: error))
             NSLog("AppEnvironment bootstrap failed: \(error)")
         }
     }
+
+    #if !DEBUG
+    /// Restarts the LaunchAgent helper at launch when the running process predates
+    /// the helper binary in the current app bundle (skew after a rebuild) or has
+    /// stopped. Without this, a long-lived helper keeps running stale code (e.g. a
+    /// pre-fix build that fabricates phantom 5h windows) until the user notices.
+    /// `KeepAlive` relaunches the fresh binary; the next heartbeat clears the skew.
+    private func restartHelperIfOutdated() async {
+        guard let repo = helperHeartbeatRepository else { return }
+        let latest = try? await repo.latest()
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/C5hHelper")
+        let evaluation = HelperHealthEvaluator().evaluate(
+            heartbeat: latest.map {
+                HelperHeartbeatEvidence(startedAt: $0.startedAt, lastSeenAt: $0.lastSeenAt, pid: $0.pid)
+            },
+            now: .now,
+            expectedBinaryModifiedAt: HelperBuildStamp.modificationDate(forBinaryAt: helperURL),
+            isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
+        )
+        guard evaluation.outdated || evaluation.status == .stopped else { return }
+        NSLog("AppEnvironment: helper \(evaluation.outdated ? "outdated" : "stopped") (pid \(evaluation.pid.map(String.init) ?? "nil")); restarting")
+        HelperRegistrationService().restart(runningPID: evaluation.pid)
+    }
+    #endif
 
     func refreshAllProviderStatuses() async {
         for id in ProviderID.allCases {

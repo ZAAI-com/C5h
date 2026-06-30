@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import Darwin
 import C5hCore
 
 @MainActor
@@ -73,6 +74,24 @@ final class HelperRegistrationService {
             refresh()
         } catch {
             status = .error(String(describing: error))
+        }
+        #endif
+    }
+
+    /// Restarts the LaunchAgent helper so the running process is the binary in the
+    /// current app bundle (the cure for a stale helper that predates a rebuild).
+    /// Terminating the running process makes launchd relaunch it via `KeepAlive`
+    /// (the plist relaunches on a non-successful exit, which a signal is). When no
+    /// running PID is known, ensures the agent is registered so launchd starts it.
+    /// No-op in Debug builds, where the helper is the unmanaged dev subprocess.
+    func restart(runningPID: Int?) {
+        #if DEBUG
+        status = .unsupported
+        #else
+        if let runningPID, runningPID > 0 {
+            kill(pid_t(runningPID), SIGTERM)
+        } else {
+            register()
         }
         #endif
     }

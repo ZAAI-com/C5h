@@ -66,7 +66,7 @@ struct SettingsView: View {
                 }
                 if helperHealth.outdated {
                     Label(
-                        "The running helper is an older build than the one on disk. Stop and Start the debug subprocess runner below to load the latest code.",
+                        "The running helper is an older build than the one on disk. Restart the helper to load the latest code.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(C5hTypography.captionFont)
@@ -75,8 +75,12 @@ struct SettingsView: View {
                 LabeledContent("Last seen", value: lastSeenLabel)
                 LabeledContent("Helper version", value: heartbeat?.helperVersion ?? "—")
                 LabeledContent("PID", value: helperHealth.pid.map(String.init) ?? "—")
-                Button("Refresh") { Task { await reloadHeartbeat() } }
-                    .buttonStyle(.glass)
+                HStack {
+                    Button("Refresh") { Task { await reloadHeartbeat() } }
+                        .buttonStyle(.glass)
+                    Button("Restart helper") { Task { await restartHelper() } }
+                        .buttonStyle(.glass)
+                }
             }
             #if DEBUG
             Section("Debug subprocess runner") {
@@ -300,6 +304,21 @@ struct SettingsView: View {
             lastExportedBundlePath = nil
             lastExportError = error.localizedDescription
         }
+    }
+
+    /// Restarts the helper so the running process becomes the current build.
+    /// Debug uses the dev subprocess runner; Release terminates the LaunchAgent
+    /// helper (relaunched by launchd `KeepAlive`). Refreshes health afterward once
+    /// the new process has had a moment to write its first heartbeat.
+    private func restartHelper() async {
+        #if DEBUG
+        devRunner.stop()
+        devRunner.start()
+        #else
+        registration.restart(runningPID: helperHealth.pid)
+        #endif
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await reloadHeartbeat()
     }
 
     private func reloadHeartbeat() async {

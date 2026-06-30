@@ -115,7 +115,11 @@ struct HelperMain {
             plannedRepo: plannedRepo
         )
 
-        // Heartbeat + tick loop. Sleep 30s between iterations.
+        // Heartbeat + tick loop. Sleep 30s between iterations. Exit after a bounded
+        // uptime so launchd (KeepAlive) relaunches a fresh process; this is the
+        // periodic restart and also self-heals version skew after an app rebuild,
+        // since the relaunch picks up the current bundle's helper binary.
+        let startedAt = Date()
         while true {
             try? await heartbeatRepo.writeHeartbeat(
                 version: helperVersion,
@@ -123,6 +127,10 @@ struct HelperMain {
             )
             _ = await scheduler.tick(now: .now)
             await usageRefresher.tickIfDue(now: .now)
+            if HelperRestartPolicy.shouldRestart(startedAt: startedAt, now: .now) {
+                NSLog("C5hHelper \(helperVersion) exiting for periodic restart after \(Int(Date().timeIntervalSince(startedAt)))s uptime (pid \(getpid()))")
+                exit(2)
+            }
             try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
         }
     }
