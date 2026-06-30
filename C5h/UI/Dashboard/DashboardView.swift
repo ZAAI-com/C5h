@@ -20,6 +20,7 @@ struct DashboardView: View {
             if viewModel == nil,
                let actual5hRepo = appEnv.actualWindow5hRepository,
                let actual7dRepo = appEnv.actualWindow7dRepository,
+               let plannedRepo = appEnv.plannedWindowRepository,
                let scheduledRepo = appEnv.scheduledPromptRepository,
                let cmdRepo = appEnv.commandRunRepository,
                let usageRepo = appEnv.usageSnapshotRepository,
@@ -28,6 +29,7 @@ struct DashboardView: View {
                 let vm = DashboardViewModel(
                     actual5hRepository: actual5hRepo,
                     actual7dRepository: actual7dRepo,
+                    plannedWindowRepository: plannedRepo,
                     scheduledRepository: scheduledRepo,
                     commandRunRepository: cmdRepo,
                     usageSnapshotRepository: usageRepo,

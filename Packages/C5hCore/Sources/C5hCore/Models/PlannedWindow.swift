@@ -51,4 +51,11 @@ public enum PlannedWindowStatus: String, Codable, Sendable, CaseIterable {
     case triggered
     case missed
     case cancelled
+
+    /// Leaf states in the lifecycle: the window has fired, lapsed, or been
+    /// abandoned and will not (re)open from here. `draft` and `scheduled` are
+    /// the pending states still awaiting execution.
+    public var isTerminal: Bool {
+        self == .triggered || self == .missed || self == .cancelled
+    }
 }

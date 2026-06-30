@@ -8,6 +8,8 @@ import C5hStore
 final class ProvidersViewModel {
     var configuredPaths: [ProviderID: String] = [:]
     var wakePrompts: [ProviderID: String] = [:]
+    var usageRefreshIntervals: [ProviderID: Int] = [:]
+    var checkWhenIdle: [ProviderID: Bool] = [:]
     var usageChecks: [ProviderID: ProviderUsageCheck] = [:]
     var loadingUsageProviders: Set<ProviderID> = []
     var lastError: String?
@@ -47,7 +49,41 @@ final class ProvidersViewModel {
         for id in ProviderID.allCases {
             await loadConfiguredPath(for: id)
             await loadWakePrompt(for: id)
+            await loadUsageRefreshInterval(for: id)
+            await loadCheckWhenIdle(for: id)
             await loadLatestUsageCheck(for: id)
+        }
+    }
+
+    private func loadUsageRefreshInterval(for id: ProviderID) async {
+        let key = AppSettingsKeys.usageRefreshIntervalSeconds(for: id)
+        let stored = (try? await appSettings.get(key, as: Int.self)) ?? nil
+        usageRefreshIntervals[id] = stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds
+    }
+
+    func setUsageRefreshInterval(id: ProviderID, _ seconds: Int) async {
+        let key = AppSettingsKeys.usageRefreshIntervalSeconds(for: id)
+        do {
+            try await appSettings.set(key, value: seconds)
+            usageRefreshIntervals[id] = seconds
+        } catch {
+            lastError = String(describing: error)
+        }
+    }
+
+    private func loadCheckWhenIdle(for id: ProviderID) async {
+        let key = AppSettingsKeys.checkUsageWhenIdle(for: id)
+        let stored = (try? await appSettings.get(key, as: Bool.self)) ?? nil
+        checkWhenIdle[id] = stored ?? AppSettingsKeys.defaultCheckUsageWhenIdle
+    }
+
+    func setCheckWhenIdle(id: ProviderID, _ enabled: Bool) async {
+        let key = AppSettingsKeys.checkUsageWhenIdle(for: id)
+        do {
+            try await appSettings.set(key, value: enabled)
+            checkWhenIdle[id] = enabled
+        } catch {
+            lastError = String(describing: error)
         }
     }
 

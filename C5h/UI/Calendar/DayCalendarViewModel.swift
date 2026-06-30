@@ -127,6 +127,15 @@ final class DayCalendarViewModel {
               let registry = providerRegistry,
               let actual7dRepo = actual7dRepository else { return }
         let actual5hRepo = actual5hRepository
+        // When settings are available, honor the per-provider "check when idle"
+        // gate; without them, fall back to refreshing (default behavior).
+        let gate = appSettings.map {
+            UsageCheckGate.make(
+                appSettings: $0,
+                actual5hRepository: actual5hRepo,
+                plannedWindowRepository: plannedRepository
+            )
+        }
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
             upsertActualWindow5h: { window, tolerance in
@@ -136,7 +145,11 @@ final class DayCalendarViewModel {
                 try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
+        let now = Date()
         for providerID in ProviderID.allCases {
+            if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
+                continue
+            }
             do {
                 let adapter = try registry.adapter(for: providerID)
                 _ = try await fetcher.fetchAndPersist(adapter: adapter)

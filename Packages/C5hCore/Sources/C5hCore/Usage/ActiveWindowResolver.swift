@@ -110,7 +110,10 @@ public struct ActiveWindowResolver: Sendable {
         now: Date
     ) async throws -> ActualWindow5h? {
         try await fetcher.persistSnapshot(snapshot)
-        let derived5h = try fetcher.derived5h(from: snapshot, now: now)
+        // A wake prompt just opened this window on purpose, so anchor it even if
+        // usage hasn't registered yet (requireActiveWindow: false). Idle polls
+        // keep the default guard so they can't fabricate a phantom window.
+        let derived5h = try fetcher.derived5h(from: snapshot, now: now, requireActiveWindow: false)
         if let window = derived5h {
             try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
         }

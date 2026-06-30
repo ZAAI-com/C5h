@@ -9,6 +9,8 @@ struct ProviderCardView: View {
     let status: ProviderStatus?
     let configuredPath: String
     let wakePrompt: String
+    let refreshIntervalSeconds: Int
+    let checkWhenIdle: Bool
     let usageCheck: ProviderUsageCheck?
     let isStatusLoading: Bool
     let isUsageLoading: Bool
@@ -21,6 +23,8 @@ struct ProviderCardView: View {
     let onSetPath: (String) -> Void
     let onClearPath: () -> Void
     let onSetWakePrompt: (String) -> Void
+    let onSetRefreshInterval: (Int) -> Void
+    let onSetCheckWhenIdle: (Bool) -> Void
 
     @State private var pathDraft: String = ""
     @State private var wakePromptDraft: String = ""
@@ -105,7 +109,42 @@ struct ProviderCardView: View {
                 Text(Self.windowLengthDisplay)
                     .font(C5hTypography.captionFont)
             }
+            GridRow {
+                Text("Refresh rate")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                Picker("", selection: refreshIntervalBinding) {
+                    Text("1 minute").tag(60)
+                    Text("5 minutes").tag(300)
+                    Text("15 minutes").tag(900)
+                    Text("30 minutes").tag(1800)
+                    Text("1 hour").tag(3600)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            GridRow {
+                Text("Check when idle")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgSecondary)
+                Toggle("", isOn: checkWhenIdleBinding)
+                    .labelsHidden()
+            }
+            GridRow {
+                Color.clear.frame(width: 0, height: 0)
+                Text("When off, C5h only checks usage while this provider has an active or planned window.")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(C5hColors.fgTertiary)
+            }
         }
+    }
+
+    private var refreshIntervalBinding: Binding<Int> {
+        Binding(get: { refreshIntervalSeconds }, set: { onSetRefreshInterval($0) })
+    }
+
+    private var checkWhenIdleBinding: Binding<Bool> {
+        Binding(get: { checkWhenIdle }, set: { onSetCheckWhenIdle($0) })
     }
 
     private var header: some View {

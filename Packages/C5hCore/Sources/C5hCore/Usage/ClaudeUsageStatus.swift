@@ -17,6 +17,16 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
         fiveHour.resetsAt.addingTimeInterval(-TimeInterval(Self.fiveHourDurationSeconds))
     }
 
+    /// True when the reported 5h window reflects real consumption. Claude's
+    /// statusLine keeps reporting a rolling `five_hour` boundary even while idle
+    /// (used_percentage stays 0); deriving a window from those reports fabricates
+    /// phantom 5h windows. Analogous to Codex's `hasActivePrimaryWindow`, but
+    /// Claude anchors `resets_at` to a boundary even when idle, so usage (not the
+    /// remaining-time heuristic) is the reliable signal here.
+    public var hasActiveFiveHourWindow: Bool {
+        fiveHour.usedPercentage > 0
+    }
+
     public var sevenDayStartAt: Date? {
         sevenDay?.resetsAt.addingTimeInterval(-TimeInterval(Self.sevenDayDurationSeconds))
     }

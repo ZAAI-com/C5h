@@ -66,6 +66,7 @@ struct HelperMain {
         let scheduledRepo = GRDBScheduledPromptRepository(database: database)
         let actual5hRepo = GRDBActualWindow5hRepository(database: database)
         let actual7dRepo = GRDBActualWindow7dRepository(database: database)
+        let plannedRepo = GRDBPlannedWindowRepository(database: database)
         let cmdRepo = GRDBCommandRunRepository(database: database)
         let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
@@ -110,7 +111,8 @@ struct HelperMain {
             fetcher: usageFetcher,
             cmdRepo: cmdRepo,
             logWriter: logWriter,
-            intervalSeconds: 5 * 60
+            actual5hRepo: actual5hRepo,
+            plannedRepo: plannedRepo
         )
 
         // Heartbeat + tick loop. Sleep 30s between iterations.
@@ -126,17 +128,19 @@ struct HelperMain {
     }
 }
 
-/// Polls every enabled provider's usage on a fixed cadence so the "current 5h
-/// window" we display stays accurate even when the main app isn't open.
+/// Polls each provider's usage on its own configured cadence so the "current 5h
+/// window" we display stays accurate even when the main app isn't open. Honors
+/// the per-provider "check when idle" setting: when off, a provider is skipped
+/// unless it has an active or pending planned window.
 actor HelperUsageRefresher {
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
     let fetcher: UsageFetcher
     let cmdRepo: any CommandRunRepository
     let logWriter: any FileLogWriting
-    let intervalSeconds: TimeInterval
+    let gate: UsageCheckGate
 
-    private var lastRefreshAt: Date?
+    private var lastRefreshAt: [ProviderID: Date] = [:]
 
     init(
         resolver: any CLIPathResolving,
@@ -144,24 +148,43 @@ actor HelperUsageRefresher {
         fetcher: UsageFetcher,
         cmdRepo: any CommandRunRepository,
         logWriter: any FileLogWriting,
-        intervalSeconds: TimeInterval
+        actual5hRepo: any ActualWindow5hRepository,
+        plannedRepo: any PlannedWindowRepository
     ) {
         self.resolver = resolver
         self.settingsRepo = settingsRepo
         self.fetcher = fetcher
         self.cmdRepo = cmdRepo
         self.logWriter = logWriter
-        self.intervalSeconds = intervalSeconds
+        self.gate = UsageCheckGate.make(
+            appSettings: settingsRepo,
+            actual5hRepository: actual5hRepo,
+            plannedWindowRepository: plannedRepo
+        )
     }
 
     func tickIfDue(now: Date) async {
-        if let last = lastRefreshAt, now.timeIntervalSince(last) < intervalSeconds {
-            return
-        }
-        lastRefreshAt = now
         for providerID in ProviderID.allCases {
+            let interval = await intervalSeconds(for: providerID)
+            if let last = lastRefreshAt[providerID], now.timeIntervalSince(last) < interval {
+                continue
+            }
+            // Don't consume the interval when gated off: re-evaluate next tick so
+            // a newly active or planned window resumes polling promptly.
+            guard await gate.shouldCheck(providerID: providerID, now: now) else {
+                continue
+            }
+            lastRefreshAt[providerID] = now
             await refresh(providerID: providerID, now: now)
         }
+    }
+
+    private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {
+        let stored = (try? await settingsRepo.get(
+            AppSettingsKeys.usageRefreshIntervalSeconds(for: providerID),
+            as: Int.self
+        )) ?? nil
+        return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
     private func refresh(providerID: ProviderID, now: Date) async {
