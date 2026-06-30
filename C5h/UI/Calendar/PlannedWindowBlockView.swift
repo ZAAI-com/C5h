@@ -55,9 +55,11 @@ struct PlannedWindowBlockView: View {
         }
         .padding(compact ? 3 : 6)
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(alignment: .top) {
-            shape.fill(brandColor.opacity(0.22))
-            nowLine(height: height)
+        .background {
+            ZStack(alignment: .top) {
+                shape.fill(brandColor.opacity(0.22))
+                nowLine(height: height)
+            }
         }
         .overlay(shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1))
         .clipShape(shape)

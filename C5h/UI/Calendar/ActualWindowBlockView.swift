@@ -144,9 +144,11 @@ struct ActualWindowBlockView: View {
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(alignment: .top) {
-            shape.fill(brandColor)
-            nowLine(height: height)
+        .background {
+            ZStack(alignment: .top) {
+                shape.fill(brandColor)
+                nowLine(height: height)
+            }
         }
         .overlay {
             shape
