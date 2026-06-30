@@ -97,6 +97,45 @@ struct UsageFetcherTests {
         #expect(weekly.usageSnapshotID == snapshot.id)
     }
 
+    @Test("Skips Claude 5h row when the report is idle (0% used)")
+    func skipsClaudeIdleWindow() throws {
+        // Claude's statusLine keeps reporting a rolling five_hour boundary while
+        // idle (used_percentage 0). Deriving a window from it would fabricate a
+        // phantom 5h window on every poll.
+        let snapshot = makeClaudeIdleSnapshot()
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(from: snapshot, now: Date(timeIntervalSince1970: 0))
+        #expect(derived5h == nil)
+    }
+
+    @Test("Anchors Claude 5h row at 0% when requireActiveWindow is false (trigger path)")
+    func anchorsClaudeIdleWindowForTrigger() throws {
+        // A wake prompt just opened this window on purpose, so the trigger path
+        // anchors it even before usage registers.
+        let snapshot = makeClaudeIdleSnapshot()
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(
+            from: snapshot,
+            now: Date(timeIntervalSince1970: 0),
+            requireActiveWindow: false
+        )
+        let window = try #require(derived5h)
+        #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
+    }
+
+    private func makeClaudeIdleSnapshot() -> UsageSnapshot {
+        UsageSnapshot(
+            providerID: .claude,
+            capturedAt: Date(timeIntervalSince1970: 100),
+            rawJSON: """
+            {"rate_limits":{"five_hour":{"used_percentage":0,"resets_at":1778373600},"seven_day":{"used_percentage":7,"resets_at":1778893200}}}
+            """,
+            normalizedJSON: "{}"
+        )
+    }
+
     private func makeFetcher() -> UsageFetcher {
         UsageFetcher(
             persistSnapshot: { _ in },

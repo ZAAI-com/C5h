@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "Homebrew": {
+      "type": "stdio",
+      "command": "brew",
+      "args": ["mcp-server"]
+    }
+  }
+}

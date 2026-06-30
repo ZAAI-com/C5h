@@ -29,6 +29,16 @@ struct ProviderColumnView: View {
         ZStack(alignment: .topLeading) {
             background
             ghostPlanBlock
+            // Continuous current-time line for the empty timeline; it sits above
+            // the column background but below the window blocks (zIndex 1/2), so
+            // each block carries it on through behind its own text.
+            if Calendar.current.isDate(date, inSameDayAs: now) {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(height: 1)
+                    .offset(y: yOffset(for: now))
+                    .allowsHitTesting(false)
+            }
             ForEach(plannedWindows) { window in
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
@@ -41,6 +51,7 @@ struct ProviderColumnView: View {
                         visibleDurationSeconds: segment.durationSeconds,
                         clipsTop: segment.clippedStart,
                         clipsBottom: segment.clippedEnd,
+                        segmentStart: segment.start,
                         displayStart: draggingPlannedID == window.id ? displayStart : nil,
                         emphasizeEndTime: true
                     )

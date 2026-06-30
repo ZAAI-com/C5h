@@ -47,13 +47,20 @@ public struct UsageFetcher: Sendable {
 
     /// Derives the rolling 5h row from a freshly-captured snapshot. Exposed for
     /// unit tests; callers should normally use `fetchAndPersist`.
+    ///
+    /// `requireActiveWindow` (default true) drops reports that don't reflect a
+    /// genuinely active window, so idle polls don't fabricate phantom 5h windows.
+    /// The trigger-anchoring path passes false: a wake prompt just opened the
+    /// window on purpose, so it should anchor even before usage registers.
     public func derived5h(
         from snapshot: UsageSnapshot,
-        now: Date = .now
+        now: Date = .now,
+        requireActiveWindow: Bool = true
     ) throws -> ActualWindow5h? {
         switch snapshot.providerID {
         case .claude:
             let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
+            if requireActiveWindow, !status.hasActiveFiveHourWindow { return nil }
             let window = status.actualWindow(providerID: .claude, createdAt: snapshot.capturedAt)
             return window.endAt > now ? window : nil
         case .codex:

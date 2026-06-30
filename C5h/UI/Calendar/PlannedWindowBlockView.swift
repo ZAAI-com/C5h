@@ -10,6 +10,10 @@ struct PlannedWindowBlockView: View {
     var clipsTop: Bool = false
     var clipsBottom: Bool = false
     var compact: Bool = false
+    /// The block's visible top time (the start of the segment rendered in this
+    /// column). Used to place the red current-time line; for cross-midnight
+    /// segments this is the clamped (midnight) start, matching the on-screen top.
+    var segmentStart: Date = .distantPast
     var displayStart: Date? = nil
     /// When true, the end-time corner label is rendered bold to match the start
     /// time. The Day view (Today/Tomorrow) sets this so every block time reads
@@ -51,9 +55,42 @@ struct PlannedWindowBlockView: View {
         }
         .padding(compact ? 3 : 6)
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(shape.fill(brandColor.opacity(0.22)))
-        .overlay(shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1))
+        .background {
+            ZStack(alignment: .top) {
+                shape.fill(brandColor.opacity(0.22))
+                shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1)
+                nowLine(height: height)
+            }
+        }
         .clipShape(shape)
+    }
+
+    /// The red current-time line, drawn in the block's background layer so it sits
+    /// above the fill and border but behind the text. Shown only while `now` falls
+    /// within the block's visible vertical span, which happens only on the day
+    /// rendered as today.
+    @ViewBuilder
+    private func nowLine(height: CGFloat) -> some View {
+        // `yOffset` is time-of-day only, so without a day guard a block on a
+        // non-today column (Week view, or a navigated Day) whose clock-time span
+        // contains the current time would draw a stray red line. Mirror the
+        // column-level guard in ProviderColumnView.
+        if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
+            let ppm = layout.pixelsPerMinute
+            let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+            let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+            if y >= 0, y <= height {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(height: 1)
+                    .offset(y: y)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var effectiveSegmentStart: Date {
+        segmentStart == .distantPast ? window.startAt : segmentStart
     }
 
     private func cornersOverlay(

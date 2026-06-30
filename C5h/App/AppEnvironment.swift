@@ -120,11 +120,53 @@ final class AppEnvironment {
 
             self.loadState = .ready
             Task { await self.refreshAllProviderStatuses() }
+            #if !DEBUG
+            Task { await self.restartHelperIfOutdated() }
+            #endif
         } catch {
             self.loadState = .failed(String(describing: error))
             NSLog("AppEnvironment bootstrap failed: \(error)")
         }
     }
+
+    #if !DEBUG
+    /// Restarts the LaunchAgent helper at launch when the running process predates
+    /// the helper binary in the current app bundle (skew after a rebuild) or has
+    /// stopped. Without this, a long-lived helper keeps running stale code (e.g. a
+    /// pre-fix build that fabricates phantom 5h windows) until the user notices.
+    /// `KeepAlive` relaunches the fresh binary; the next heartbeat clears the skew.
+    private func restartHelperIfOutdated() async {
+        guard let repo = helperHeartbeatRepository else { return }
+        let latest = try? await repo.latest()
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/C5hHelper")
+        let evaluation = HelperHealthEvaluator().evaluate(
+            heartbeat: latest.map {
+                HelperHeartbeatEvidence(startedAt: $0.startedAt, lastSeenAt: $0.lastSeenAt, pid: $0.pid)
+            },
+            now: .now,
+            expectedBinaryModifiedAt: HelperBuildStamp.modificationDate(forBinaryAt: helperURL),
+            isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
+        )
+        // A helper that died more than `staleAfterSeconds` ago reports `.stale`
+        // (the evaluator returns `.stale` before it ever checks liveness), so the
+        // common "long-dead at launch" case must be repaired here too, not only
+        // the narrow `.stopped` window.
+        guard evaluation.outdated
+            || evaluation.status == .stopped
+            || evaluation.status == .stale else { return }
+        let reason = evaluation.outdated ? "outdated" : String(describing: evaluation.status)
+        NSLog("AppEnvironment: helper \(reason) (pid \(evaluation.pid.map(String.init) ?? "nil")); restarting")
+        // Only signal a confirmed-live PID. `.stale` is reported before any
+        // liveness check and `.stopped` is a dead PID, so passing them risks a
+        // stray SIGTERM to a recycled PID (common after a reboot) while skipping
+        // the register() that would actually bring the helper back. Mirror
+        // SettingsView.restartHelper(): pass nil for those states so restart()
+        // registers instead.
+        let runningPID = evaluation.status == .running ? evaluation.pid : nil
+        HelperRegistrationService().restart(runningPID: runningPID)
+    }
+    #endif
 
     func refreshAllProviderStatuses() async {
         for id in ProviderID.allCases {

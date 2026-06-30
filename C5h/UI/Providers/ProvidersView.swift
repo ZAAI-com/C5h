@@ -86,6 +86,8 @@ struct ProvidersView: View {
             status: appEnv.providerStatuses[id],
             configuredPath: viewModel.configuredPaths[id] ?? "",
             wakePrompt: viewModel.wakePrompts[id] ?? "",
+            refreshIntervalSeconds: viewModel.usageRefreshIntervals[id] ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds,
+            checkWhenIdle: viewModel.checkWhenIdle[id] ?? AppSettingsKeys.defaultCheckUsageWhenIdle,
             usageCheck: viewModel.usageChecks[id],
             isStatusLoading: appEnv.providerStatusLoading.contains(id),
             isUsageLoading: viewModel.loadingUsageProviders.contains(id),
@@ -101,6 +103,12 @@ struct ProvidersView: View {
             onClearPath: { Task { await viewModel.setCLIPath(id: id, nil) } },
             onSetWakePrompt: { newValue in
                 Task { await viewModel.setWakePrompt(id: id, newValue) }
+            },
+            onSetRefreshInterval: { seconds in
+                Task { await viewModel.setUsageRefreshInterval(id: id, seconds) }
+            },
+            onSetCheckWhenIdle: { enabled in
+                Task { await viewModel.setCheckWhenIdle(id: id, enabled) }
             }
         )
     }

@@ -13,7 +13,6 @@ struct SettingsView: View {
         pid: nil
     )
     @State private var registration = HelperRegistrationService()
-    @State private var usageRefreshThrottleSeconds = AppSettingsKeys.defaultUsageRefreshThrottleSeconds
     #if DEBUG
     @State private var devRunner = HelperDevModeRunner()
     #endif
@@ -67,7 +66,7 @@ struct SettingsView: View {
                 }
                 if helperHealth.outdated {
                     Label(
-                        "The running helper is an older build than the one on disk. Stop and Start the debug subprocess runner below to load the latest code.",
+                        "The running helper is an older build than the one on disk. Restart the helper to load the latest code.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(C5hTypography.captionFont)
@@ -76,8 +75,12 @@ struct SettingsView: View {
                 LabeledContent("Last seen", value: lastSeenLabel)
                 LabeledContent("Helper version", value: heartbeat?.helperVersion ?? "—")
                 LabeledContent("PID", value: helperHealth.pid.map(String.init) ?? "—")
-                Button("Refresh") { Task { await reloadHeartbeat() } }
-                    .buttonStyle(.glass)
+                HStack {
+                    Button("Refresh") { Task { await reloadHeartbeat() } }
+                        .buttonStyle(.glass)
+                    Button("Restart helper") { Task { await restartHelper() } }
+                        .buttonStyle(.glass)
+                }
             }
             #if DEBUG
             Section("Debug subprocess runner") {
@@ -96,18 +99,6 @@ struct SettingsView: View {
                     .foregroundStyle(C5hColors.fgTertiary)
             }
             #endif
-            Section("Usage refresh") {
-                Picker("Refresh no more often than", selection: $usageRefreshThrottleSeconds) {
-                    Text("1 minute").tag(60)
-                    Text("5 minutes").tag(300)
-                    Text("15 minutes").tag(900)
-                    Text("30 minutes").tag(1800)
-                    Text("1 hour").tag(3600)
-                }
-                Text("The dashboard always shows the last fetched usage. This sets how often C5h re-runs the Claude and Codex CLIs in the background to refresh it.")
-                    .font(C5hTypography.captionFont)
-                    .foregroundStyle(C5hColors.fgTertiary)
-            }
             Section("Time zone") {
                 LabeledContent("Identifier", value: TimeZone.current.identifier)
                 LabeledContent("Abbreviation", value: TimeZone.current.abbreviation() ?? "—")
@@ -166,27 +157,7 @@ struct SettingsView: View {
         }
         .task {
             await reloadHeartbeat()
-            await loadUsageRefreshThrottle()
         }
-        .onChange(of: usageRefreshThrottleSeconds) { _, newValue in
-            Task { await saveUsageRefreshThrottle(newValue) }
-        }
-    }
-
-    private func loadUsageRefreshThrottle() async {
-        guard let repo = appEnv.appSettingsRepository else { return }
-        let stored = (try? await repo.get(
-            AppSettingsKeys.usageRefreshThrottleSeconds,
-            as: Int.self
-        )) ?? nil
-        if let stored {
-            usageRefreshThrottleSeconds = stored
-        }
-    }
-
-    private func saveUsageRefreshThrottle(_ seconds: Int) async {
-        guard let repo = appEnv.appSettingsRepository else { return }
-        try? await repo.set(AppSettingsKeys.usageRefreshThrottleSeconds, value: seconds)
     }
 
     @State private var lastSweepResult: LogRetentionResult?
@@ -333,6 +304,24 @@ struct SettingsView: View {
             lastExportedBundlePath = nil
             lastExportError = error.localizedDescription
         }
+    }
+
+    /// Restarts the helper so the running process becomes the current build.
+    /// Debug uses the dev subprocess runner; Release terminates the LaunchAgent
+    /// helper (relaunched by launchd `KeepAlive`). Refreshes health afterward once
+    /// the new process has had a moment to write its first heartbeat.
+    private func restartHelper() async {
+        #if DEBUG
+        devRunner.stop()
+        devRunner.start()
+        #else
+        // Only signal a PID that is actually alive; for stopped/stale states the
+        // heartbeat PID is dead, so pass nil and let restart() register instead.
+        let runningPID = helperHealth.status == .running ? helperHealth.pid : nil
+        registration.restart(runningPID: runningPID)
+        #endif
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await reloadHeartbeat()
     }
 
     private func reloadHeartbeat() async {

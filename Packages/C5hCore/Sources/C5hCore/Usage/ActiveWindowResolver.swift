@@ -49,16 +49,24 @@ public struct ActiveWindowResolver: Sendable {
         now: Date = .now
     ) async -> ActualWindow5h? {
         // 1. Prefer the provider's real current window from a fresh usage
-        //    snapshot, promoted to `c5hTriggered`/`exact`.
-        if let snapshot = try? await snapshotFetch(providerID),
-           let promoted = try? await promoteFromSnapshot(
-               snapshot,
-               providerID: providerID,
-               commandRunID: commandRunID,
-               now: now
-           ) {
-            NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
-            return promoted
+        //    snapshot, promoted to `c5hTriggered`/`exact`. A thrown error here
+        //    (usage CLI failure, decode error, DB write failure) is logged and
+        //    falls through to reuse, so a hard failure stays distinguishable from
+        //    a genuine no-active-window result (`promoteFromSnapshot` -> nil,
+        //    which stays quiet and also falls through).
+        do {
+            let snapshot = try await snapshotFetch(providerID)
+            if let promoted = try await promoteFromSnapshot(
+                snapshot,
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
+                return promoted
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: snapshot/promote failed for \(providerID.rawValue) command \(commandRunID): \(error)")
         }
 
         // 2. No usable fresh window (the snapshot threw, or reported no active 5h
@@ -66,14 +74,19 @@ public struct ActiveWindowResolver: Sendable {
         //    covers `now` instead of fabricating one. The run happened inside
         //    that window, so a pinned `[now, +5h]` estimate would only ever
         //    linger as an overlapping duplicate (its end is offset from the real
-        //    window's, beyond the dedup tolerance).
-        if let reused = try? await reuseActiveWindow(
-            providerID: providerID,
-            commandRunID: commandRunID,
-            now: now
-        ) {
-            NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) (no fresh window from usage)")
-            return reused
+        //    window's, beyond the dedup tolerance). A thrown error here is logged
+        //    and falls through to recording nothing.
+        do {
+            if let reused = try await reuseActiveWindow(
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) (no fresh window from usage)")
+                return reused
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: reuse failed for \(providerID.rawValue) command \(commandRunID): \(error)")
         }
 
         // 3. No real 5h window exists to anchor to. Record nothing: the
@@ -97,7 +110,10 @@ public struct ActiveWindowResolver: Sendable {
         now: Date
     ) async throws -> ActualWindow5h? {
         try await fetcher.persistSnapshot(snapshot)
-        let derived5h = try fetcher.derived5h(from: snapshot, now: now)
+        // A wake prompt just opened this window on purpose, so anchor it even if
+        // usage hasn't registered yet (requireActiveWindow: false). Idle polls
+        // keep the default guard so they can't fabricate a phantom window.
+        let derived5h = try fetcher.derived5h(from: snapshot, now: now, requireActiveWindow: false)
         if let window = derived5h {
             try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
         }

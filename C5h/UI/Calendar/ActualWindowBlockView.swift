@@ -135,6 +135,7 @@ struct ActualWindowBlockView: View {
                         )
                         .offset(y: usageRowOffset(
                             capturedAt: reading.capturedAt,
+                            rowHeight: usageRowHeight(reading: reading, contentWidth: contentWidth),
                             height: height,
                             duration: duration,
                             pad: pad
@@ -144,14 +145,40 @@ struct ActualWindowBlockView: View {
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
-        .background(shape.fill(brandColor))
-        .overlay {
-            shape
-                .strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
-                .allowsHitTesting(false)
+        .background {
+            ZStack(alignment: .top) {
+                shape.fill(brandColor)
+                shape.strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
+                    .allowsHitTesting(false)
+                nowLine(height: height)
+            }
         }
         .clipShape(shape)
         .foregroundStyle(.white)
+    }
+
+    /// The red current-time line, drawn in the block's background layer so it sits
+    /// above the colored fill and border but behind the white text. Shown only
+    /// while `now` falls within the block's visible vertical span, which happens
+    /// only on the day rendered as today.
+    @ViewBuilder
+    private func nowLine(height: CGFloat) -> some View {
+        // `yOffset` is time-of-day only, so without a day guard a block on a
+        // non-today column (Week view, or a navigated Day) whose clock-time span
+        // contains the current time would draw a stray red line. Mirror the
+        // column-level guard in ProviderColumnView.
+        if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
+            let ppm = layout.pixelsPerMinute
+            let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+            let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+            if y >= 0, y <= height {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(height: 1)
+                    .offset(y: y)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     /// Subtle, neutral marker for a quota reset boundary. Deliberately plain (no
@@ -270,9 +297,16 @@ struct ActualWindowBlockView: View {
 
     private var usageFontSize: CGFloat { compact ? 9 : 10 }
 
+    /// Below this content width, a single row can't hold the time plus both
+    /// `5h usage` and `7d usage` readings without the two metrics overlapping (as
+    /// happens for lane-packed half-width boxes), so they stack vertically instead.
+    private static let usageRowMinSingleLineWidth: CGFloat = 150
+
     /// Day view row: time at the left, 5h usage starting at the horizontal
-    /// midpoint, and 7d usage right-aligned. The row's vertical location is
-    /// controlled by its caller.
+    /// midpoint, and 7d usage right-aligned. In a box too narrow to fit both
+    /// metrics on the time's row, the time, 5h and 7d stack on their own
+    /// left-aligned lines instead so the labels never overlap. The row's vertical
+    /// location is controlled by its caller.
     private func usageReadingRow(
         timeText: String,
         showsResetGlyph: Bool = false,
@@ -286,20 +320,40 @@ struct ActualWindowBlockView: View {
             showFiveHourWhenZero: showFiveHourWhenZero
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
-        return ZStack(alignment: .leading) {
-            timeLabel(
-                timeText,
-                weight: .semibold,
-                showsResetGlyph: showsResetGlyph
-            )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let five {
-                usageMetricLabel("5h usage", value: five)
-                    .offset(x: contentWidth / 2)
-            }
-            if let seven {
-                usageMetricLabel("7d usage", value: seven)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+        let stacked = contentWidth < Self.usageRowMinSingleLineWidth
+            && (five != nil || seven != nil)
+        return Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: 0) {
+                    timeLabel(
+                        timeText,
+                        weight: .semibold,
+                        showsResetGlyph: showsResetGlyph
+                    )
+                    if let five {
+                        usageMetricLabel("5h usage", value: five)
+                    }
+                    if let seven {
+                        usageMetricLabel("7d usage", value: seven)
+                    }
+                }
+            } else {
+                ZStack(alignment: .leading) {
+                    timeLabel(
+                        timeText,
+                        weight: .semibold,
+                        showsResetGlyph: showsResetGlyph
+                    )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let five {
+                        usageMetricLabel("5h usage", value: five)
+                            .offset(x: contentWidth / 2)
+                    }
+                    if let seven {
+                        usageMetricLabel("7d usage", value: seven)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
             }
         }
         .lineLimit(1)
@@ -336,12 +390,32 @@ struct ActualWindowBlockView: View {
             .monospacedDigit()
     }
 
-    /// Vertical offset (from the block's top edge) that places a reading label so
+    /// Rendered height of the floating usage row. In a narrow lane-packed block
+    /// the row stacks the time, 5h and 7d onto their own lines (see
+    /// `usageReadingRow`), so the anchoring math must reserve this taller height
+    /// instead of a single line to avoid colliding with the corner rows or the
+    /// now-line. Mirrors the `stacked` condition in `usageReadingRow`.
+    private func usageRowHeight(
+        reading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?),
+        contentWidth: CGFloat
+    ) -> CGFloat {
+        let five = Self.visibleFiveHour(reading.fiveHour, showFiveHourWhenZero: true)
+        let seven = Self.meaningfulSevenDay(reading.sevenDay)
+        let stacked = contentWidth < Self.usageRowMinSingleLineWidth
+            && (five != nil || seven != nil)
+        guard stacked else { return labelLineHeight }
+        let lines = 1 + (five != nil ? 1 : 0) + (seven != nil ? 1 : 0)
+        return labelLineHeight * CGFloat(lines)
+    }
+
+    /// Vertical offset (from the block's top edge) that places a reading row so
     /// its center sits at `asOf` on the time scale, clamped to stay inside the
     /// block and clear of the start (top) and end (bottom) corner times.
+    /// `rowHeight` is the row's rendered height (taller when stacked).
     private func anchoredOffset(
         forAsOf asOf: Date,
         height: CGFloat,
+        rowHeight: CGFloat,
         pad: CGFloat
     ) -> CGFloat {
         let ppm = layout.pixelsPerMinute
@@ -349,20 +423,23 @@ struct ActualWindowBlockView: View {
         let raw = CalendarPositioning.yOffset(for: asOf, pixelsPerMinute: ppm) - top
         let h = labelLineHeight
         let minOffset = pad + h
-        let maxOffset = max(minOffset, height - pad - 2 * h)
-        return min(max(raw - h / 2, minOffset), maxOffset)
+        // Reserve the bottom corner (one line) plus the row's own height.
+        let maxOffset = max(minOffset, height - pad - h - rowHeight)
+        return min(max(raw - rowHeight / 2, minOffset), maxOffset)
     }
 
     /// Like `anchoredOffset`, but for the in-progress window (one that contains
     /// `now`) nudges the usage row above the red now-line when possible, falling
-    /// below only when the upper side has no room.
+    /// below only when the upper side has no room. `rowHeight` is the row's
+    /// rendered height so a stacked (multi-line) row clears the line too.
     private func usageRowOffset(
         capturedAt: Date,
+        rowHeight: CGFloat,
         height: CGFloat,
         duration: Int,
         pad: CGFloat
     ) -> CGFloat {
-        let offset = anchoredOffset(forAsOf: capturedAt, height: height, pad: pad)
+        let offset = anchoredOffset(forAsOf: capturedAt, height: height, rowHeight: rowHeight, pad: pad)
         let visibleStart = effectiveSegmentStart
         let segmentEnd = visibleStart.addingTimeInterval(TimeInterval(duration))
         guard visibleStart <= now, now < segmentEnd else { return offset }
@@ -371,11 +448,11 @@ struct ActualWindowBlockView: View {
         let nowY = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
         let h = labelLineHeight
         let gap: CGFloat = 4
-        let straddles = offset < nowY + gap && offset + h > nowY - gap
+        let straddles = offset < nowY + gap && offset + rowHeight > nowY - gap
         guard straddles else { return offset }
         let minOffset = pad + h
-        let maxOffset = max(minOffset, height - pad - 2 * h)
-        let above = nowY - h - gap
+        let maxOffset = max(minOffset, height - pad - h - rowHeight)
+        let above = nowY - rowHeight - gap
         if above >= minOffset {
             return above
         }

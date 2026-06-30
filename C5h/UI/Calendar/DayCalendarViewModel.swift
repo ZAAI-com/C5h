@@ -127,6 +127,15 @@ final class DayCalendarViewModel {
               let registry = providerRegistry,
               let actual7dRepo = actual7dRepository else { return }
         let actual5hRepo = actual5hRepository
+        // When settings are available, honor the per-provider "check when idle"
+        // gate; without them, fall back to refreshing (default behavior).
+        let gate = appSettings.map {
+            UsageCheckGate.make(
+                appSettings: $0,
+                actual5hRepository: actual5hRepo,
+                plannedWindowRepository: plannedRepository
+            )
+        }
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in try await usageRepo.create(snapshot) },
             upsertActualWindow5h: { window, tolerance in
@@ -136,7 +145,19 @@ final class DayCalendarViewModel {
                 try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
             }
         )
+        let now = Date()
         for providerID in ProviderID.allCases {
+            // Honor the per-provider refresh interval first: skip providers whose
+            // cached usage is still fresh so reopening the calendar doesn't
+            // re-spawn every CLI. Mirrors DashboardViewModel.refreshUsageWindowIfDue.
+            let interval = await intervalSeconds(for: providerID)
+            if let age = await cachedUsageAge(providerID: providerID, now: now),
+               age < interval {
+                continue
+            }
+            if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
+                continue
+            }
             do {
                 let adapter = try registry.adapter(for: providerID)
                 _ = try await fetcher.fetchAndPersist(adapter: adapter)
@@ -144,6 +165,29 @@ final class DayCalendarViewModel {
                 NSLog("DayCalendarViewModel: usage refresh failed for \(providerID.rawValue): \(error)")
             }
         }
+    }
+
+    /// Age of a provider's freshest cached usage snapshot, or nil when nothing has
+    /// been fetched yet (treated as stale so a first fetch runs).
+    private func cachedUsageAge(providerID: ProviderID, now: Date) async -> TimeInterval? {
+        guard let usageRepo = usageSnapshotRepository,
+              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID) else {
+            return nil
+        }
+        return now.timeIntervalSince(snapshot.capturedAt)
+    }
+
+    /// Per-provider refresh interval from settings, falling back to the default
+    /// when settings are unavailable or unset.
+    private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {
+        guard let appSettings else {
+            return TimeInterval(AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
+        }
+        let stored = (try? await appSettings.get(
+            AppSettingsKeys.usageRefreshIntervalSeconds(for: providerID),
+            as: Int.self
+        )) ?? nil
+        return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {

@@ -26,10 +26,12 @@ final class DashboardViewModel {
     private let appSettings: any AppSettingsRepository
     private let registry: ProviderRegistry
     private let fetcher: UsageFetcher
+    private let usageGate: UsageCheckGate
 
     init(
         actual5hRepository: any ActualWindow5hRepository,
         actual7dRepository: any ActualWindow7dRepository,
+        plannedWindowRepository: any PlannedWindowRepository,
         scheduledRepository: any ScheduledPromptRepository,
         commandRunRepository: any CommandRunRepository,
         usageSnapshotRepository: any UsageSnapshotRepository,
@@ -43,6 +45,11 @@ final class DashboardViewModel {
         self.usageRepo = usageSnapshotRepository
         self.appSettings = appSettingsRepository
         self.registry = registry
+        self.usageGate = UsageCheckGate.make(
+            appSettings: appSettingsRepository,
+            actual5hRepository: actual5hRepository,
+            plannedWindowRepository: plannedWindowRepository
+        )
         self.fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
                 try await usageSnapshotRepository.create(snapshot)
@@ -92,19 +99,28 @@ final class DashboardViewModel {
         defer { isRefreshingUsage = false }
 
         let now = Date()
-        let throttle = await throttleInterval()
-        if let age = await cachedUsageAge(now: now), age < throttle {
-            return
-        }
-
         await withTaskGroup(of: Void.self) { group in
             for providerID in ProviderID.allCases {
                 group.addTask { [weak self] in
-                    await self?.refreshUsageWindow(providerID: providerID, now: now)
+                    await self?.refreshUsageWindowIfDue(providerID: providerID, now: now)
                 }
             }
         }
         await reloadDerivedUsage(now: now)
+    }
+
+    /// Refreshes one provider only when its cached usage is older than that
+    /// provider's configured interval and a check is warranted (the per-provider
+    /// "check when idle" gate). Each provider is throttled independently.
+    private func refreshUsageWindowIfDue(providerID: ProviderID, now: Date) async {
+        let interval = await intervalSeconds(for: providerID)
+        if let age = await cachedUsageAge(providerID: providerID, now: now), age < interval {
+            return
+        }
+        guard await usageGate.shouldCheck(providerID: providerID, now: now) else {
+            return
+        }
+        await refreshUsageWindow(providerID: providerID, now: now)
     }
 
     /// Re-reads the DB-derived usage views after a provider refresh persists new
@@ -124,28 +140,21 @@ final class DashboardViewModel {
         }
     }
 
-    /// Age of the freshest cached usage snapshot across providers, or nil when
-    /// nothing has been fetched yet (treated as stale so a first fetch runs).
-    private func cachedUsageAge(now: Date) async -> TimeInterval? {
-        var newest: Date?
-        for providerID in ProviderID.allCases {
-            if let snapshot = try? await usageRepo.fetchLatest(providerID: providerID) {
-                if newest == nil || snapshot.capturedAt > newest! {
-                    newest = snapshot.capturedAt
-                }
-            }
+    /// Age of a provider's freshest cached usage snapshot, or nil when nothing
+    /// has been fetched yet (treated as stale so a first fetch runs).
+    private func cachedUsageAge(providerID: ProviderID, now: Date) async -> TimeInterval? {
+        guard let snapshot = try? await usageRepo.fetchLatest(providerID: providerID) else {
+            return nil
         }
-        guard let newest else { return nil }
-        return now.timeIntervalSince(newest)
+        return now.timeIntervalSince(snapshot.capturedAt)
     }
 
-    private func throttleInterval() async -> TimeInterval {
+    private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {
         let stored = (try? await appSettings.get(
-            AppSettingsKeys.usageRefreshThrottleSeconds,
+            AppSettingsKeys.usageRefreshIntervalSeconds(for: providerID),
             as: Int.self
         )) ?? nil
-        let seconds = stored ?? AppSettingsKeys.defaultUsageRefreshThrottleSeconds
-        return TimeInterval(seconds)
+        return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
     private func loadUsageHistory(now: Date, days: Int = 7) async {

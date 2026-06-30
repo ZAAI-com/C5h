@@ -353,7 +353,8 @@ private struct WeekDayColumnView: View {
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
-                            clipsBottom: segment.clippedEnd
+                            clipsBottom: segment.clippedEnd,
+                            segmentStart: segment.start
                         )
                     }
                     .buttonStyle(.plain)
@@ -387,6 +388,7 @@ private struct WeekDayColumnView: View {
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
+                            segmentStart: segment.start,
                             displayStart: actualSegment.startAt,
                             displayEnd: actualSegment.endAt,
                             marksResetEnd: actualSegment.marksResetEnd,
@@ -404,12 +406,14 @@ private struct WeekDayColumnView: View {
                 }
             }
             if Calendar.current.isDateInToday(day) {
+                // Below the window blocks (zIndex 1/2) so it passes behind their
+                // text; each block carries the line on through its own background.
                 Rectangle()
                     .fill(Color.red)
                     .frame(width: columnWidth, height: 1)
                     .offset(y: yOffset(for: now))
                     .allowsHitTesting(false)
-                    .zIndex(3)
+                    .zIndex(0)
             }
         }
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
