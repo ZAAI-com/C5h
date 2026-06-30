@@ -157,7 +157,14 @@ final class AppEnvironment {
             || evaluation.status == .stale else { return }
         let reason = evaluation.outdated ? "outdated" : String(describing: evaluation.status)
         NSLog("AppEnvironment: helper \(reason) (pid \(evaluation.pid.map(String.init) ?? "nil")); restarting")
-        HelperRegistrationService().restart(runningPID: evaluation.pid)
+        // Only signal a confirmed-live PID. `.stale` is reported before any
+        // liveness check and `.stopped` is a dead PID, so passing them risks a
+        // stray SIGTERM to a recycled PID (common after a reboot) while skipping
+        // the register() that would actually bring the helper back. Mirror
+        // SettingsView.restartHelper(): pass nil for those states so restart()
+        // registers instead.
+        let runningPID = evaluation.status == .running ? evaluation.pid : nil
+        HelperRegistrationService().restart(runningPID: runningPID)
     }
     #endif
 
