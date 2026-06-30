@@ -315,7 +315,10 @@ struct SettingsView: View {
         devRunner.stop()
         devRunner.start()
         #else
-        registration.restart(runningPID: helperHealth.pid)
+        // Only signal a PID that is actually alive; for stopped/stale states the
+        // heartbeat PID is dead, so pass nil and let restart() register instead.
+        let runningPID = helperHealth.status == .running ? helperHealth.pid : nil
+        registration.restart(runningPID: runningPID)
         #endif
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         await reloadHeartbeat()

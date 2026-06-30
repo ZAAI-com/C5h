@@ -148,8 +148,15 @@ final class AppEnvironment {
             expectedBinaryModifiedAt: HelperBuildStamp.modificationDate(forBinaryAt: helperURL),
             isProcessAlive: { ProcessLivenessChecker.isAlive(pid: $0) }
         )
-        guard evaluation.outdated || evaluation.status == .stopped else { return }
-        NSLog("AppEnvironment: helper \(evaluation.outdated ? "outdated" : "stopped") (pid \(evaluation.pid.map(String.init) ?? "nil")); restarting")
+        // A helper that died more than `staleAfterSeconds` ago reports `.stale`
+        // (the evaluator returns `.stale` before it ever checks liveness), so the
+        // common "long-dead at launch" case must be repaired here too, not only
+        // the narrow `.stopped` window.
+        guard evaluation.outdated
+            || evaluation.status == .stopped
+            || evaluation.status == .stale else { return }
+        let reason = evaluation.outdated ? "outdated" : String(describing: evaluation.status)
+        NSLog("AppEnvironment: helper \(reason) (pid \(evaluation.pid.map(String.init) ?? "nil")); restarting")
         HelperRegistrationService().restart(runningPID: evaluation.pid)
     }
     #endif

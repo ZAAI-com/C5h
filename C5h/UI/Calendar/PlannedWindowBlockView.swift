@@ -71,15 +71,21 @@ struct PlannedWindowBlockView: View {
     /// rendered as today.
     @ViewBuilder
     private func nowLine(height: CGFloat) -> some View {
-        let ppm = layout.pixelsPerMinute
-        let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
-        let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
-        if y >= 0, y <= height {
-            Rectangle()
-                .fill(Color.red)
-                .frame(height: 1)
-                .offset(y: y)
-                .allowsHitTesting(false)
+        // `yOffset` is time-of-day only, so without a day guard a block on a
+        // non-today column (Week view, or a navigated Day) whose clock-time span
+        // contains the current time would draw a stray red line. Mirror the
+        // column-level guard in ProviderColumnView.
+        if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
+            let ppm = layout.pixelsPerMinute
+            let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+            let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+            if y >= 0, y <= height {
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(height: 1)
+                    .offset(y: y)
+                    .allowsHitTesting(false)
+            }
         }
     }
 

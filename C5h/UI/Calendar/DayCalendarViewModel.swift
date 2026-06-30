@@ -147,6 +147,14 @@ final class DayCalendarViewModel {
         )
         let now = Date()
         for providerID in ProviderID.allCases {
+            // Honor the per-provider refresh interval first: skip providers whose
+            // cached usage is still fresh so reopening the calendar doesn't
+            // re-spawn every CLI. Mirrors DashboardViewModel.refreshUsageWindowIfDue.
+            let interval = await intervalSeconds(for: providerID)
+            if let age = await cachedUsageAge(providerID: providerID, now: now),
+               age < interval {
+                continue
+            }
             if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
                 continue
             }
@@ -157,6 +165,29 @@ final class DayCalendarViewModel {
                 NSLog("DayCalendarViewModel: usage refresh failed for \(providerID.rawValue): \(error)")
             }
         }
+    }
+
+    /// Age of a provider's freshest cached usage snapshot, or nil when nothing has
+    /// been fetched yet (treated as stale so a first fetch runs).
+    private func cachedUsageAge(providerID: ProviderID, now: Date) async -> TimeInterval? {
+        guard let usageRepo = usageSnapshotRepository,
+              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID) else {
+            return nil
+        }
+        return now.timeIntervalSince(snapshot.capturedAt)
+    }
+
+    /// Per-provider refresh interval from settings, falling back to the default
+    /// when settings are unavailable or unset.
+    private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {
+        guard let appSettings else {
+            return TimeInterval(AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
+        }
+        let stored = (try? await appSettings.get(
+            AppSettingsKeys.usageRefreshIntervalSeconds(for: providerID),
+            as: Int.self
+        )) ?? nil
+        return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {

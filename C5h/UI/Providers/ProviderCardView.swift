@@ -121,6 +121,7 @@ struct ProviderCardView: View {
                     Text("1 hour").tag(3600)
                 }
                 .labelsHidden()
+                .accessibilityLabel("Refresh rate")
                 .fixedSize()
             }
             GridRow {
@@ -129,6 +130,7 @@ struct ProviderCardView: View {
                     .foregroundStyle(C5hColors.fgSecondary)
                 Toggle("", isOn: checkWhenIdleBinding)
                     .labelsHidden()
+                    .accessibilityLabel("Check when idle")
             }
             GridRow {
                 Color.clear.frame(width: 0, height: 0)

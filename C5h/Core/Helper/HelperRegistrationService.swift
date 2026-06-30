@@ -82,14 +82,24 @@ final class HelperRegistrationService {
     /// current app bundle (the cure for a stale helper that predates a rebuild).
     /// Terminating the running process makes launchd relaunch it via `KeepAlive`
     /// (the plist relaunches on a non-successful exit, which a signal is). When no
-    /// running PID is known, ensures the agent is registered so launchd starts it.
+    /// running PID is known, or the PID is stale (`kill` fails with `ESRCH`), falls
+    /// back to registering so launchd starts the helper instead of leaving it down.
     /// No-op in Debug builds, where the helper is the unmanaged dev subprocess.
     func restart(runningPID: Int?) {
         #if DEBUG
         status = .unsupported
         #else
         if let runningPID, runningPID > 0 {
-            kill(pid_t(runningPID), SIGTERM)
+            if kill(pid_t(runningPID), SIGTERM) != 0 {
+                let code = errno
+                NSLog("HelperRegistrationService.restart: SIGTERM to pid \(runningPID) failed (errno \(code)); registering instead")
+                // A stale or dead PID (ESRCH) means there is no process for
+                // KeepAlive to relaunch, so register the agent to get launchd to
+                // start a fresh helper rather than silently leaving it stopped.
+                if code == ESRCH {
+                    register()
+                }
+            }
         } else {
             register()
         }
