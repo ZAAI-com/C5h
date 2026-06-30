@@ -293,9 +293,16 @@ struct ActualWindowBlockView: View {
 
     private var usageFontSize: CGFloat { compact ? 9 : 10 }
 
+    /// Below this content width, a single row can't hold the time plus both
+    /// `5h usage` and `7d usage` readings without the two metrics overlapping (as
+    /// happens for lane-packed half-width boxes), so they stack vertically instead.
+    private static let usageRowMinSingleLineWidth: CGFloat = 150
+
     /// Day view row: time at the left, 5h usage starting at the horizontal
-    /// midpoint, and 7d usage right-aligned. The row's vertical location is
-    /// controlled by its caller.
+    /// midpoint, and 7d usage right-aligned. In a box too narrow to fit both
+    /// metrics on the time's row, the time, 5h and 7d stack on their own
+    /// left-aligned lines instead so the labels never overlap. The row's vertical
+    /// location is controlled by its caller.
     private func usageReadingRow(
         timeText: String,
         showsResetGlyph: Bool = false,
@@ -309,20 +316,40 @@ struct ActualWindowBlockView: View {
             showFiveHourWhenZero: showFiveHourWhenZero
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
-        return ZStack(alignment: .leading) {
-            timeLabel(
-                timeText,
-                weight: .semibold,
-                showsResetGlyph: showsResetGlyph
-            )
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let five {
-                usageMetricLabel("5h usage", value: five)
-                    .offset(x: contentWidth / 2)
-            }
-            if let seven {
-                usageMetricLabel("7d usage", value: seven)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+        let stacked = contentWidth < Self.usageRowMinSingleLineWidth
+            && (five != nil || seven != nil)
+        return Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: 0) {
+                    timeLabel(
+                        timeText,
+                        weight: .semibold,
+                        showsResetGlyph: showsResetGlyph
+                    )
+                    if let five {
+                        usageMetricLabel("5h usage", value: five)
+                    }
+                    if let seven {
+                        usageMetricLabel("7d usage", value: seven)
+                    }
+                }
+            } else {
+                ZStack(alignment: .leading) {
+                    timeLabel(
+                        timeText,
+                        weight: .semibold,
+                        showsResetGlyph: showsResetGlyph
+                    )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let five {
+                        usageMetricLabel("5h usage", value: five)
+                            .offset(x: contentWidth / 2)
+                    }
+                    if let seven {
+                        usageMetricLabel("7d usage", value: seven)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
             }
         }
         .lineLimit(1)
