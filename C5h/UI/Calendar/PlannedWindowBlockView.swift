@@ -58,16 +58,17 @@ struct PlannedWindowBlockView: View {
         .background {
             ZStack(alignment: .top) {
                 shape.fill(brandColor.opacity(0.22))
+                shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1)
                 nowLine(height: height)
             }
         }
-        .overlay(shape.strokeBorder(brandColor.opacity(0.7), lineWidth: 1))
         .clipShape(shape)
     }
 
     /// The red current-time line, drawn in the block's background layer so it sits
-    /// above the fill but behind the text. Shown only while `now` falls within the
-    /// block's visible vertical span, which happens only on the day rendered as today.
+    /// above the fill and border but behind the text. Shown only while `now` falls
+    /// within the block's visible vertical span, which happens only on the day
+    /// rendered as today.
     @ViewBuilder
     private func nowLine(height: CGFloat) -> some View {
         let ppm = layout.pixelsPerMinute
