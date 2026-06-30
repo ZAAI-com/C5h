@@ -111,12 +111,18 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 updated.durationSeconds = window.durationSeconds
                 updated.timeZoneIdentifier = window.timeZoneIdentifier
                 updated.localDate = window.localDate
-                // Preserve a stronger user-visible tag: if the row was already
-                // promoted to `c5hTriggered`/`exact` by a triggered command, a
-                // routine `detectedFromUsage`/`estimated` refresh shouldn't
-                // downgrade the labels, only correct the times.
+                // Keep the stronger user-visible `c5hTriggered` tag through a
+                // routine `detectedFromUsage` refresh, correcting only the times.
+                // A triggered window that started life as a reused `estimated`
+                // row (the trigger's fresh poll could not confirm the start, e.g.
+                // a Codex synthetic "fresh slot") now gets confirmed by this real
+                // anchored poll, so upgrade its confidence to `exact`. A
+                // `detectedFromUsage` window reaching here is always a real,
+                // anchored window: synthetic slots are dropped upstream by
+                // `hasActivePrimaryWindow` in `UsageFetcher.derived5h`.
                 if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
-                    // keep updated.source / updated.confidence / updated.commandRunID
+                    updated.confidence = .exact
+                    // keep updated.source / updated.commandRunID
                 } else {
                     updated.source = window.source
                     updated.confidence = window.confidence

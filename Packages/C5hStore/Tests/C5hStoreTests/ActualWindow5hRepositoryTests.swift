@@ -76,6 +76,48 @@ struct ActualWindow5hRepositoryUpsertTests {
         #expect(row.commandRunID == stale.commandRunID, "command-run link should be preserved")
     }
 
+    @Test("A reused c5hTriggered/estimated window settles to exact once a real usage poll confirms its start")
+    func reusedTriggeredEstimatedSettlesToExact() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        // A Codex trigger whose fresh poll could not confirm the start (synthetic
+        // "fresh slot"): the resolver reused an existing window, tagged it
+        // c5hTriggered, and linked the command run, but left it `estimated`.
+        let reusedStart = Date(timeIntervalSince1970: 1_730_000_000)
+        let triggered = ActualWindow5h(
+            providerID: .codex,
+            startAt: reusedStart,
+            durationSeconds: 5 * 3600,
+            source: .c5hTriggered,
+            confidence: .estimated,
+            commandRunID: UUID()
+        )
+        try await repo.create(triggered)
+
+        // The next background poll sees the real anchored window (~13 min later),
+        // overlapping the reused row but ending at a different time.
+        let realStart = reusedStart.addingTimeInterval(13 * 60)
+        let real = ActualWindow5h(
+            providerID: .codex,
+            startAt: realStart,
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.upsertByEndAt(real, tolerance: 60)
+
+        let all = try await repo.fetchAll().filter { $0.providerID == .codex }
+        #expect(all.count == 1, "the confirming poll should merge onto the triggered row, not add a second row")
+        let row = try #require(all.first)
+        #expect(row.startAt == realStart, "times should be corrected to upstream truth")
+        #expect(row.endAt == realStart.addingTimeInterval(5 * 3600))
+        #expect(row.source == .c5hTriggered, "triggered tag should be preserved")
+        #expect(row.confidence == .exact, "a real anchored poll confirms the start, so confidence should settle to exact")
+        #expect(row.commandRunID == triggered.commandRunID, "command-run link should be preserved")
+    }
+
     @Test("Overlapping detectedFromUsage 5h windows with different reset times stay distinct")
     func overlappingDetectedWindowsWithDifferentResetsStayDistinct() async throws {
         let db = try Database.inMemory()
