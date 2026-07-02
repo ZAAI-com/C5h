@@ -129,9 +129,12 @@ struct ActualWindowBlockView: View {
                     .padding(pad)
                     if density.showsCenter, let reading = floatingReading {
                         let cornerHeights = cornerRowsHeight(
+                            shownStart: shownStart,
+                            shownEnd: shownEnd,
                             openReading: openReading,
                             closeReading: closeReading,
-                            density: density
+                            density: density,
+                            contentWidth: contentWidth
                         )
                         usageRow(
                             reading: reading,
@@ -303,8 +306,9 @@ struct ActualWindowBlockView: View {
 
     private var usageFontSize: CGFloat { compact ? 9 : 10 }
 
-    /// Day view row: time first, then each available usage metric on its own
-    /// line. This keeps 5h and 7d readings readable at every column width.
+    /// Day view row: preserve the old left/middle/right row when there is enough
+    /// width, and stack the metrics only when the row would collide.
+    @ViewBuilder
     private func usageReadingRow(
         timeText: String,
         showsResetGlyph: Bool = false,
@@ -318,63 +322,115 @@ struct ActualWindowBlockView: View {
             showFiveHourWhenZero: showFiveHourWhenZero
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
-        return VStack(alignment: .leading, spacing: 0) {
-            timeLabel(
-                timeText,
-                weight: .semibold,
-                showsResetGlyph: showsResetGlyph
-            )
-            if let five {
-                usageMetricLabel("5h usage", value: five)
+        if usesSingleLineUsageRow(
+            timeText: timeText,
+            fiveHour: five,
+            sevenDay: seven,
+            contentWidth: contentWidth
+        ) {
+            ZStack(alignment: .leading) {
+                timeLabel(
+                    timeText,
+                    weight: .semibold,
+                    showsResetGlyph: showsResetGlyph
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let five {
+                    usageMetricLabel("5h usage", value: five)
+                        .offset(x: contentWidth / 2)
+                }
+                if let seven {
+                    usageMetricLabel("7d usage", value: seven)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
-            if let seven {
-                usageMetricLabel("7d usage", value: seven)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: contentWidth, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                timeLabel(
+                    timeText,
+                    weight: .semibold,
+                    showsResetGlyph: showsResetGlyph
+                )
+                if let five {
+                    usageMetricLabel("5h usage", value: five)
+                }
+                if let seven {
+                    usageMetricLabel("7d usage", value: seven)
+                }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: contentWidth, alignment: .leading)
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .frame(maxWidth: contentWidth, alignment: .leading)
     }
 
-    private func usageLineCount(fiveHour: Double?, sevenDay: Double?, showFiveHourWhenZero: Bool) -> Int {
+    private func usageLineCount(
+        timeText: String,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        showFiveHourWhenZero: Bool,
+        contentWidth: CGFloat
+    ) -> Int {
         let five = Self.visibleFiveHour(
             fiveHour,
             showFiveHourWhenZero: showFiveHourWhenZero
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
+        if usesSingleLineUsageRow(
+            timeText: timeText,
+            fiveHour: five,
+            sevenDay: seven,
+            contentWidth: contentWidth
+        ) {
+            return 1
+        }
         return 1 + (five != nil ? 1 : 0) + (seven != nil ? 1 : 0)
     }
 
     private func usageRowHeight(
+        timeText: String,
         fiveHour: Double?,
         sevenDay: Double?,
-        showFiveHourWhenZero: Bool
+        showFiveHourWhenZero: Bool,
+        contentWidth: CGFloat
     ) -> CGFloat {
         labelLineHeight * CGFloat(usageLineCount(
+            timeText: timeText,
             fiveHour: fiveHour,
             sevenDay: sevenDay,
-            showFiveHourWhenZero: showFiveHourWhenZero
+            showFiveHourWhenZero: showFiveHourWhenZero,
+            contentWidth: contentWidth
         ))
     }
 
     private func cornerRowsHeight(
+        shownStart: Date,
+        shownEnd: Date,
         openReading: (capturedAt: Date, fiveHour: Double?, sevenDay: Double?)?,
         closeReading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?)?,
-        density: BlockDensity
+        density: BlockDensity,
+        contentWidth: CGFloat
     ) -> (top: CGFloat, bottom: CGFloat) {
         guard density.showsBottomCorners else {
             return (labelLineHeight, 0)
         }
         return (
             usageRowHeight(
+                timeText: BlockFormatters.formatTime(shownStart),
                 fiveHour: openReading?.fiveHour,
                 sevenDay: openReading?.sevenDay,
-                showFiveHourWhenZero: false
+                showFiveHourWhenZero: false,
+                contentWidth: contentWidth
             ),
             usageRowHeight(
+                timeText: BlockFormatters.formatTime(shownEnd),
                 fiveHour: closeReading?.fiveHour,
                 sevenDay: closeReading?.sevenDay,
-                showFiveHourWhenZero: true
+                showFiveHourWhenZero: true,
+                contentWidth: contentWidth
             )
         )
     }
@@ -403,10 +459,43 @@ struct ActualWindowBlockView: View {
         contentWidth: CGFloat
     ) -> CGFloat {
         usageRowHeight(
+            timeText: BlockFormatters.formatTime(reading.capturedAt),
             fiveHour: reading.fiveHour,
             sevenDay: reading.sevenDay,
-            showFiveHourWhenZero: true
+            showFiveHourWhenZero: true,
+            contentWidth: contentWidth
         )
+    }
+
+    private func usesSingleLineUsageRow(
+        timeText: String,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        contentWidth: CGFloat
+    ) -> Bool {
+        guard fiveHour != nil || sevenDay != nil else { return true }
+        let gap: CGFloat = compact ? 10 : 16
+        let timeWidth = estimatedTextWidth(timeText) + (compact ? 10 : 12)
+        let fiveWidth = fiveHour.map { estimatedTextWidth("5h usage \(BlockFormatters.formatPercent($0))") } ?? 0
+        let sevenWidth = sevenDay.map { estimatedTextWidth("7d usage \(BlockFormatters.formatPercent($0))") } ?? 0
+
+        if fiveHour != nil, sevenDay != nil {
+            return contentWidth >= max(
+                timeWidth + gap + fiveWidth,
+                2 * (fiveWidth + sevenWidth + gap)
+            )
+        }
+        if fiveHour != nil {
+            return contentWidth >= max(
+                timeWidth + gap + fiveWidth,
+                2 * (fiveWidth + gap)
+            )
+        }
+        return contentWidth >= timeWidth + gap + sevenWidth
+    }
+
+    private func estimatedTextWidth(_ text: String) -> CGFloat {
+        CGFloat(text.count) * usageFontSize * 0.64
     }
 
     /// Vertical offset (from the block's top edge) that places a reading row so
