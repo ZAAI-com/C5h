@@ -59,12 +59,20 @@ final class AppEnvironment {
             }
 
             let settingsRepo = GRDBAppSettingsRepository(database: db)
+            let plannedRepo = GRDBPlannedWindowRepository(database: db)
+            let actual5hRepo = GRDBActualWindow5hRepository(database: db)
+            let actual7dRepo = GRDBActualWindow7dRepository(database: db)
+            let scheduledRepo = GRDBScheduledPromptRepository(database: db)
+            let repairedPlannedCount = try await scheduledRepo.reconcileLinkedPlannedWindowStatuses()
+            if repairedPlannedCount > 0 {
+                NSLog("Reconciled \(repairedPlannedCount) planned window statuses from scheduled prompts")
+            }
 
             self.providerRepository = providerRepo
-            self.plannedWindowRepository = GRDBPlannedWindowRepository(database: db)
-            self.actualWindow5hRepository = GRDBActualWindow5hRepository(database: db)
-            self.actualWindow7dRepository = GRDBActualWindow7dRepository(database: db)
-            self.scheduledPromptRepository = GRDBScheduledPromptRepository(database: db)
+            self.plannedWindowRepository = plannedRepo
+            self.actualWindow5hRepository = actual5hRepo
+            self.actualWindow7dRepository = actual7dRepo
+            self.scheduledPromptRepository = scheduledRepo
             self.commandRunRepository = cmdRepo
             self.usageSnapshotRepository = GRDBUsageSnapshotRepository(database: db)
             self.promptTemplateRepository = GRDBPromptTemplateRepository(database: db)

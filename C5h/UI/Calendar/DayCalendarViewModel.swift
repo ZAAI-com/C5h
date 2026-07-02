@@ -53,7 +53,8 @@ final class DayCalendarViewModel {
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
             async let actual = actual5hRepository.fetchWindows(for: interval)
-            self.planned = try await planned
+            let fetchedPlanned = try await planned
+            self.planned = fetchedPlanned.filter { !$0.status.isTerminal }
             self.actual = try await actual
             self.lastError = nil
         } catch {

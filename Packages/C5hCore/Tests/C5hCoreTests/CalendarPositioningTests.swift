@@ -171,4 +171,45 @@ struct CalendarPositioningTests {
             start: start, durationSeconds: 2 * 3600, day: day2, calendar: cal
         ))
     }
+
+    @Test("vertical stack shifts overlapping blocks after previous block")
+    func verticalStackShiftsOverlaps() {
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 10, height: 50),
+            .init(yOffset: 40, height: 20),
+        ], gap: 6)
+
+        #expect(placements == [
+            .init(yOffset: 10),
+            .init(yOffset: 66),
+        ])
+    }
+
+    @Test("vertical stack keeps touching blocks at true positions")
+    func verticalStackKeepsTouchingBlocks() {
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 10, height: 50),
+            .init(yOffset: 60, height: 20),
+        ], gap: 6)
+
+        #expect(placements == [
+            .init(yOffset: 10),
+            .init(yOffset: 60),
+        ])
+    }
+
+    @Test("vertical stack chains shifted overlaps")
+    func verticalStackChainsShiftedOverlaps() {
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 10, height: 50),
+            .init(yOffset: 40, height: 20),
+            .init(yOffset: 70, height: 10),
+        ], gap: 4)
+
+        #expect(placements == [
+            .init(yOffset: 10),
+            .init(yOffset: 64),
+            .init(yOffset: 88),
+        ])
+    }
 }

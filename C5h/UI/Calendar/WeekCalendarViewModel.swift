@@ -50,7 +50,8 @@ final class WeekCalendarViewModel {
         do {
             async let p = plannedRepo.fetchWindows(for: interval)
             async let a = actual5hRepo.fetchWindows(for: interval)
-            self.planned = try await p
+            let fetchedPlanned = try await p
+            self.planned = fetchedPlanned.filter { !$0.status.isTerminal }
             self.actual = try await a
             self.lastError = nil
             pruneSelectionIfNeeded()

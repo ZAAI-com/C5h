@@ -70,6 +70,9 @@ struct HelperMain {
         let cmdRepo = GRDBCommandRunRepository(database: database)
         let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
+        if let repaired = try? await scheduledRepo.reconcileLinkedPlannedWindowStatuses(), repaired > 0 {
+            NSLog("C5hHelper: reconciled \(repaired) planned window statuses from scheduled prompts")
+        }
 
         let logsDir = appSupport
             .appendingPathComponent("logs", isDirectory: true)

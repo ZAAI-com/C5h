@@ -109,6 +109,45 @@ public enum CalendarPositioning {
         }
     }
 
+    public struct VerticalStackInput: Sendable, Equatable {
+        public let yOffset: CGFloat
+        public let height: CGFloat
+
+        public init(yOffset: CGFloat, height: CGFloat) {
+            self.yOffset = yOffset
+            self.height = height
+        }
+    }
+
+    public struct VerticalStackPlacement: Sendable, Equatable {
+        public let yOffset: CGFloat
+
+        public init(yOffset: CGFloat) {
+            self.yOffset = yOffset
+        }
+    }
+
+    /// Display-only vertical packing for calendar blocks in the same column.
+    /// The caller supplies blocks in render order, normally sorted by their true
+    /// time-derived Y position. Touching blocks keep their true position; only a
+    /// block whose top would overlap the previous rendered bottom is shifted down.
+    public static func stackVertically(
+        _ blocks: [VerticalStackInput],
+        gap: CGFloat = 4
+    ) -> [VerticalStackPlacement] {
+        var previousBottom: CGFloat?
+        return blocks.map { block in
+            let y: CGFloat
+            if let bottom = previousBottom, block.yOffset < bottom {
+                y = bottom + gap
+            } else {
+                y = block.yOffset
+            }
+            previousBottom = y + block.height
+            return VerticalStackPlacement(yOffset: y)
+        }
+    }
+
     /// Greedy interval-graph packing — the standard calendar column layout.
     /// Returns one placement per input interval, in the same order as the input.
     /// Overlapping intervals are assigned distinct lanes; every interval in a
