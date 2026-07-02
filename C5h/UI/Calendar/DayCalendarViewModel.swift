@@ -163,6 +163,9 @@ final class DayCalendarViewModel {
                 let adapter = try registry.adapter(for: providerID)
                 _ = try await fetcher.fetchAndPersist(adapter: adapter)
             } catch {
+                if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                    continue
+                }
                 NSLog("DayCalendarViewModel: usage refresh failed for \(providerID.rawValue): \(error)")
             }
         }

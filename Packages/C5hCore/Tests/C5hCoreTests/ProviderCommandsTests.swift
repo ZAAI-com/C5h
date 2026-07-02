@@ -90,6 +90,76 @@ struct ProviderCommandsTests {
         }
     }
 
+    @Test("UsageCommand lock contention skips before creating a command run")
+    func usageCommandLockContentionSkipsBeforeCommandRun() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let lockConfig = UsageProbeLockConfiguration(directory: dir)
+        let acquiredLock = try UsageProbeLock.acquire(providerID: .claude, configuration: lockConfig)
+        let lock = try #require(acquiredLock)
+        let recorder = RunRecorder()
+        let usage = UsageCommand(
+            providerID: .claude,
+            executableURL: URL(fileURLWithPath: "/bin/echo"),
+            timeoutSeconds: 0.1,
+            lockConfiguration: lockConfig
+        )
+
+        do {
+            _ = try await usage.collect(onStart: { run in await recorder.recordStart(run) })
+            Issue.record("Second usage command should skip while provider lock is held")
+        } catch C5hError.usageRefreshAlreadyRunning(let providerID) {
+            #expect(providerID == .claude)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        let calls = await recorder.calls
+        #expect(calls.isEmpty)
+        _ = lock
+    }
+
+    @Test("Claude usage timeout writes bounded PTY transcript to stderr log")
+    func claudeUsageTimeoutWritesTranscript() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let script = dir.appendingPathComponent("hanging-claude")
+        FileManager.default.createFile(
+            atPath: script.path,
+            contents: "#!/bin/sh\nprintf 'fake claude banner\\n'\nsleep 5\n".data(using: .utf8)
+        )
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        let store = CommandRunStore()
+        let usage = UsageCommand(
+            providerID: .claude,
+            executableURL: script,
+            timeoutSeconds: 0.5,
+            lockConfiguration: UsageProbeLockConfiguration(directory: dir.appendingPathComponent("locks"))
+        )
+
+        do {
+            _ = try await usage.collect(
+                logWriter: DiskLogWriter(baseDirectory: dir.appendingPathComponent("logs")),
+                onComplete: { run in await store.record(run) }
+            )
+            Issue.record("Hanging Claude usage command should time out")
+        } catch C5hError.processTimedOut {
+            // expected
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        let completedOptional = await store.completed
+        let completed = try #require(completedOptional)
+        #expect(completed.status == .timedOut)
+        #expect(completed.errorMessage == "processTimedOut")
+        let stderrPath = try #require(completed.stderrPath)
+        let stderr = try String(contentsOf: URL(fileURLWithPath: stderrPath), encoding: .utf8)
+        #expect(stderr.contains("processTimedOut"))
+        #expect(stderr.contains("fake claude banner"))
+    }
+
     @Test("PromptCommand builds provider prompt specs")
     func promptCommand() {
         let input = TriggerPromptInput(prompt: "do work", projectPath: "/tmp/project")
@@ -126,5 +196,13 @@ struct ProviderCommandsTests {
             isInstalled: true,
             isAuthenticated: nil
         )) == .unknown)
+    }
+}
+
+actor CommandRunStore {
+    var completed: CommandRun?
+
+    func record(_ run: CommandRun) {
+        completed = run
     }
 }

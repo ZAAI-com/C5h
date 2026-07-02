@@ -5,16 +5,26 @@ public protocol CLIPathResolving: Sendable {
 }
 
 public struct DefaultCLIPathResolver: CLIPathResolving {
-    public static let knownPrefixes: [String] = [
-        "/opt/homebrew/bin",
-        "/usr/local/bin",
-        "/usr/bin",
-        "/bin"
-    ]
+    public static var defaultKnownPrefixes: [String] {
+        [
+            "\(NSHomeDirectory())/.local/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin"
+        ]
+    }
 
+    public static var knownPrefixes: [String] { defaultKnownPrefixes }
+
+    private let searchPrefixes: [String]
     private let whichExecutable: URL
 
-    public init(whichExecutable: URL = URL(fileURLWithPath: "/usr/bin/which")) {
+    public init(
+        searchPrefixes: [String] = Self.defaultKnownPrefixes,
+        whichExecutable: URL = URL(fileURLWithPath: "/usr/bin/which")
+    ) {
+        self.searchPrefixes = searchPrefixes
         self.whichExecutable = whichExecutable
     }
 
@@ -27,7 +37,7 @@ public struct DefaultCLIPathResolver: CLIPathResolving {
             }
         }
 
-        for prefix in Self.knownPrefixes {
+        for prefix in searchPrefixes {
             let candidate = URL(fileURLWithPath: prefix).appendingPathComponent(executableName)
             if fm.isExecutableFile(atPath: candidate.path) {
                 return candidate

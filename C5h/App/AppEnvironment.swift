@@ -57,6 +57,10 @@ final class AppEnvironment {
             if sweptCount > 0 {
                 NSLog("Swept \(sweptCount) stale running command runs at startup")
             }
+            if let sweptUsageProbes = try? ClaudeUsageProbeSweeper().sweepOrphanedUsageProbes(),
+               sweptUsageProbes > 0 {
+                NSLog("Swept \(sweptUsageProbes) orphaned Claude usage probe processes at startup")
+            }
 
             let settingsRepo = GRDBAppSettingsRepository(database: db)
             let plannedRepo = GRDBPlannedWindowRepository(database: db)

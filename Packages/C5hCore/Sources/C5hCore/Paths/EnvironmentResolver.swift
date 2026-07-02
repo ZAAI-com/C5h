@@ -2,6 +2,7 @@ import Foundation
 
 public enum EnvironmentResolver {
     public static let defaultPath: String = [
+        "\(NSHomeDirectory())/.local/bin",
         "/opt/homebrew/bin",
         "/usr/local/bin",
         "/usr/bin",

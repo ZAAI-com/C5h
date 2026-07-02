@@ -26,6 +26,25 @@ struct CLIPathResolverTests {
         #expect(resolved?.path == executable.path)
     }
 
+    @Test("Search prefixes prefer user local bin before Homebrew")
+    func prefersUserLocalBeforeHomebrew() async throws {
+        let dir = try TempDirectory.make()
+        defer { try? TempDirectory.cleanup(dir) }
+        let userLocal = dir.appendingPathComponent("user-local", isDirectory: true)
+        let homebrew = dir.appendingPathComponent("homebrew", isDirectory: true)
+        try FileManager.default.createDirectory(at: userLocal, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: homebrew, withIntermediateDirectories: true)
+        let userClaude = try makeExecutable(named: "claude", in: userLocal)
+        _ = try makeExecutable(named: "claude", in: homebrew)
+
+        let resolver = DefaultCLIPathResolver(
+            searchPrefixes: [userLocal.path, homebrew.path],
+            whichExecutable: dir.appendingPathComponent("missing-which")
+        )
+        let resolved = await resolver.resolveCLI(named: "claude", configuredPath: nil)
+        #expect(resolved?.path == userClaude.path)
+    }
+
     @Test("Unknown tool resolves to nil")
     func unknownTool() async {
         let resolver = DefaultCLIPathResolver()
@@ -42,6 +61,19 @@ struct CLIPathResolverTests {
         let resolved = await resolver.resolveCLI(named: "which", configuredPath: nil)
         // 'which' may live at /usr/bin/which (matching knownPrefixes) — either is fine
         #expect(resolved != nil)
+    }
+
+    private func makeExecutable(named name: String, in directory: URL) throws -> URL {
+        let executable = directory.appendingPathComponent(name)
+        FileManager.default.createFile(
+            atPath: executable.path,
+            contents: "#!/bin/sh\nexit 0\n".data(using: .utf8)
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: executable.path
+        )
+        return executable
     }
 }
 

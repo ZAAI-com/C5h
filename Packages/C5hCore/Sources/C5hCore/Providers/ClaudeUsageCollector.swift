@@ -9,15 +9,18 @@ public struct ClaudeUsageCollector: Sendable {
     public var executableURL: URL
     public var environment: [String: String]
     public var timeoutSeconds: TimeInterval
+    public var maxTranscriptCharacters: Int
 
     public init(
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
-        timeoutSeconds: TimeInterval = 15
+        timeoutSeconds: TimeInterval = 15,
+        maxTranscriptCharacters: Int = 64 * 1024
     ) {
         self.executableURL = executableURL
         self.environment = environment
         self.timeoutSeconds = timeoutSeconds
+        self.maxTranscriptCharacters = maxTranscriptCharacters
     }
 
     public func collect() async throws -> UsageSnapshot {
@@ -110,7 +113,7 @@ public struct ClaudeUsageCollector: Sendable {
                 throw CancellationError()
             }
             if let chunk = try Self.readAvailable(from: masterFD) {
-                output.append(chunk)
+                Self.append(chunk, to: &output, limit: maxTranscriptCharacters)
                 if let snapshot = try snapshotIfAvailable(in: output) {
                     try? Self.write("/exit\r", to: masterFD)
                     return snapshot
@@ -142,7 +145,7 @@ public struct ClaudeUsageCollector: Sendable {
         if !launched.isRunning {
             throw C5hError.processLaunchFailed("Claude exited before reporting rate_limits.five_hour")
         }
-        throw C5hError.processTimedOut
+        throw C5hError.processTimedOutWithTranscript(Self.printableTranscript(output))
     }
 
     private func snapshotIfAvailable(in output: String) throws -> UsageSnapshot? {
@@ -208,6 +211,18 @@ public struct ClaudeUsageCollector: Sendable {
                 offset += written
             }
         }
+    }
+
+    private static func append(_ chunk: String, to output: inout String, limit: Int) {
+        output.append(chunk)
+        guard limit > 0, output.count > limit else { return }
+        output.removeFirst(output.count - limit)
+    }
+
+    private static func printableTranscript(_ output: String) -> String {
+        output
+            .replacingOccurrences(of: "\u{1B}", with: "<ESC>")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func errnoMessage(_ prefix: String) -> String {

@@ -11,7 +11,7 @@ import Foundation
 public struct UsageCheckGate: Sendable {
     public typealias IsIdleCheckEnabled = @Sendable (ProviderID) async -> Bool
     public typealias HasActiveWindow = @Sendable (ProviderID, Date) async throws -> Bool
-    public typealias HasPendingPlannedWindow = @Sendable (ProviderID) async throws -> Bool
+    public typealias HasPendingPlannedWindow = @Sendable (ProviderID, Date) async throws -> Bool
 
     public let isIdleCheckEnabled: IsIdleCheckEnabled
     public let hasActiveWindow: HasActiveWindow
@@ -37,7 +37,7 @@ public struct UsageCheckGate: Sendable {
         if (try? await hasActiveWindow(providerID, now)) == true {
             return true
         }
-        if (try? await hasPendingPlannedWindow(providerID)) == true {
+        if (try? await hasPendingPlannedWindow(providerID, now)) == true {
             return true
         }
         return false

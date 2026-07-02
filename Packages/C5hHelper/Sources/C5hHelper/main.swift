@@ -52,6 +52,10 @@ struct HelperMain {
         }
 
         NSLog("C5hHelper \(helperVersion) starting (pid \(getpid()))")
+        if let sweptUsageProbes = try? ClaudeUsageProbeSweeper().sweepOrphanedUsageProbes(),
+           sweptUsageProbes > 0 {
+            NSLog("C5hHelper: swept \(sweptUsageProbes) orphaned Claude usage probe processes at startup")
+        }
         let dbURL = appSupport.appendingPathComponent("c5h.sqlite")
 
         let database: Database
@@ -226,6 +230,9 @@ actor HelperUsageRefresher {
                 try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
             }
         } catch {
+            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                return
+            }
             NSLog("C5hHelper: usage refresh failed for \(providerID.rawValue): \(error)")
         }
     }

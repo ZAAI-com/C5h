@@ -28,10 +28,13 @@ public extension UsageCheckGate {
                     $0.providerID == providerID && $0.startAt <= now && $0.endAt >= now
                 }
             },
-            hasPendingPlannedWindow: { providerID in
+            hasPendingPlannedWindow: { providerID, now in
                 let windows = try await plannedWindowRepository.fetchAll()
                 return windows.contains {
-                    $0.providerID == providerID && !$0.status.isTerminal
+                    $0.providerID == providerID
+                        && !$0.status.isTerminal
+                        && $0.startAt <= now
+                        && now < $0.endAt
                 }
             }
         )
