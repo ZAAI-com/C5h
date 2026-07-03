@@ -131,7 +131,7 @@ public struct UsageCommand: Sendable {
         providerID: ProviderID,
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
-        timeoutSeconds: TimeInterval = 15,
+        timeoutSeconds: TimeInterval = 30,
         lockConfiguration: UsageProbeLockConfiguration = .production
     ) {
         self.providerID = providerID
@@ -157,7 +157,7 @@ public struct UsageCommand: Sendable {
         case .claude:
             ProviderCommandPreview.format(
                 providerID.executableName,
-                arguments: ["--settings", "<C5h statusLine usage hook>"]
+                arguments: Self.maskedArguments(for: providerID)
             )
         case .codex:
             "\(providerID.executableName) app-server -> \(CodexAppServerClient.methodRateLimits)"
@@ -248,7 +248,7 @@ public struct UsageCommand: Sendable {
         let args: [String]
         switch providerID {
         case .claude:
-            args = ["--settings", "<C5h statusLine usage hook>"]
+            args = maskedArguments(for: providerID)
         case .codex:
             args = ["app-server", "->", CodexAppServerClient.methodRateLimits]
         }
@@ -257,6 +257,15 @@ public struct UsageCommand: Sendable {
             return string
         }
         return "[]"
+    }
+
+    private static func maskedArguments(for providerID: ProviderID) -> [String] {
+        switch providerID {
+        case .claude:
+            ["--setting-sources", "local", "--settings", "<C5h statusLine usage hook>"]
+        case .codex:
+            ["app-server", "->", CodexAppServerClient.methodRateLimits]
+        }
     }
 
     private static func isProcessTimedOut(_ error: Error) -> Bool {

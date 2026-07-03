@@ -14,7 +14,7 @@ public struct ClaudeUsageCollector: Sendable {
     public init(
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
-        timeoutSeconds: TimeInterval = 15,
+        timeoutSeconds: TimeInterval = 30,
         maxTranscriptCharacters: Int = 64 * 1024
     ) {
         self.executableURL = executableURL
@@ -64,6 +64,11 @@ public struct ClaudeUsageCollector: Sendable {
             try? errorHandle.close()
         }
 
+        let statusPayloadURL = try Self.statusPayloadURL()
+        var launchEnvironment = environment
+        launchEnvironment["C5H_USAGE_STATUS_PATH"] = statusPayloadURL.path
+        defer { try? FileManager.default.removeItem(at: statusPayloadURL) }
+
         let arguments = try claudeArguments(settingsJSON: settingsJSON())
 
         let launched: LaunchedProcess
@@ -71,7 +76,7 @@ public struct ClaudeUsageCollector: Sendable {
             launched = try DisclaimingSpawn.launch(
                 executableURL: executableURL,
                 arguments: arguments,
-                environment: environment,
+                environment: launchEnvironment,
                 workingDirectory: Self.safeWorkingDirectory(),
                 stdin: .fileHandle(inputHandle),
                 stdout: .fileHandle(outputHandle),
@@ -118,6 +123,10 @@ public struct ClaudeUsageCollector: Sendable {
                     try? Self.write("/exit\r", to: masterFD)
                     return snapshot
                 }
+            }
+            if let snapshot = try snapshotIfAvailable(at: statusPayloadURL) {
+                try? Self.write("/exit\r", to: masterFD)
+                return snapshot
             }
 
             if !sentUsageCommand, Date().timeIntervalSince(startedAt) >= 1.0 {
@@ -166,8 +175,27 @@ public struct ClaudeUsageCollector: Sendable {
         return nil
     }
 
+    private func snapshotIfAvailable(at url: URL) throws -> UsageSnapshot? {
+        guard let payload = try? String(contentsOf: url, encoding: .utf8),
+              !payload.isEmpty else {
+            return nil
+        }
+        guard let status = try? ClaudeUsageStatus.parsePayload(payload) else {
+            return nil
+        }
+        let capturedAt = Date()
+        return UsageSnapshot(
+            providerID: .claude,
+            capturedAt: capturedAt,
+            rawJSON: payload,
+            normalizedJSON: UsageNormalizer.encode(
+                status.normalizedUsage(providerID: .claude, capturedAt: capturedAt)
+            )
+        )
+    }
+
     private func claudeArguments(settingsJSON: String) throws -> [String] {
-        ["--settings", settingsJSON]
+        ["--setting-sources", "local", "--settings", settingsJSON]
     }
 
     private func settingsJSON() throws -> String {
@@ -179,7 +207,7 @@ public struct ClaudeUsageCollector: Sendable {
     }
 
     private static let statusLineCommand = """
-    /usr/bin/env node -e 'let d="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d||"{}");if(j.rate_limits){console.log("C5H_RATE_LIMITS:"+JSON.stringify({rate_limits:j.rate_limits}))}}catch(e){}});'
+    /usr/bin/env node -e 'let d="";process.stdin.setEncoding("utf8");process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d||"{}");if(j.rate_limits){const p=JSON.stringify({rate_limits:j.rate_limits});if(process.env.C5H_USAGE_STATUS_PATH){try{require("fs").writeFileSync(process.env.C5H_USAGE_STATUS_PATH,p)}catch(e){}}console.log("C5H_RATE_LIMITS:"+p)}}catch(e){}});'
     """
 
     private static func readAvailable(from fd: Int32) throws -> String? {
@@ -227,6 +255,15 @@ public struct ClaudeUsageCollector: Sendable {
 
     private static func errnoMessage(_ prefix: String) -> String {
         "\(prefix): \(String(cString: strerror(errno)))"
+    }
+
+    private static func statusPayloadURL() throws -> URL {
+        let fallback = FileManager.default.temporaryDirectory
+            .appendingPathComponent("C5h", isDirectory: true)
+        let base = safeWorkingDirectory() ?? fallback
+        let dir = base.appendingPathComponent("usage-probes", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
     }
 
     /// Working directory for the usage collector subprocess.

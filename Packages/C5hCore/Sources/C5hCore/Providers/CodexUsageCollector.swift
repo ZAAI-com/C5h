@@ -12,7 +12,7 @@ public struct CodexUsageCollector: Sendable {
     public init(
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
-        timeoutSeconds: TimeInterval = 15,
+        timeoutSeconds: TimeInterval = 30,
         clientVersion: String = "dev"
     ) {
         self.executableURL = executableURL
