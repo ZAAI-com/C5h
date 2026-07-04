@@ -10,7 +10,7 @@
 #   APPLE_TEAM_ID="ABCDEFGHIJ"
 #   APPLE_APP_PASSWORD="app-specific password"  # for notarytool
 #
-# Usage: ./Toolkit/Conductor/release.sh 0.1.0
+# Usage: ./Toolkit/Release/release.sh 0.1.0
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -69,6 +69,9 @@ if [ -z "$TEAM_ID" ]; then
 fi
 
 echo "==> Archive main app"
+# CURRENT_PROJECT_VERSION becomes CFBundleVersion, which Sparkle compares to
+# decide whether an update is newer. Pinning it to the release version (strict
+# X.Y.Z is a valid CFBundleVersion) keeps the update feed ordering correct.
 xcodebuild \
   -workspace "${WORKSPACE}" \
   -scheme "${SCHEME}" \
@@ -80,7 +83,8 @@ xcodebuild \
   CODE_SIGN_STYLE=Manual \
   DEVELOPMENT_TEAM="${TEAM_ID}" \
   ENABLE_HARDENED_RUNTIME=YES \
-  MARKETING_VERSION="${VERSION}"
+  MARKETING_VERSION="${VERSION}" \
+  CURRENT_PROJECT_VERSION="${VERSION}"
 
 echo "==> Embed helper binary"
 HELPER_DST="${ARCHIVE}/Products/Applications/${SCHEME}.app/Contents/Helpers"
@@ -95,7 +99,13 @@ mkdir -p "${LA_DST}"
 cp Resources/com.zaai.c5h.helper.plist "${LA_DST}/"
 
 echo "==> Re-sign main app bundle (helper changed)"
-codesign --force --options runtime --deep --sign "${DEVELOPER_ID_APPLICATION}" \
+# Outer bundle only: codesign --deep is forbidden here because it would
+# re-sign Sparkle's nested Autoupdate and Updater.app and break their
+# signatures (the archive already signed them correctly, and the helper was
+# signed individually above). Deep VERIFICATION below is fine.
+codesign --force --options runtime --timestamp \
+  --preserve-metadata=entitlements \
+  --sign "${DEVELOPER_ID_APPLICATION}" \
   "${ARCHIVE}/Products/Applications/${SCHEME}.app"
 
 echo "==> Verify universal slices"
@@ -105,6 +115,41 @@ APP="${ARCHIVE}/Products/Applications/${SCHEME}.app"
 lipo "${APP}/Contents/MacOS/${SCHEME}" -verify_arch arm64 x86_64
 lipo "${APP}/Contents/Helpers/C5hHelper" -verify_arch arm64 x86_64
 codesign --verify --deep --strict --verbose=2 "${APP}"
+
+echo "==> Verify Sparkle framework and update metadata"
+# A bundle missing Sparkle's update helpers or the SU* Info.plist keys would
+# ship with in-app updates silently broken, so fail fast here.
+SPARKLE_FW="${APP}/Contents/Frameworks/Sparkle.framework"
+for required in \
+  "${SPARKLE_FW}" \
+  "${SPARKLE_FW}/Versions/B/Autoupdate" \
+  "${SPARKLE_FW}/Versions/B/Updater.app"; do
+  if [ ! -e "${required}" ]; then
+    echo "ERROR: expected ${required} in the app bundle, not found." >&2
+    exit 3
+  fi
+done
+codesign --verify --strict --verbose=2 "${SPARKLE_FW}"
+
+INFO_PLIST="${APP}/Contents/Info.plist"
+BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${INFO_PLIST}")"
+if [ "${BUNDLE_VERSION}" != "${VERSION}" ]; then
+  echo "ERROR: CFBundleVersion is '${BUNDLE_VERSION}', expected '${VERSION}'; Sparkle would misorder this release." >&2
+  exit 3
+fi
+for key in SUPublicEDKey SUFeedURL; do
+  if ! /usr/libexec/PlistBuddy -c "Print :${key}" "${INFO_PLIST}" >/dev/null 2>&1; then
+    echo "ERROR: ${key} missing from the app's Info.plist; Sparkle updates would not work." >&2
+    exit 3
+  fi
+done
+# Presence alone is not enough: shipping the checked-in placeholder would pass
+# the loop above but break signature validation on every client.
+ED_PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "${INFO_PLIST}")"
+if [ "${ED_PUBLIC_KEY}" = "REPLACE_WITH_GENERATE_KEYS_PUBLIC_KEY" ]; then
+  echo "ERROR: SUPublicEDKey is still the placeholder; run generate_keys and put the real public key in C5h/Info.plist (see the Sparkle Auto-Updates runbook in .claude/CLAUDE.md)." >&2
+  exit 3
+fi
 
 echo "==> Export"
 cat > build/export-options.plist <<EOF
@@ -164,6 +209,9 @@ if [ "${NOTARIZE}" = "1" ]; then
   xcrun stapler validate "${EXPORT_DIR}/${SCHEME}.app"
   xcrun stapler validate "${DMG}"
   codesign --verify --deep --strict --verbose=2 "${EXPORT_DIR}/${SCHEME}.app"
+  # Gatekeeper's own verdict on the exported app; catches signing or stapling
+  # problems that codesign and stapler alone can miss.
+  spctl --assess --type execute --verbose=2 "${EXPORT_DIR}/${SCHEME}.app"
 fi
 
 echo "==> Compute SHA256"

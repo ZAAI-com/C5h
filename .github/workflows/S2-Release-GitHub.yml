@@ -7,6 +7,11 @@ on:
         description: "Release version (strict semver, no v prefix, e.g. 0.5.0)"
         required: true
         type: string
+      prerelease:
+        description: "Mark the GitHub release as a prerelease (kept out of latest and the appcast feed)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,16 +37,17 @@ jobs:
             exit 1
           fi
 
-      - name: Require notarization credentials
+      - name: Require release credentials
         env:
           APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           missing=
-          for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+          for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD SPARKLE_ED_PRIVATE_KEY; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
@@ -93,7 +99,12 @@ jobs:
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./Toolkit/Conductor/release.sh "${{ inputs.version }}"
+        run: ./Toolkit/Release/release.sh "${{ inputs.version }}"
+
+      - name: Generate and sign Sparkle appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}"
 
       - name: Clean up keychain
         if: always()
@@ -103,8 +114,10 @@ jobs:
         uses: softprops/action-gh-release@2bb465e97f322d3cb2a965294d483e0d26a67aa9 # v3.0.1
         with:
           tag_name: ${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             build/C5h-${{ inputs.version }}.dmg
             build/C5h-${{ inputs.version }}.dmg.sha256
+            build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

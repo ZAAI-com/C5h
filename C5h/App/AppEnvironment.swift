@@ -40,6 +40,11 @@ final class AppEnvironment {
     private(set) var providerPromptLastError: [ProviderID: String] = [:]
     private(set) var providerPromptLastFiredAt: [ProviderID: Date] = [:]
 
+    // Created synchronously rather than in bootstrap(): the updater has no
+    // database dependency, and the update menu/Settings must work even when
+    // the database load fails.
+    let updaterService = UpdaterService()
+
     init() {
         Task { await self.bootstrap() }
     }
