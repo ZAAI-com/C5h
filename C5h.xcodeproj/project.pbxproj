@@ -35,6 +35,7 @@
 		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
 		0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000002 /* AppSchedulerDriver.swift */; };
 		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
+		0A0012060000000000000004 /* DatabaseChangeMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000004 /* DatabaseChangeMonitor.swift */; };
 		0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000001 /* HelperRegistrationService.swift */; };
 		0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000002 /* HelperDevModeRunner.swift */; };
 		0A0012070000000000000003 /* ProcessLivenessChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011070000000000000003 /* ProcessLivenessChecker.swift */; };
@@ -107,6 +108,7 @@
 		0A0011020301000000000013 /* WeekCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarViewModel.swift; sourceTree = "<group>"; };
 		0A0011060000000000000002 /* AppSchedulerDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSchedulerDriver.swift; sourceTree = "<group>"; };
 		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
+		0A0011060000000000000004 /* DatabaseChangeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseChangeMonitor.swift; sourceTree = "<group>"; };
 		0A0011070000000000000001 /* HelperRegistrationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperRegistrationService.swift; sourceTree = "<group>"; };
 		0A0011070000000000000002 /* HelperDevModeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperDevModeRunner.swift; sourceTree = "<group>"; };
 		0A0011070000000000000003 /* ProcessLivenessChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessLivenessChecker.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 			children = (
 				0A0011060000000000000002 /* AppSchedulerDriver.swift */,
 				0A0011060000000000000003 /* SchedulerTicker.swift */,
+				0A0011060000000000000004 /* DatabaseChangeMonitor.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -558,6 +561,7 @@
 				0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */,
 				0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */,
 				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,
+				0A0012060000000000000004 /* DatabaseChangeMonitor.swift in Sources */,
 				0A0012070000000000000001 /* HelperRegistrationService.swift in Sources */,
 				0A0012070000000000000002 /* HelperDevModeRunner.swift in Sources */,
 				0A0012070000000000000003 /* ProcessLivenessChecker.swift in Sources */,
@@ -719,7 +723,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -730,7 +734,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h.debug;
 				PRODUCT_NAME = "C5h Dev";
 				REGISTER_APP_GROUPS = NO;
@@ -748,7 +752,7 @@
 				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 57KL6Y7V32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -760,7 +764,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zaai.c5h;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = NO;

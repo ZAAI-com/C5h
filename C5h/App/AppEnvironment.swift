@@ -33,6 +33,7 @@ final class AppEnvironment {
     private(set) var providerRegistry: ProviderRegistry?
     private(set) var schedulerDriver: AppSchedulerDriver?
     private(set) var schedulerTicker: SchedulerTicker?
+    private(set) var databaseChangeMonitor: DatabaseChangeMonitor?
     private(set) var providerStatuses: [ProviderID: ProviderStatus] = [:]
     private(set) var providerStatusLoading: Set<ProviderID> = []
     private(set) var providerPromptFiring: Set<ProviderID> = []
@@ -49,6 +50,14 @@ final class AppEnvironment {
             self.paths = paths
             let db = try Database.open(at: paths.databaseURL)
             self.database = db
+            // Reuse the monitor across bootstrap retries: replacing it would
+            // deallocate an instance whose raw pointer is still registered with
+            // the Darwin notify center.
+            if databaseChangeMonitor == nil {
+                let changeMonitor = DatabaseChangeMonitor()
+                self.databaseChangeMonitor = changeMonitor
+                changeMonitor.start()
+            }
             try await Seed.runIfNeeded(database: db)
 
             let providerRepo = GRDBProviderRepository(database: db)
@@ -57,14 +66,26 @@ final class AppEnvironment {
             if sweptCount > 0 {
                 NSLog("Swept \(sweptCount) stale running command runs at startup")
             }
+            if let sweptUsageProbes = try? ClaudeUsageProbeSweeper().sweepOrphanedUsageProbes(),
+               sweptUsageProbes > 0 {
+                NSLog("Swept \(sweptUsageProbes) orphaned Claude usage probe processes at startup")
+            }
 
             let settingsRepo = GRDBAppSettingsRepository(database: db)
+            let plannedRepo = GRDBPlannedWindowRepository(database: db)
+            let actual5hRepo = GRDBActualWindow5hRepository(database: db)
+            let actual7dRepo = GRDBActualWindow7dRepository(database: db)
+            let scheduledRepo = GRDBScheduledPromptRepository(database: db)
+            let repairedPlannedCount = try await scheduledRepo.reconcileLinkedPlannedWindowStatuses()
+            if repairedPlannedCount > 0 {
+                NSLog("Reconciled \(repairedPlannedCount) planned window statuses from scheduled prompts")
+            }
 
             self.providerRepository = providerRepo
-            self.plannedWindowRepository = GRDBPlannedWindowRepository(database: db)
-            self.actualWindow5hRepository = GRDBActualWindow5hRepository(database: db)
-            self.actualWindow7dRepository = GRDBActualWindow7dRepository(database: db)
-            self.scheduledPromptRepository = GRDBScheduledPromptRepository(database: db)
+            self.plannedWindowRepository = plannedRepo
+            self.actualWindow5hRepository = actual5hRepo
+            self.actualWindow7dRepository = actual7dRepo
+            self.scheduledPromptRepository = scheduledRepo
             self.commandRunRepository = cmdRepo
             self.usageSnapshotRepository = GRDBUsageSnapshotRepository(database: db)
             self.promptTemplateRepository = GRDBPromptTemplateRepository(database: db)

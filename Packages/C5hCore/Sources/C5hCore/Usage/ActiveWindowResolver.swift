@@ -66,6 +66,13 @@ public struct ActiveWindowResolver: Sendable {
                 return promoted
             }
         } catch {
+            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                return await resolveFromExistingWindow(
+                    providerID: providerID,
+                    commandRunID: commandRunID,
+                    now: now
+                )
+            }
             NSLog("ActiveWindowResolver: snapshot/promote failed for \(providerID.rawValue) command \(commandRunID): \(error)")
         }
 
@@ -94,6 +101,27 @@ public struct ActiveWindowResolver: Sendable {
         //    detected-from-usage poll persists the real window once the provider
         //    reports it. Fabricating a `[now, +5h]` block here would draw a fake
         //    window with the wrong bounds.
+        NSLog("ActiveWindowResolver: no real \(providerID.rawValue) window to anchor command \(commandRunID); leaving the CommandRun as the only record")
+        return nil
+    }
+
+    private func resolveFromExistingWindow(
+        providerID: ProviderID,
+        commandRunID: UUID,
+        now: Date
+    ) async -> ActualWindow5h? {
+        do {
+            if let reused = try await reuseActiveWindow(
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) (usage refresh already running)")
+                return reused
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: reuse failed for \(providerID.rawValue) command \(commandRunID): \(error)")
+        }
         NSLog("ActiveWindowResolver: no real \(providerID.rawValue) window to anchor command \(commandRunID); leaving the CommandRun as the only record")
         return nil
     }

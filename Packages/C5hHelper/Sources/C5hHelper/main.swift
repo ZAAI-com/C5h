@@ -52,6 +52,10 @@ struct HelperMain {
         }
 
         NSLog("C5hHelper \(helperVersion) starting (pid \(getpid()))")
+        if let sweptUsageProbes = try? ClaudeUsageProbeSweeper().sweepOrphanedUsageProbes(),
+           sweptUsageProbes > 0 {
+            NSLog("C5hHelper: swept \(sweptUsageProbes) orphaned Claude usage probe processes at startup")
+        }
         let dbURL = appSupport.appendingPathComponent("c5h.sqlite")
 
         let database: Database
@@ -70,6 +74,9 @@ struct HelperMain {
         let cmdRepo = GRDBCommandRunRepository(database: database)
         let usageRepo = GRDBUsageSnapshotRepository(database: database)
         let _ = try? await cmdRepo.sweepStaleRunning(message: "orphaned by helper restart")
+        if let repaired = try? await scheduledRepo.reconcileLinkedPlannedWindowStatuses(), repaired > 0 {
+            NSLog("C5hHelper: reconciled \(repaired) planned window statuses from scheduled prompts")
+        }
 
         let logsDir = appSupport
             .appendingPathComponent("logs", isDirectory: true)
@@ -182,8 +189,9 @@ actor HelperUsageRefresher {
             guard await gate.shouldCheck(providerID: providerID, now: now) else {
                 continue
             }
-            lastRefreshAt[providerID] = now
-            await refresh(providerID: providerID, now: now)
+            if await refresh(providerID: providerID, now: now) {
+                lastRefreshAt[providerID] = now
+            }
         }
     }
 
@@ -195,7 +203,10 @@ actor HelperUsageRefresher {
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
-    private func refresh(providerID: ProviderID, now: Date) async {
+    /// Returns true when the provider's interval should be consumed. A lock
+    /// collision means another process is already refreshing, so the helper
+    /// should retry on the next tick instead of sleeping for the full interval.
+    private func refresh(providerID: ProviderID, now: Date) async -> Bool {
         do {
             let configured = try? await settingsRepo.get(
                 AppSettingsKeys.cliPath(for: providerID),
@@ -205,7 +216,7 @@ actor HelperUsageRefresher {
                 named: providerID.executableName,
                 configuredPath: configured
             ) else {
-                return
+                return true
             }
             let snapshot: UsageSnapshot
             let repo = cmdRepo
@@ -222,8 +233,13 @@ actor HelperUsageRefresher {
             if let window = try fetcher.derived7d(from: snapshot) {
                 try await fetcher.upsertActualWindow7d(window, UsageFetcher.dedupTolerance)
             }
+            return true
         } catch {
+            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                return false
+            }
             NSLog("C5hHelper: usage refresh failed for \(providerID.rawValue): \(error)")
+            return true
         }
     }
 }

@@ -18,6 +18,7 @@ public protocol ScheduledPromptRepository: Sendable {
     func markFailed(id: UUID, error: String) async throws
     func markMissed(id: UUID) async throws
     func cancel(id: UUID) async throws
+    func reconcileLinkedPlannedWindowStatuses() async throws -> Int
 }
 
 public struct GRDBScheduledPromptRepository: ScheduledPromptRepository {
@@ -141,11 +142,76 @@ public struct GRDBScheduledPromptRepository: ScheduledPromptRepository {
         try await transitionStatus(id: id, to: .cancelled, error: nil)
     }
 
+    public func reconcileLinkedPlannedWindowStatuses() async throws -> Int {
+        let now = DateTimeService.formatUTC(.now)
+        let succeeded = ScheduledPromptStatus.succeeded.rawValue
+        let missed = ScheduledPromptStatus.missed.rawValue
+        let failed = ScheduledPromptStatus.failed.rawValue
+        let cancelled = ScheduledPromptStatus.cancelled.rawValue
+        let triggeredWindow = PlannedWindowStatus.triggered.rawValue
+        let missedWindow = PlannedWindowStatus.missed.rawValue
+        let cancelledWindow = PlannedWindowStatus.cancelled.rawValue
+
+        return try await writer.write { db in
+            try db.execute(
+                sql: """
+                UPDATE planned_windows
+                SET status = CASE (
+                        SELECT sp.status
+                        FROM scheduled_prompts sp
+                        WHERE sp.planned_window_id = planned_windows.id
+                          AND sp.status IN (?, ?, ?, ?)
+                        ORDER BY datetime(sp.updated_at) DESC, datetime(sp.run_at) DESC
+                        LIMIT 1
+                    )
+                    WHEN ? THEN ?
+                    WHEN ? THEN ?
+                    WHEN ? THEN ?
+                    WHEN ? THEN ?
+                    ELSE status
+                    END,
+                    updated_at = ?
+                WHERE status NOT IN (?, ?, ?)
+                  AND EXISTS (
+                    SELECT 1
+                    FROM scheduled_prompts sp
+                    WHERE sp.planned_window_id = planned_windows.id
+                      AND sp.status IN (?, ?, ?, ?)
+                  )
+                """,
+                arguments: [
+                    succeeded,
+                    missed,
+                    failed,
+                    cancelled,
+                    succeeded,
+                    triggeredWindow,
+                    missed,
+                    missedWindow,
+                    failed,
+                    missedWindow,
+                    cancelled,
+                    cancelledWindow,
+                    now,
+                    triggeredWindow,
+                    missedWindow,
+                    cancelledWindow,
+                    succeeded,
+                    missed,
+                    failed,
+                    cancelled
+                ]
+            )
+            return db.changesCount
+        }
+    }
+
     private func transitionStatus(
         id: UUID,
         to status: ScheduledPromptStatus,
         error: String?
     ) async throws {
+        let now = DateTimeService.formatUTC(.now)
         try await writer.write { db in
             try db.execute(
                 sql: """
@@ -156,10 +222,46 @@ public struct GRDBScheduledPromptRepository: ScheduledPromptRepository {
                 arguments: [
                     status.rawValue,
                     error,
-                    DateTimeService.formatUTC(.now),
+                    now,
                     id.uuidString
                 ]
             )
+            guard let plannedStatus = Self.plannedWindowStatus(for: status) else {
+                return
+            }
+            try db.execute(
+                sql: """
+                UPDATE planned_windows
+                SET status = ?, updated_at = ?
+                WHERE id = (
+                    SELECT planned_window_id
+                    FROM scheduled_prompts
+                    WHERE id = ?
+                )
+                  AND status NOT IN (?, ?, ?)
+                """,
+                arguments: [
+                    plannedStatus.rawValue,
+                    now,
+                    id.uuidString,
+                    PlannedWindowStatus.triggered.rawValue,
+                    PlannedWindowStatus.missed.rawValue,
+                    PlannedWindowStatus.cancelled.rawValue
+                ]
+            )
+        }
+    }
+
+    private static func plannedWindowStatus(for status: ScheduledPromptStatus) -> PlannedWindowStatus? {
+        switch status {
+        case .succeeded:
+            return .triggered
+        case .missed, .failed:
+            return .missed
+        case .cancelled:
+            return .cancelled
+        case .scheduled, .due, .running:
+            return nil
         }
     }
 }

@@ -53,8 +53,12 @@ final class DayCalendarViewModel {
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
             async let actual = actual5hRepository.fetchWindows(for: interval)
-            self.planned = try await planned
-            self.actual = try await actual
+            let fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
+            let fetchedActual = try await actual
+            // Assign only when changed so a coarse change signal (which can fire
+            // for a different day) doesn't re-render and restart block animations.
+            if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
+            if self.actual != fetchedActual { self.actual = fetchedActual }
             self.lastError = nil
         } catch {
             self.lastError = errorMessage(error)
@@ -83,8 +87,11 @@ final class DayCalendarViewModel {
                 NSLog("DayCalendarViewModel: usage history load failed for \(providerID.rawValue): \(error)")
             }
         }
-        self.usageHistories = built
-        self.resetEvents = built.mapValues { UsageResetDetector.detect(in: $0) }
+        // Assign only when changed so change signals from unrelated tables don't
+        // force chart re-renders.
+        if self.usageHistories != built { self.usageHistories = built }
+        let detected = built.mapValues { UsageResetDetector.detect(in: $0) }
+        if self.resetEvents != detected { self.resetEvents = detected }
     }
 
     func history(for providerID: ProviderID) -> UsageHistorySeries? {
@@ -109,7 +116,7 @@ final class DayCalendarViewModel {
     /// Best-effort: fetch fresh usage from each provider so stale
     /// `[wrong-start, +5h]` ActualWindow5h rows (from older trigger code that
     /// didn't reconcile against upstream `resetsAt`) get corrected before the
-    /// calendar reads them. Failures are silent — the calendar still shows
+    /// calendar reads them. Failures are silent: the calendar still shows
     /// whatever's already in the repo.
     private func refreshUsageWindowsInBackground() {
         guard usageRefreshTask == nil else { return }
@@ -162,6 +169,9 @@ final class DayCalendarViewModel {
                 let adapter = try registry.adapter(for: providerID)
                 _ = try await fetcher.fetchAndPersist(adapter: adapter)
             } catch {
+                if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                    continue
+                }
                 NSLog("DayCalendarViewModel: usage refresh failed for \(providerID.rawValue): \(error)")
             }
         }

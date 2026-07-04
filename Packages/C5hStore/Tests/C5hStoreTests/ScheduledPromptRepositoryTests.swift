@@ -137,4 +137,91 @@ struct ScheduledPromptRepositoryTests {
         let deleted = try await plannedRepo.fetch(id: planned.id)
         #expect(deleted == nil)
     }
+
+    @Test("Terminal prompt transitions update linked planned window")
+    func terminalTransitionsUpdateLinkedPlannedWindow() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let promptRepo = GRDBScheduledPromptRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+
+        func createLinked(offsetHours: Double) async throws -> (planned: PlannedWindow, prompt: ScheduledPrompt) {
+            let runAt = base.addingTimeInterval(offsetHours * 3_600)
+            let planned = PlannedWindow(providerID: .codex, startAt: runAt, status: .scheduled)
+            try await plannedRepo.create(planned)
+            let prompt = ScheduledPrompt(
+                providerID: .codex,
+                plannedWindowID: planned.id,
+                prompt: "go",
+                runAt: runAt,
+                status: .scheduled
+            )
+            try await promptRepo.create(prompt)
+            return (planned, prompt)
+        }
+
+        let succeeded = try await createLinked(offsetHours: 0)
+        let missed = try await createLinked(offsetHours: 6)
+        let failed = try await createLinked(offsetHours: 12)
+        let cancelled = try await createLinked(offsetHours: 18)
+
+        try await promptRepo.markSucceeded(id: succeeded.prompt.id)
+        try await promptRepo.markMissed(id: missed.prompt.id)
+        try await promptRepo.markFailed(id: failed.prompt.id, error: "launch failed")
+        try await promptRepo.cancel(id: cancelled.prompt.id)
+
+        #expect(try await plannedRepo.fetch(id: succeeded.planned.id)?.status == .triggered)
+        #expect(try await plannedRepo.fetch(id: missed.planned.id)?.status == .missed)
+        #expect(try await plannedRepo.fetch(id: failed.planned.id)?.status == .missed)
+        #expect(try await plannedRepo.fetch(id: cancelled.planned.id)?.status == .cancelled)
+    }
+
+    @Test("Reconciliation repairs stale linked planned window statuses")
+    func reconciliationRepairsLinkedPlannedWindowStatuses() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let promptRepo = GRDBScheduledPromptRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+
+        func createLinked(
+            offsetHours: Double,
+            plannedStatus: PlannedWindowStatus = .scheduled,
+            promptStatus: ScheduledPromptStatus
+        ) async throws -> PlannedWindow {
+            let runAt = base.addingTimeInterval(offsetHours * 3_600)
+            let planned = PlannedWindow(providerID: .claude, startAt: runAt, status: plannedStatus)
+            try await plannedRepo.create(planned)
+            try await promptRepo.create(ScheduledPrompt(
+                providerID: .claude,
+                plannedWindowID: planned.id,
+                prompt: "go",
+                runAt: runAt,
+                status: promptStatus
+            ))
+            return planned
+        }
+
+        let succeeded = try await createLinked(offsetHours: 0, promptStatus: .succeeded)
+        let missed = try await createLinked(offsetHours: 6, promptStatus: .missed)
+        let failed = try await createLinked(offsetHours: 12, promptStatus: .failed)
+        let cancelled = try await createLinked(offsetHours: 18, promptStatus: .cancelled)
+        let alreadyTerminal = try await createLinked(
+            offsetHours: 24,
+            plannedStatus: .cancelled,
+            promptStatus: .succeeded
+        )
+
+        let repaired = try await promptRepo.reconcileLinkedPlannedWindowStatuses()
+
+        #expect(repaired == 4)
+        #expect(try await plannedRepo.fetch(id: succeeded.id)?.status == .triggered)
+        #expect(try await plannedRepo.fetch(id: missed.id)?.status == .missed)
+        #expect(try await plannedRepo.fetch(id: failed.id)?.status == .missed)
+        #expect(try await plannedRepo.fetch(id: cancelled.id)?.status == .cancelled)
+        #expect(try await plannedRepo.fetch(id: alreadyTerminal.id)?.status == .cancelled)
+    }
 }

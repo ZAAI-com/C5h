@@ -24,6 +24,16 @@ struct UsageCheckGateTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
+    @Test("Passes now into planned-window check")
+    func passesNowIntoPlannedWindowCheck() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in false },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, checkDate in checkDate == now }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     @Test("Skips when idle-checking is off and there is no active or planned window")
     func skipsWhenIdleAndEmpty() async {
         let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: false)
@@ -36,7 +46,7 @@ struct UsageCheckGateTests {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
             hasActiveWindow: { providerID, _ in providerID == .claude },
-            hasPendingPlannedWindow: { _ in false }
+            hasPendingPlannedWindow: { _, _ in false }
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
         #expect(await gate.shouldCheck(providerID: .codex, now: now) == false)
@@ -48,7 +58,7 @@ struct UsageCheckGateTests {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
             hasActiveWindow: { _, _ in throw Boom() },
-            hasPendingPlannedWindow: { _ in throw Boom() }
+            hasPendingPlannedWindow: { _, _ in throw Boom() }
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
@@ -57,7 +67,7 @@ struct UsageCheckGateTests {
         UsageCheckGate(
             isIdleCheckEnabled: { _ in idleEnabled },
             hasActiveWindow: { _, _ in hasActive },
-            hasPendingPlannedWindow: { _ in hasPending }
+            hasPendingPlannedWindow: { _, _ in hasPending }
         )
     }
 }

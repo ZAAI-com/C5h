@@ -148,6 +148,11 @@ final class ProvidersViewModel {
             usageChecks[id] = Self.usageCheck(from: snapshot)
             lastError = nil
         } catch {
+            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                await loadLatestUsageCheck(for: id)
+                lastError = nil
+                return
+            }
             let message = String(describing: error)
             usageChecks[id] = ProviderUsageCheck(
                 checkedAt: .now,

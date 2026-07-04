@@ -200,6 +200,9 @@ final class DashboardViewModel {
             let adapter = try registry.adapter(for: providerID)
             _ = try await fetcher.fetchAndPersist(adapter: adapter, now: now)
         } catch {
+            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+                return
+            }
             NSLog("\(providerID.displayName) usage refresh failed: \(error)")
         }
     }

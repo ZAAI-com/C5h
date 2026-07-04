@@ -6,6 +6,8 @@ public enum C5hError: LocalizedError, Sendable {
     case authMissing(ProviderID)
     case processLaunchFailed(String)
     case processTimedOut
+    case processTimedOutWithTranscript(String)
+    case usageRefreshAlreadyRunning(ProviderID)
     case databaseError(String)
     case invalidProjectPath(String)
     case schedulerError(String)
@@ -23,6 +25,10 @@ public enum C5hError: LocalizedError, Sendable {
             "Could not launch process: \(message)"
         case .processTimedOut:
             "Command timed out"
+        case .processTimedOutWithTranscript:
+            "Command timed out"
+        case .usageRefreshAlreadyRunning(let provider):
+            "\(provider.displayName) usage refresh is already running"
         case .databaseError(let message):
             "Database error: \(message)"
         case .invalidProjectPath(let path):
@@ -32,5 +38,28 @@ public enum C5hError: LocalizedError, Sendable {
         case .migrationFailed(let message):
             "Database migration failed: \(message)"
         }
+    }
+
+    public var isProcessTimedOut: Bool {
+        switch self {
+        case .processTimedOut, .processTimedOutWithTranscript:
+            true
+        default:
+            false
+        }
+    }
+
+    public var isUsageRefreshAlreadyRunning: Bool {
+        if case .usageRefreshAlreadyRunning = self {
+            return true
+        }
+        return false
+    }
+
+    public var timeoutTranscript: String? {
+        if case .processTimedOutWithTranscript(let transcript) = self {
+            return transcript
+        }
+        return nil
     }
 }

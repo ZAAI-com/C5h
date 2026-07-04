@@ -7,6 +7,7 @@ struct CalendarLayoutConfig: Sendable {
     var plannedBlockWidthRatio: CGFloat = 0.42
     var actualBlockWidthRatio: CGFloat = 0.84
     var blockCornerRadius: CGFloat = 10
+    var blockVerticalGap: CGFloat = 4
     var hourLineOpacity: Double = 0.18
 
     var dayHeight: CGFloat { pixelsPerMinute * 24 * 60 }

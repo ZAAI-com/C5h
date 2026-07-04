@@ -125,17 +125,20 @@ public struct UsageCommand: Sendable {
     public var executableURL: URL
     public var environment: [String: String]
     public var timeoutSeconds: TimeInterval
+    public var lockConfiguration: UsageProbeLockConfiguration
 
     public init(
         providerID: ProviderID,
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
-        timeoutSeconds: TimeInterval = 15
+        timeoutSeconds: TimeInterval = 30,
+        lockConfiguration: UsageProbeLockConfiguration = .production
     ) {
         self.providerID = providerID
         self.executableURL = executableURL
         self.environment = environment
         self.timeoutSeconds = timeoutSeconds
+        self.lockConfiguration = lockConfiguration
     }
 
     public func claudeArguments(settingsJSON: String) throws -> [String] {
@@ -154,7 +157,7 @@ public struct UsageCommand: Sendable {
         case .claude:
             ProviderCommandPreview.format(
                 providerID.executableName,
-                arguments: ["--settings", "<C5h statusLine usage hook>"]
+                arguments: Self.maskedArguments(for: providerID)
             )
         case .codex:
             "\(providerID.executableName) app-server -> \(CodexAppServerClient.methodRateLimits)"
@@ -166,6 +169,20 @@ public struct UsageCommand: Sendable {
         onStart: OnEvent? = nil,
         onComplete: OnEvent? = nil
     ) async throws -> UsageSnapshot {
+        let lock: UsageProbeLock?
+        if lockConfiguration.isEnabled {
+            guard let acquired = try UsageProbeLock.acquire(
+                providerID: providerID,
+                configuration: lockConfiguration
+            ) else {
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            }
+            lock = acquired
+        } else {
+            lock = nil
+        }
+        defer { _ = lock }
+
         let runID = UUID()
         let startedAt = Date()
         let logPaths = try? logWriter?.makeLogPaths(for: runID, at: startedAt)
@@ -210,16 +227,19 @@ public struct UsageCommand: Sendable {
             return snapshot
         } catch {
             run.endedAt = Date()
-            if case C5hError.processTimedOut = error {
+            if Self.isProcessTimedOut(error) {
                 run.status = .timedOut
             } else {
                 run.status = .failed
             }
-            run.errorMessage = String(describing: error)
+            run.errorMessage = Self.commandRunErrorMessage(for: error)
             if let url = logPaths?.stderrURL {
-                try? String(describing: error).data(using: .utf8)?.write(to: url)
+                try? Self.stderrLogText(for: error).data(using: .utf8)?.write(to: url)
             }
             if let onComplete { try await onComplete(run) }
+            if Self.isProcessTimedOut(error) {
+                throw C5hError.processTimedOut
+            }
             throw error
         }
     }
@@ -228,7 +248,7 @@ public struct UsageCommand: Sendable {
         let args: [String]
         switch providerID {
         case .claude:
-            args = ["--settings", "<C5h statusLine usage hook>"]
+            args = maskedArguments(for: providerID)
         case .codex:
             args = ["app-server", "->", CodexAppServerClient.methodRateLimits]
         }
@@ -237,6 +257,39 @@ public struct UsageCommand: Sendable {
             return string
         }
         return "[]"
+    }
+
+    private static func maskedArguments(for providerID: ProviderID) -> [String] {
+        switch providerID {
+        case .claude:
+            ["--setting-sources", "local", "--settings", "<C5h statusLine usage hook>"]
+        case .codex:
+            ["app-server", "->", CodexAppServerClient.methodRateLimits]
+        }
+    }
+
+    private static func isProcessTimedOut(_ error: Error) -> Bool {
+        (error as? C5hError)?.isProcessTimedOut == true
+    }
+
+    private static func commandRunErrorMessage(for error: Error) -> String {
+        if isProcessTimedOut(error) {
+            return "processTimedOut"
+        }
+        return String(describing: error)
+    }
+
+    private static func stderrLogText(for error: Error) -> String {
+        guard let transcript = (error as? C5hError)?.timeoutTranscript,
+              !transcript.isEmpty else {
+            return String(describing: error)
+        }
+        return """
+        processTimedOut
+
+        --- Claude usage collector output ---
+        \(transcript)
+        """
     }
 }
 

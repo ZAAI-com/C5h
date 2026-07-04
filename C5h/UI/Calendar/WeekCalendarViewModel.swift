@@ -50,8 +50,12 @@ final class WeekCalendarViewModel {
         do {
             async let p = plannedRepo.fetchWindows(for: interval)
             async let a = actual5hRepo.fetchWindows(for: interval)
-            self.planned = try await p
-            self.actual = try await a
+            let fetchedPlanned = try await p.filter { !$0.status.isTerminal }
+            let fetchedActual = try await a
+            // Assign only when changed so a coarse change signal (which can fire
+            // for a different week) doesn't re-render and restart block animations.
+            if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
+            if self.actual != fetchedActual { self.actual = fetchedActual }
             self.lastError = nil
             pruneSelectionIfNeeded()
         } catch {
@@ -148,8 +152,11 @@ final class WeekCalendarViewModel {
                 NSLog("WeekCalendarViewModel: usage history load failed for \(providerID.rawValue): \(error)")
             }
         }
-        self.usageHistories = built
-        self.resetEvents = built.mapValues { UsageResetDetector.detect(in: $0) }
+        // Assign only when changed so change signals from unrelated tables don't
+        // force chart re-renders.
+        if self.usageHistories != built { self.usageHistories = built }
+        let detected = built.mapValues { UsageResetDetector.detect(in: $0) }
+        if self.resetEvents != detected { self.resetEvents = detected }
     }
 
     func history(for providerID: ProviderID) -> UsageHistorySeries? {

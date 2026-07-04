@@ -68,22 +68,34 @@ struct ActualWindowBlockView: View {
         let usageAnchor = min(shownEnd, now)
         let isPast = shownEnd <= now
         let isCurrent = shownStart <= now && now < shownEnd
+        // Readings are scoped to snapshots reporting this window's own reset
+        // end, so a re-anchored adjacent window (e.g. a tier change) cannot pin
+        // a foreign reading inside this block even when its capture time falls
+        // inside the block's range.
+        let scopedHistory = window.hasProviderAnchoredUsageWindow
+            ? history?.scoped(toFiveHourWindowEndingAt: window.endAt)
+            : history
         let condensedSevenD = shownEnd > now
             ? nil
-            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
+            : Self.meaningfulSevenDay(scopedHistory?.sevenDayPercent(at: shownEnd)?.value)
         let condensed5h: (value: Double, asOf: Date)? = shownStart > now
             ? nil
-            : history?.fiveHourPercent(at: usageAnchor)
+            : scopedHistory?.fiveHourPercent(at: usageAnchor)
         // Day view: the "opening" reading shown beside the start time, taken from
         // the first snapshot captured at or just after the window opened.
         let openReadingRaw = shownStart > now
             ? nil
-            : history?.openingReading(at: shownStart, within: Self.openingWindowSeconds)
+            : scopedHistory?.openingReading(at: shownStart, within: Self.openingWindowSeconds)
         // Day view: the "closing" reading shown beside the end time on a completed
         // window: the latest in-window snapshot at or before the end (targets the
-        // last few minutes, falling back to the most recent earlier reading).
+        // last few minutes, falling back to the most recent earlier reading). A
+        // provider-anchored window searches up to its real end, so a reset-clipped
+        // block still shows the cap it hit after the clip boundary but before the
+        // reset was detected; scoping guarantees no foreign readings leak in.
         let closeReading = isPast
-            ? history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart)
+            ? (window.hasProviderAnchoredUsageWindow
+                ? scopedHistory?.usageReading(atOrBefore: window.endAt, notBefore: visibleStart)
+                : history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart))
             : nil
         // Suppress the opening annotation when it is the same capture as the close
         // (single-reading window) so the value isn't shown at both corners.
@@ -94,7 +106,7 @@ struct ActualWindowBlockView: View {
         // latest reading once it is at least 5 min past the start; a completed
         // window marks the moment 5h first hit 100%.
         let floatingReading = Self.floatingReading(
-            history: history,
+            history: scopedHistory,
             isCurrent: isCurrent,
             isPast: isPast,
             shownStart: shownStart,
@@ -128,6 +140,14 @@ struct ActualWindowBlockView: View {
                     )
                     .padding(pad)
                     if density.showsCenter, let reading = floatingReading {
+                        let cornerHeights = cornerRowsHeight(
+                            shownStart: shownStart,
+                            shownEnd: shownEnd,
+                            openReading: openReading,
+                            closeReading: closeReading,
+                            density: density,
+                            contentWidth: contentWidth
+                        )
                         usageRow(
                             reading: reading,
                             pad: pad,
@@ -138,7 +158,9 @@ struct ActualWindowBlockView: View {
                             rowHeight: usageRowHeight(reading: reading, contentWidth: contentWidth),
                             height: height,
                             duration: duration,
-                            pad: pad
+                            pad: pad,
+                            topReservedHeight: cornerHeights.top,
+                            bottomReservedHeight: cornerHeights.bottom
                         ))
                     }
                 }
@@ -190,9 +212,8 @@ struct ActualWindowBlockView: View {
             .allowsHitTesting(false)
     }
 
-    /// Start time pinned top-left and end time bottom-left, each with its
-    /// boundary usage reading on the same row. The 5h label starts at the row
-    /// midpoint while 7d remains right-aligned.
+    /// Start time pinned top-left and end time bottom-left, with any boundary
+    /// usage readings stacked below their time labels.
     private func cornersOverlay(
         shownStart: Date,
         shownEnd: Date,
@@ -297,16 +318,9 @@ struct ActualWindowBlockView: View {
 
     private var usageFontSize: CGFloat { compact ? 9 : 10 }
 
-    /// Below this content width, a single row can't hold the time plus both
-    /// `5h usage` and `7d usage` readings without the two metrics overlapping (as
-    /// happens for lane-packed half-width boxes), so they stack vertically instead.
-    private static let usageRowMinSingleLineWidth: CGFloat = 150
-
-    /// Day view row: time at the left, 5h usage starting at the horizontal
-    /// midpoint, and 7d usage right-aligned. In a box too narrow to fit both
-    /// metrics on the time's row, the time, 5h and 7d stack on their own
-    /// left-aligned lines instead so the labels never overlap. The row's vertical
-    /// location is controlled by its caller.
+    /// Day view row: preserve the old left/middle/right row when there is enough
+    /// width, and stack the metrics only when the row would collide.
+    @ViewBuilder
     private func usageReadingRow(
         timeText: String,
         showsResetGlyph: Bool = false,
@@ -320,49 +334,121 @@ struct ActualWindowBlockView: View {
             showFiveHourWhenZero: showFiveHourWhenZero
         )
         let seven = Self.meaningfulSevenDay(sevenDay)
-        let stacked = contentWidth < Self.usageRowMinSingleLineWidth
-            && (five != nil || seven != nil)
-        return Group {
-            if stacked {
-                VStack(alignment: .leading, spacing: 0) {
-                    timeLabel(
-                        timeText,
-                        weight: .semibold,
-                        showsResetGlyph: showsResetGlyph
-                    )
-                    if let five {
-                        usageMetricLabel("5h usage", value: five)
-                    }
-                    if let seven {
-                        usageMetricLabel("7d usage", value: seven)
-                    }
+        if usesSingleLineUsageRow(
+            timeText: timeText,
+            fiveHour: five,
+            sevenDay: seven,
+            contentWidth: contentWidth
+        ) {
+            ZStack(alignment: .leading) {
+                timeLabel(
+                    timeText,
+                    weight: .semibold,
+                    showsResetGlyph: showsResetGlyph
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let five {
+                    usageMetricLabel("5h usage", value: five)
+                        .offset(x: contentWidth / 2)
                 }
-            } else {
-                ZStack(alignment: .leading) {
-                    timeLabel(
-                        timeText,
-                        weight: .semibold,
-                        showsResetGlyph: showsResetGlyph
-                    )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if let five {
-                        usageMetricLabel("5h usage", value: five)
-                            .offset(x: contentWidth / 2)
-                    }
-                    if let seven {
-                        usageMetricLabel("7d usage", value: seven)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                if let seven {
+                    usageMetricLabel("7d usage", value: seven)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(width: contentWidth, alignment: .leading)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                timeLabel(
+                    timeText,
+                    weight: .semibold,
+                    showsResetGlyph: showsResetGlyph
+                )
+                if let five {
+                    usageMetricLabel("5h usage", value: five)
+                }
+                if let seven {
+                    usageMetricLabel("7d usage", value: seven)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: contentWidth, alignment: .leading)
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func usageLineCount(
+        timeText: String,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        showFiveHourWhenZero: Bool,
+        contentWidth: CGFloat
+    ) -> Int {
+        let five = Self.visibleFiveHour(
+            fiveHour,
+            showFiveHourWhenZero: showFiveHourWhenZero
+        )
+        let seven = Self.meaningfulSevenDay(sevenDay)
+        if usesSingleLineUsageRow(
+            timeText: timeText,
+            fiveHour: five,
+            sevenDay: seven,
+            contentWidth: contentWidth
+        ) {
+            return 1
+        }
+        return 1 + (five != nil ? 1 : 0) + (seven != nil ? 1 : 0)
+    }
+
+    private func usageRowHeight(
+        timeText: String,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        showFiveHourWhenZero: Bool,
+        contentWidth: CGFloat
+    ) -> CGFloat {
+        labelLineHeight * CGFloat(usageLineCount(
+            timeText: timeText,
+            fiveHour: fiveHour,
+            sevenDay: sevenDay,
+            showFiveHourWhenZero: showFiveHourWhenZero,
+            contentWidth: contentWidth
+        ))
+    }
+
+    private func cornerRowsHeight(
+        shownStart: Date,
+        shownEnd: Date,
+        openReading: (capturedAt: Date, fiveHour: Double?, sevenDay: Double?)?,
+        closeReading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?)?,
+        density: BlockDensity,
+        contentWidth: CGFloat
+    ) -> (top: CGFloat, bottom: CGFloat) {
+        guard density.showsBottomCorners else {
+            return (labelLineHeight, 0)
+        }
+        return (
+            usageRowHeight(
+                timeText: BlockFormatters.formatTime(shownStart),
+                fiveHour: openReading?.fiveHour,
+                sevenDay: openReading?.sevenDay,
+                showFiveHourWhenZero: false,
+                contentWidth: contentWidth
+            ),
+            usageRowHeight(
+                timeText: BlockFormatters.formatTime(shownEnd),
+                fiveHour: closeReading?.fiveHour,
+                sevenDay: closeReading?.sevenDay,
+                showFiveHourWhenZero: true,
+                contentWidth: contentWidth
+            )
+        )
     }
 
     /// Day view: one time-anchored usage row. The reading's captured time stays
-    /// left, 5h starts at the row midpoint, and 7d remains right-aligned.
+    /// above the separate 5h/7d usage lines.
     private func usageRow(
         reading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?),
         pad: CGFloat,
@@ -379,79 +465,102 @@ struct ActualWindowBlockView: View {
         .padding(.horizontal, pad)
     }
 
-    private func usageMetricLabel(_ label: String, value: Double) -> some View {
-        let percent = BlockFormatters.formatPercent(value)
-        var text = AttributedString("\(label) \(percent)")
-        text.font = .system(size: usageFontSize, weight: .regular)
-        if let percentRange = text.range(of: percent) {
-            text[percentRange].font = .system(size: usageFontSize, weight: .semibold)
-        }
-        return Text(text)
-            .monospacedDigit()
-    }
-
-    /// Rendered height of the floating usage row. In a narrow lane-packed block
-    /// the row stacks the time, 5h and 7d onto their own lines (see
-    /// `usageReadingRow`), so the anchoring math must reserve this taller height
-    /// instead of a single line to avoid colliding with the corner rows or the
-    /// now-line. Mirrors the `stacked` condition in `usageReadingRow`.
+    /// Rendered height of the floating usage row.
     private func usageRowHeight(
         reading: (capturedAt: Date, fiveHour: Double, sevenDay: Double?),
         contentWidth: CGFloat
     ) -> CGFloat {
-        let five = Self.visibleFiveHour(reading.fiveHour, showFiveHourWhenZero: true)
-        let seven = Self.meaningfulSevenDay(reading.sevenDay)
-        let stacked = contentWidth < Self.usageRowMinSingleLineWidth
-            && (five != nil || seven != nil)
-        guard stacked else { return labelLineHeight }
-        let lines = 1 + (five != nil ? 1 : 0) + (seven != nil ? 1 : 0)
-        return labelLineHeight * CGFloat(lines)
+        usageRowHeight(
+            timeText: BlockFormatters.formatTime(reading.capturedAt),
+            fiveHour: reading.fiveHour,
+            sevenDay: reading.sevenDay,
+            showFiveHourWhenZero: true,
+            contentWidth: contentWidth
+        )
+    }
+
+    private func usesSingleLineUsageRow(
+        timeText: String,
+        fiveHour: Double?,
+        sevenDay: Double?,
+        contentWidth: CGFloat
+    ) -> Bool {
+        guard fiveHour != nil || sevenDay != nil else { return true }
+        let gap: CGFloat = compact ? 10 : 16
+        let timeWidth = estimatedTextWidth(timeText) + (compact ? 10 : 12)
+        let fiveWidth = fiveHour.map { estimatedTextWidth("5h usage \(BlockFormatters.formatPercent($0))") } ?? 0
+        let sevenWidth = sevenDay.map { estimatedTextWidth("7d usage \(BlockFormatters.formatPercent($0))") } ?? 0
+
+        if fiveHour != nil, sevenDay != nil {
+            return contentWidth >= max(
+                timeWidth + gap + fiveWidth,
+                2 * (fiveWidth + sevenWidth + gap)
+            )
+        }
+        if fiveHour != nil {
+            return contentWidth >= max(
+                timeWidth + gap + fiveWidth,
+                2 * (fiveWidth + gap)
+            )
+        }
+        return contentWidth >= timeWidth + gap + sevenWidth
+    }
+
+    private func estimatedTextWidth(_ text: String) -> CGFloat {
+        CGFloat(text.count) * usageFontSize * 0.64
     }
 
     /// Vertical offset (from the block's top edge) that places a reading row so
     /// its center sits at `asOf` on the time scale, clamped to stay inside the
-    /// block and clear of the start (top) and end (bottom) corner times.
-    /// `rowHeight` is the row's rendered height (taller when stacked).
+    /// block and clear of the start (top) and end (bottom) corner rows.
+    /// `rowHeight` is the row's rendered height.
     private func anchoredOffset(
         forAsOf asOf: Date,
         height: CGFloat,
         rowHeight: CGFloat,
-        pad: CGFloat
+        pad: CGFloat,
+        topReservedHeight: CGFloat,
+        bottomReservedHeight: CGFloat
     ) -> CGFloat {
         let ppm = layout.pixelsPerMinute
         let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
         let raw = CalendarPositioning.yOffset(for: asOf, pixelsPerMinute: ppm) - top
-        let h = labelLineHeight
-        let minOffset = pad + h
-        // Reserve the bottom corner (one line) plus the row's own height.
-        let maxOffset = max(minOffset, height - pad - h - rowHeight)
+        let minOffset = pad + topReservedHeight
+        let maxOffset = max(minOffset, height - pad - bottomReservedHeight - rowHeight)
         return min(max(raw - rowHeight / 2, minOffset), maxOffset)
     }
 
     /// Like `anchoredOffset`, but for the in-progress window (one that contains
     /// `now`) nudges the usage row above the red now-line when possible, falling
-    /// below only when the upper side has no room. `rowHeight` is the row's
-    /// rendered height so a stacked (multi-line) row clears the line too.
+    /// below only when the upper side has no room.
     private func usageRowOffset(
         capturedAt: Date,
         rowHeight: CGFloat,
         height: CGFloat,
         duration: Int,
-        pad: CGFloat
+        pad: CGFloat,
+        topReservedHeight: CGFloat,
+        bottomReservedHeight: CGFloat
     ) -> CGFloat {
-        let offset = anchoredOffset(forAsOf: capturedAt, height: height, rowHeight: rowHeight, pad: pad)
+        let offset = anchoredOffset(
+            forAsOf: capturedAt,
+            height: height,
+            rowHeight: rowHeight,
+            pad: pad,
+            topReservedHeight: topReservedHeight,
+            bottomReservedHeight: bottomReservedHeight
+        )
         let visibleStart = effectiveSegmentStart
         let segmentEnd = visibleStart.addingTimeInterval(TimeInterval(duration))
         guard visibleStart <= now, now < segmentEnd else { return offset }
         let ppm = layout.pixelsPerMinute
         let top = CalendarPositioning.yOffset(for: visibleStart, pixelsPerMinute: ppm)
         let nowY = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
-        let h = labelLineHeight
         let gap: CGFloat = 4
         let straddles = offset < nowY + gap && offset + rowHeight > nowY - gap
         guard straddles else { return offset }
-        let minOffset = pad + h
-        let maxOffset = max(minOffset, height - pad - h - rowHeight)
+        let minOffset = pad + topReservedHeight
+        let maxOffset = max(minOffset, height - pad - bottomReservedHeight - rowHeight)
         let above = nowY - rowHeight - gap
         if above >= minOffset {
             return above
@@ -471,6 +580,17 @@ struct ActualWindowBlockView: View {
         value
     }
 
+    private func usageMetricLabel(_ label: String, value: Double) -> some View {
+        let percent = BlockFormatters.formatPercent(value)
+        var text = AttributedString("\(label) \(percent)")
+        text.font = .system(size: usageFontSize, weight: .regular)
+        if let percentRange = text.range(of: percent) {
+            text[percentRange].font = .system(size: usageFontSize, weight: .semibold)
+        }
+        return Text(text)
+            .monospacedDigit()
+    }
+
     private static func visibleFiveHour(
         _ value: Double?,
         showFiveHourWhenZero: Bool
@@ -487,10 +607,13 @@ struct ActualWindowBlockView: View {
     private static let middleLeadSeconds: TimeInterval = 5 * 60
 
     /// The floating, time-anchored reading for the Day view. A current window
-    /// that has hit 100% freezes at the moment 5h first reached 100%; while still
-    /// below 100% it shows its latest in-window reading once that reading is at
-    /// least `middleLeadSeconds` past the start. A completed window marks the
-    /// moment 5h first reached 100%. Future windows show nothing.
+    /// at the cap freezes at the start of the trailing run of 100% readings so
+    /// the row stops sliding to each new poll, and unpins when a later reading
+    /// drops below 100% (a same-window re-baseline, e.g. extra usage bought
+    /// mid-window). While below 100% it shows its latest in-window reading once
+    /// that reading is at least `middleLeadSeconds` past the start. A completed
+    /// window marks the trailing capped run the same way. Future windows show
+    /// nothing.
     private static func floatingReading(
         history: UsageHistorySeries?,
         isCurrent: Bool,
@@ -501,11 +624,14 @@ struct ActualWindowBlockView: View {
         usageAnchor: Date
     ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
         if isCurrent {
-            // Once the cap is hit, freeze the row at the first 100% moment so it
-            // stops sliding to each new poll. Below 100%, keep showing the live
-            // latest reading.
-            if let hit = history?.firstFiveHourReaching(100, from: visibleStart, to: usageAnchor) {
-                return hit
+            // Freeze the row at the start of the trailing capped run while the
+            // cap still holds. Below 100%, keep showing the live latest reading.
+            if let capped = history?.trailingFiveHourRunStart(
+                reaching: 100,
+                from: visibleStart,
+                to: usageAnchor
+            ) {
+                return capped
             }
             guard let latest = history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart),
                   latest.capturedAt >= shownStart.addingTimeInterval(middleLeadSeconds)
@@ -513,7 +639,7 @@ struct ActualWindowBlockView: View {
             return latest
         }
         if isPast {
-            return history?.firstFiveHourReaching(100, from: visibleStart, to: shownEnd)
+            return history?.trailingFiveHourRunStart(reaching: 100, from: visibleStart, to: shownEnd)
         }
         return nil
     }

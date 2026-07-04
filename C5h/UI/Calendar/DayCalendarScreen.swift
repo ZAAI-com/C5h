@@ -60,6 +60,11 @@ struct DayCalendarScreen: View {
                 Task { await viewModel.reload() }
             }
         }
+        .onChange(of: appEnv.databaseChangeMonitor?.changeToken) { _, _ in
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ToolbarContentBuilder

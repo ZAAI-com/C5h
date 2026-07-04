@@ -56,6 +56,11 @@ struct WeekCalendarScreen: View {
                 Task { await viewModel.reload() }
             }
         }
+        .onChange(of: appEnv.databaseChangeMonitor?.changeToken) { _, _ in
+            if let viewModel {
+                Task { await viewModel.reload() }
+            }
+        }
     }
 
     @ViewBuilder
@@ -266,6 +271,7 @@ struct WeekCalendarView: View {
         guard showPlanned else { return [] }
         return viewModel.planned.filter {
             visibleProviders.contains($0.providerID)
+                && !$0.status.isTerminal
                 && CalendarPositioning.windowOverlaps(
                     start: $0.startAt,
                     durationSeconds: $0.durationSeconds,
@@ -335,10 +341,23 @@ private struct WeekDayColumnView: View {
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
 
+    private enum StackID: Hashable {
+        case planned(UUID)
+        case actual(UUID)
+    }
+
+    private struct StackBlock {
+        let id: StackID
+        let yOffset: CGFloat
+        let height: CGFloat
+        let sortPriority: Int
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
-            ForEach(planned) { window in
+            let stackedYOffsets = stackedBlockYOffsets
+            ForEach(activePlanned) { window in
                 if let segment = visibleSegment(
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
@@ -349,33 +368,29 @@ private struct WeekDayColumnView: View {
                         PlannedWindowBlockView(
                             window: window,
                             now: now,
-                            columnWidth: halfColumnWidth,
+                            columnWidth: providerContentWidth,
                             layout: layout,
                             visibleDurationSeconds: segment.durationSeconds,
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
-                            segmentStart: segment.start
+                            segmentStart: segment.start,
+                            widthOverride: providerContentWidth
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
-                        y: yOffset(for: segment.start)
+                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
                     )
                     .zIndex(1)
                 }
             }
-            let actualPlacementsMap = actualPlacements
             ForEach(actual) { actualSegment in
                 let window = actualSegment.window
                 if let segment = visibleSegment(
                     start: actualSegment.startAt,
                     durationSeconds: actualSegment.durationSeconds
                 ) {
-                    let placement = actualPlacementsMap[actualSegment.id]
-                        ?? CalendarPositioning.LanePlacement(lane: 0, laneCount: 1)
-                    let regionWidth = halfColumnWidth * layout.actualBlockWidthRatio
-                    let laneWidth = regionWidth / CGFloat(placement.laneCount)
                     Button {
                         onSelectActual(window)
                     } label: {
@@ -393,14 +408,14 @@ private struct WeekDayColumnView: View {
                             displayEnd: actualSegment.endAt,
                             marksResetEnd: actualSegment.marksResetEnd,
                             condensed: true,
-                            widthOverride: placement.laneCount > 1 ? laneWidth : nil,
+                            widthOverride: providerContentWidth,
                             isReset: resetWindowIDs.contains(actualSegment.id)
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
-                        x: actualXOffset(for: window.providerID) + CGFloat(placement.lane) * laneWidth,
-                        y: yOffset(for: segment.start)
+                        x: providerXOffset(for: window.providerID),
+                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
                     )
                     .zIndex(2)
                 }
@@ -424,18 +439,58 @@ private struct WeekDayColumnView: View {
         max(0, (columnWidth - 4) / 2)
     }
 
-    /// Lane placement per actual window, packed within each provider's half so
-    /// overlapping reset-derived windows render side-by-side without crossing
-    /// into the other provider's column.
-    private var actualPlacements: [UUID: CalendarPositioning.LanePlacement] {
-        var map: [UUID: CalendarPositioning.LanePlacement] = [:]
+    private var providerContentWidth: CGFloat {
+        max(0, halfColumnWidth - 4)
+    }
+
+    private var activePlanned: [PlannedWindow] {
+        planned.filter { !$0.status.isTerminal }
+    }
+
+    private var stackedBlockYOffsets: [StackID: CGFloat] {
+        var map: [StackID: CGFloat] = [:]
         for provider in ProviderID.allCases {
-            let windows = actual.filter { $0.window.providerID == provider }
-            let packed = CalendarPositioning.packLanes(
-                windows.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+            var blocks: [StackBlock] = []
+            for window in activePlanned where window.providerID == provider {
+                guard let segment = visibleSegment(
+                    start: window.startAt,
+                    durationSeconds: window.durationSeconds
+                ) else { continue }
+                blocks.append(StackBlock(
+                    id: .planned(window.id),
+                    yOffset: yOffset(for: segment.start),
+                    height: CalendarPositioning.blockHeight(
+                        durationSeconds: segment.durationSeconds,
+                        pixelsPerMinute: layout.pixelsPerMinute
+                    ),
+                    sortPriority: 0
+                ))
+            }
+            for actualSegment in actual where actualSegment.window.providerID == provider {
+                guard let segment = visibleSegment(
+                    start: actualSegment.startAt,
+                    durationSeconds: actualSegment.durationSeconds
+                ) else { continue }
+                blocks.append(StackBlock(
+                    id: .actual(actualSegment.id),
+                    yOffset: yOffset(for: segment.start),
+                    height: CalendarPositioning.blockHeight(
+                        durationSeconds: segment.durationSeconds,
+                        pixelsPerMinute: layout.pixelsPerMinute
+                    ),
+                    sortPriority: 1
+                ))
+            }
+            let sorted = blocks.sorted {
+                if $0.yOffset != $1.yOffset { return $0.yOffset < $1.yOffset }
+                return $0.sortPriority < $1.sortPriority
+            }
+            let placements = CalendarPositioning.stackVertically(
+                sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
+                gap: layout.blockVerticalGap
             )
-            for (segment, placement) in zip(windows, packed) {
-                map[segment.id] = placement
+            for (block, placement) in zip(sorted, placements) {
+                map[block.id] = placement.yOffset
             }
         }
         return map
@@ -448,14 +503,6 @@ private struct WeekDayColumnView: View {
         case .claude: return 2
         case .codex: return 2 + halfColumnWidth
         }
-    }
-
-    private func actualXOffset(for providerID: ProviderID) -> CGFloat {
-        // Right-justify actual blocks within each provider's half, matching
-        // the day view's convention where actual blocks sit on the right edge.
-        let baseX = providerXOffset(for: providerID)
-        let actualWidth = halfColumnWidth * layout.actualBlockWidthRatio
-        return baseX + (halfColumnWidth - actualWidth)
     }
 
     private var background: some View {

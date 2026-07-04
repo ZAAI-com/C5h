@@ -19,6 +19,9 @@ struct PlannedWindowBlockView: View {
     /// time. The Day view (Today/Tomorrow) sets this so every block time reads
     /// uniformly; the Week tab leaves it off.
     var emphasizeEndTime: Bool = false
+    /// Explicit block width for layouts that render planned and actual windows
+    /// in one common column.
+    var widthOverride: CGFloat? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -35,7 +38,7 @@ struct PlannedWindowBlockView: View {
             topTrailingRadius: clipsTop ? 0 : radius,
             style: .continuous
         )
-        let width = compact ? columnWidth : columnWidth * layout.plannedBlockWidthRatio
+        let width = widthOverride ?? (compact ? columnWidth : columnWidth * layout.plannedBlockWidthRatio)
 
         let shownStart = displayStart ?? window.startAt
         // Height uses the clipped visible duration, but the corner labels should

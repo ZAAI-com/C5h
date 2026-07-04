@@ -31,6 +31,18 @@ public struct UsagePoint: Sendable, Hashable {
         self.hasActiveFiveHourWindow = hasActiveFiveHourWindow
         self.sevenDayResetsAt = sevenDayResetsAt
     }
+
+    /// True when this point confirms `end` is the active 5h window: it reports
+    /// an active window whose reset end is within `tolerance` of `end`. Shared
+    /// by the display resolver's rolloff detection and window-scoped reading
+    /// selection so both attribute points to windows the same way.
+    public func confirmsActiveFiveHourWindow(
+        endingAt end: Date,
+        tolerance: TimeInterval
+    ) -> Bool {
+        hasActiveFiveHourWindow
+            && (fiveHourResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false)
+    }
 }
 
 /// Sorted, in-memory time series of (5h%, 7d%) values for one provider, built
@@ -55,6 +67,24 @@ public struct UsageHistorySeries: Sendable, Hashable {
     }
 
     public var latest: UsagePoint? { points.last }
+
+    /// A copy of the series keeping only points that confirm the 5h window
+    /// ending at `end` (see `UsagePoint.confirmsActiveFiveHourWindow`). The
+    /// calendar scopes a block's readings this way so a snapshot belonging to
+    /// an adjacent window with a different provider-reported reset end (e.g. a
+    /// tier change re-anchored the window mid-flight) cannot leak into the
+    /// block, even when its capture time falls inside the block's range.
+    public func scoped(
+        toFiveHourWindowEndingAt end: Date,
+        tolerance: TimeInterval = ActualWindow5hDisplayResolver.resetEndTolerance
+    ) -> UsageHistorySeries {
+        UsageHistorySeries(
+            providerID: providerID,
+            points: points.filter {
+                $0.confirmsActiveFiveHourWindow(endingAt: end, tolerance: tolerance)
+            }
+        )
+    }
 
     /// 7d% from the latest point with `capturedAt <= time`. Returns nil when no
     /// such point exists (e.g., `time` is before any recorded snapshot). The
@@ -135,6 +165,29 @@ public struct UsageHistorySeries: Sendable, Hashable {
             }
         }
         return nil
+    }
+
+    /// The earliest sample of the trailing contiguous run of 5h readings in
+    /// `[lowerBound, upperBound]` that all round to at least `threshold`.
+    /// Returns nil when the latest in-range 5h reading rounds below
+    /// `threshold`: after a same-window re-baseline (e.g. extra usage bought
+    /// mid-window) the cap no longer holds, so callers unpin from the earlier
+    /// capped moment and resume live readings. Contiguity is over samples that
+    /// carry a 5h value; samples without one are skipped. The 7d value, when
+    /// present, comes from the same snapshot.
+    public func trailingFiveHourRunStart(
+        reaching threshold: Double,
+        from lowerBound: Date,
+        to upperBound: Date
+    ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
+        var runStart: (capturedAt: Date, fiveHour: Double, sevenDay: Double?)?
+        for point in points.reversed()
+            where point.capturedAt >= lowerBound && point.capturedAt <= upperBound {
+            guard let fiveHour = point.fiveHour else { continue }
+            guard fiveHour.rounded() >= threshold else { break }
+            runStart = (point.capturedAt, fiveHour, point.sevenDay)
+        }
+        return runStart
     }
 
     private func lastPoint(atOrBefore time: Date) -> UsagePoint? {
