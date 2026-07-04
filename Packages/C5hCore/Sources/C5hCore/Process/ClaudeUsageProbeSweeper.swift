@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import Dispatch
 
 public struct ClaudeUsageProbeSweeper: Sendable {
     public struct ProcessCandidate: Sendable, Equatable {
@@ -59,13 +60,20 @@ public struct ClaudeUsageProbeSweeper: Sendable {
         process.standardOutput = stdout
         process.standardError = stderr
         try process.run()
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+
+        let group = DispatchGroup()
+        let stdoutCapture = PipeCapture(stdout.fileHandleForReading)
+        let stderrCapture = PipeCapture(stderr.fileHandleForReading)
+        stdoutCapture.drain(on: .global(qos: .utility), group: group)
+        stderrCapture.drain(on: .global(qos: .utility), group: group)
+
         process.waitUntilExit()
+        group.wait()
         guard process.terminationStatus == 0 else {
-            let err = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let err = String(data: stderrCapture.data, encoding: .utf8) ?? ""
             throw C5hError.processLaunchFailed("ps failed: \(err)")
         }
-        let raw = String(data: data, encoding: .utf8) ?? ""
+        let raw = String(data: stdoutCapture.data, encoding: .utf8) ?? ""
         return raw.split(separator: "\n").compactMap(parseProcessLine)
     }
 
@@ -81,5 +89,32 @@ public struct ClaudeUsageProbeSweeper: Sendable {
 
     public static func terminateProcess(_ pid: Int32) -> Bool {
         Darwin.kill(pid, SIGTERM) == 0
+    }
+}
+
+private final class PipeCapture: @unchecked Sendable {
+    private let handle: FileHandle
+    private let lock = NSLock()
+    private var storage = Data()
+
+    init(_ handle: FileHandle) {
+        self.handle = handle
+    }
+
+    var data: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
+
+    func drain(on queue: DispatchQueue, group: DispatchGroup) {
+        group.enter()
+        queue.async {
+            defer { group.leave() }
+            let data = self.handle.readDataToEndOfFile()
+            self.lock.lock()
+            self.storage = data
+            self.lock.unlock()
+        }
     }
 }

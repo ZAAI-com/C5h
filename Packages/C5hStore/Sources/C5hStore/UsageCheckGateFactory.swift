@@ -29,7 +29,9 @@ public extension UsageCheckGate {
                 }
             },
             hasPendingPlannedWindow: { providerID, now in
-                let windows = try await plannedWindowRepository.fetchAll()
+                let windows = try await plannedWindowRepository.fetchWindows(
+                    for: DateInterval(start: now, duration: 1)
+                )
                 return windows.contains {
                     $0.providerID == providerID
                         && !$0.status.isTerminal

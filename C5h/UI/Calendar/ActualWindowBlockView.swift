@@ -72,7 +72,7 @@ struct ActualWindowBlockView: View {
         // end, so a re-anchored adjacent window (e.g. a tier change) cannot pin
         // a foreign reading inside this block even when its capture time falls
         // inside the block's range.
-        let scopedHistory = isProviderAnchored
+        let scopedHistory = window.hasProviderAnchoredUsageWindow
             ? history?.scoped(toFiveHourWindowEndingAt: window.endAt)
             : history
         let condensedSevenD = shownEnd > now
@@ -93,7 +93,7 @@ struct ActualWindowBlockView: View {
         // block still shows the cap it hit after the clip boundary but before the
         // reset was detected; scoping guarantees no foreign readings leak in.
         let closeReading = isPast
-            ? (isProviderAnchored
+            ? (window.hasProviderAnchoredUsageWindow
                 ? scopedHistory?.usageReading(atOrBefore: window.endAt, notBefore: visibleStart)
                 : history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart))
             : nil
@@ -646,14 +646,6 @@ struct ActualWindowBlockView: View {
 
     private var effectiveSegmentStart: Date {
         segmentStart == .distantPast ? window.startAt : segmentStart
-    }
-
-    /// True when the window's end came from a provider-reported reset time
-    /// (detected from usage, or promoted to exact by a trigger), so in-window
-    /// snapshots are expected to confirm it. Manual and legacy placeholder
-    /// windows keep the unscoped series: no snapshot could confirm their ends.
-    private var isProviderAnchored: Bool {
-        window.source == .detectedFromUsage || window.confidence == .exact
     }
 
     private var brandColor: Color {

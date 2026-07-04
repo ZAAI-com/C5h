@@ -26,6 +26,33 @@ struct ModelsTests {
         #expect(window.durationSeconds == 5 * 3600)
     }
 
+    @Test("ActualWindow5h scopes usage readings for non-manual windows")
+    func actual5hUsageScopingPolicy() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let detected = ActualWindow5h(
+            providerID: .claude,
+            startAt: start,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let triggeredReuse = ActualWindow5h(
+            providerID: .claude,
+            startAt: start,
+            source: .c5hTriggered,
+            confidence: .estimated
+        )
+        let manual = ActualWindow5h(
+            providerID: .claude,
+            startAt: start,
+            source: .manual,
+            confidence: .exact
+        )
+
+        #expect(detected.hasProviderAnchoredUsageWindow)
+        #expect(triggeredReuse.hasProviderAnchoredUsageWindow)
+        #expect(manual.hasProviderAnchoredUsageWindow == false)
+    }
+
     @Test("ActualWindow7d defaults to 7d and stores usage")
     func actual7dDefaultsTo7d() {
         let window = ActualWindow7d(
