@@ -206,7 +206,7 @@ struct UsageHistorySeriesTests {
         #expect(between?.value == 42)
         #expect(between?.asOf.timeIntervalSince1970 == 2_000)
 
-        // At/after t2: the t2 reading. Distinct from earlier anchors — the bug
+        // At/after t2: the t2 reading. Distinct from earlier anchors: the bug
         // was every window collapsing to this single latest value.
         #expect(series.fiveHourPercent(at: Date(timeIntervalSince1970: 9_999))?.value == 92)
     }
@@ -502,6 +502,269 @@ struct UsageHistorySeriesTests {
 
         #expect(result?.capturedAt.timeIntervalSince1970 == 2_000)
         #expect(result?.sevenDay == 20)
+    }
+
+    @Test("scoped keeps only points reporting the window's own reset end")
+    func scopedKeepsOwnWindowPoints() {
+        let oldWindowReading = claudeSnapshot(
+            fiveHourPercent: 19,
+            fiveHourResetsAt: 40_200,
+            capturedAt: Date(timeIntervalSince1970: 27_120)
+        )
+        let oldWindowCap = claudeSnapshot(
+            fiveHourPercent: 100,
+            fiveHourResetsAt: 40_200,
+            capturedAt: Date(timeIntervalSince1970: 29_760)
+        )
+        let newWindowReading = claudeSnapshot(
+            fiveHourPercent: 4,
+            fiveHourResetsAt: 47_400,
+            capturedAt: Date(timeIntervalSince1970: 30_060)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [oldWindowReading, oldWindowCap, newWindowReading]
+        )
+
+        let scopedOld = series.scoped(
+            toFiveHourWindowEndingAt: Date(timeIntervalSince1970: 40_200)
+        )
+        let scopedNew = series.scoped(
+            toFiveHourWindowEndingAt: Date(timeIntervalSince1970: 47_400)
+        )
+
+        #expect(scopedOld.points.map(\.fiveHour) == [19, 100])
+        #expect(scopedNew.points.map(\.fiveHour) == [4])
+    }
+
+    @Test("Regression: a tier-change recalibration does not pin the old 100% in the new window")
+    func tierChangeDoesNotPinOldCapInNewWindow() {
+        // 2026-07-04 incident: the old window (ending 40_200) capped at 100%,
+        // the user upgraded their plan, and the provider re-anchored a new
+        // window (ending 47_400) whose retroactive start predates the capped
+        // snapshot. Scoping must keep that snapshot out of the new window's
+        // readings so the block follows the live post-upgrade values.
+        let oldWindowReading = claudeSnapshot(
+            fiveHourPercent: 19,
+            fiveHourResetsAt: 40_200,
+            capturedAt: Date(timeIntervalSince1970: 27_120)
+        )
+        let oldWindowCap = claudeSnapshot(
+            fiveHourPercent: 100,
+            fiveHourResetsAt: 40_200,
+            capturedAt: Date(timeIntervalSince1970: 29_760)
+        )
+        let newWindowReading = claudeSnapshot(
+            fiveHourPercent: 4,
+            fiveHourResetsAt: 47_400,
+            capturedAt: Date(timeIntervalSince1970: 30_060)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [oldWindowReading, oldWindowCap, newWindowReading]
+        )
+        let newWindowStart = Date(timeIntervalSince1970: 29_400)
+        let now = Date(timeIntervalSince1970: 30_600)
+
+        let scopedNew = series.scoped(
+            toFiveHourWindowEndingAt: Date(timeIntervalSince1970: 47_400)
+        )
+
+        #expect(scopedNew.trailingFiveHourRunStart(
+            reaching: 100,
+            from: newWindowStart,
+            to: now
+        ) == nil)
+        #expect(scopedNew.firstFiveHourReaching(100, from: newWindowStart, to: now) == nil)
+        let latest = scopedNew.usageReading(atOrBefore: now, notBefore: newWindowStart)
+        #expect(latest?.capturedAt.timeIntervalSince1970 == 30_060)
+        #expect(latest?.fiveHour == 4)
+    }
+
+    @Test("scoped applies the reset-end tolerance and drops unanchored points")
+    func scopedToleranceAndUnanchoredPoints() {
+        let end = Date(timeIntervalSince1970: 40_200)
+        let withinTolerance = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 1_000),
+            fiveHour: 10,
+            sevenDay: nil,
+            fiveHourResetsAt: end.addingTimeInterval(30)
+        )
+        let beyondTolerance = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: 20,
+            sevenDay: nil,
+            fiveHourResetsAt: end.addingTimeInterval(90)
+        )
+        let noResetEnd = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 3_000),
+            fiveHour: 30,
+            sevenDay: nil
+        )
+        let syntheticFreshSlot = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 4_000),
+            fiveHour: 40,
+            sevenDay: nil,
+            fiveHourResetsAt: end,
+            hasActiveFiveHourWindow: false
+        )
+        let series = UsageHistorySeries(
+            providerID: .codex,
+            points: [withinTolerance, beyondTolerance, noResetEnd, syntheticFreshSlot]
+        )
+
+        let scoped = series.scoped(toFiveHourWindowEndingAt: end)
+
+        #expect(scoped.points.map(\.fiveHour) == [10])
+    }
+
+    @Test("trailingFiveHourRunStart returns the first sample of the trailing capped run")
+    func trailingRunStartReturnsRunStart() {
+        let below = claudeSnapshot(
+            fiveHourPercent: 50,
+            sevenDayPercent: 10,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let firstFull = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let stillFullRounded = claudeSnapshot(
+            fiveHourPercent: 99.6,
+            sevenDayPercent: 25,
+            capturedAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [below, firstFull, stillFullRounded]
+        )
+
+        let result = series.trailingFiveHourRunStart(
+            reaching: 100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(result?.fiveHour == 100)
+        #expect(result?.sevenDay == 20)
+    }
+
+    @Test("trailingFiveHourRunStart unpins after a same-end re-baseline")
+    func trailingRunStartUnpinsAfterRebaseline() {
+        let capped = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let rebaselined = claudeSnapshot(
+            fiveHourPercent: 30,
+            sevenDayPercent: 21,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [capped, rebaselined])
+
+        let result = series.trailingFiveHourRunStart(
+            reaching: 100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result == nil)
+    }
+
+    @Test("trailingFiveHourRunStart skips samples without a 5h value inside the run")
+    func trailingRunStartSkipsMissingFiveHour() {
+        let capped = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let sevenDayOnly = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            fiveHour: nil,
+            sevenDay: 30
+        )
+        let stillCapped = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 40,
+            capturedAt: Date(timeIntervalSince1970: 3_000)
+        )
+        let parsed = UsageHistorySeries(providerID: .claude, snapshots: [capped, stillCapped])
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            points: parsed.points + [sevenDayOnly]
+        )
+
+        let result = series.trailingFiveHourRunStart(
+            reaching: 100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 1_000)
+    }
+
+    @Test("trailingFiveHourRunStart ignores samples outside the range")
+    func trailingRunStartIgnoresOutOfRange() {
+        let beforeRange = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 10,
+            capturedAt: Date(timeIntervalSince1970: 100)
+        )
+        let inRange = claudeSnapshot(
+            fiveHourPercent: 100,
+            sevenDayPercent: 20,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let afterRange = claudeSnapshot(
+            fiveHourPercent: 30,
+            sevenDayPercent: 30,
+            capturedAt: Date(timeIntervalSince1970: 9_000)
+        )
+        let series = UsageHistorySeries(
+            providerID: .claude,
+            snapshots: [beforeRange, inRange, afterRange]
+        )
+
+        let result = series.trailingFiveHourRunStart(
+            reaching: 100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 4_000)
+        )
+
+        #expect(result?.capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(result?.sevenDay == 20)
+    }
+
+    @Test("A scoped series with no confirming points yields nil readings")
+    func scopedEmptySeriesYieldsNilReadings() {
+        let foreign = claudeSnapshot(
+            fiveHourPercent: 100,
+            fiveHourResetsAt: 40_200,
+            sevenDayPercent: 50,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [foreign])
+
+        let scoped = series.scoped(
+            toFiveHourWindowEndingAt: Date(timeIntervalSince1970: 99_999)
+        )
+
+        #expect(scoped.points.isEmpty)
+        #expect(scoped.usageReading(
+            atOrBefore: Date(timeIntervalSince1970: 2_000),
+            notBefore: Date(timeIntervalSince1970: 500)
+        ) == nil)
+        #expect(scoped.openingReading(at: Date(timeIntervalSince1970: 500), within: 240) == nil)
+        #expect(scoped.trailingFiveHourRunStart(
+            reaching: 100,
+            from: Date(timeIntervalSince1970: 500),
+            to: Date(timeIntervalSince1970: 2_000)
+        ) == nil)
+        #expect(scoped.fiveHourPercent(at: Date(timeIntervalSince1970: 2_000)) == nil)
+        #expect(scoped.sevenDayPercent(at: Date(timeIntervalSince1970: 2_000)) == nil)
     }
 
     // MARK: - Helpers

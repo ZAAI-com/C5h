@@ -68,22 +68,34 @@ struct ActualWindowBlockView: View {
         let usageAnchor = min(shownEnd, now)
         let isPast = shownEnd <= now
         let isCurrent = shownStart <= now && now < shownEnd
+        // Readings are scoped to snapshots reporting this window's own reset
+        // end, so a re-anchored adjacent window (e.g. a tier change) cannot pin
+        // a foreign reading inside this block even when its capture time falls
+        // inside the block's range.
+        let scopedHistory = isProviderAnchored
+            ? history?.scoped(toFiveHourWindowEndingAt: window.endAt)
+            : history
         let condensedSevenD = shownEnd > now
             ? nil
-            : Self.meaningfulSevenDay(history?.sevenDayPercent(at: shownEnd)?.value)
+            : Self.meaningfulSevenDay(scopedHistory?.sevenDayPercent(at: shownEnd)?.value)
         let condensed5h: (value: Double, asOf: Date)? = shownStart > now
             ? nil
-            : history?.fiveHourPercent(at: usageAnchor)
+            : scopedHistory?.fiveHourPercent(at: usageAnchor)
         // Day view: the "opening" reading shown beside the start time, taken from
         // the first snapshot captured at or just after the window opened.
         let openReadingRaw = shownStart > now
             ? nil
-            : history?.openingReading(at: shownStart, within: Self.openingWindowSeconds)
+            : scopedHistory?.openingReading(at: shownStart, within: Self.openingWindowSeconds)
         // Day view: the "closing" reading shown beside the end time on a completed
         // window: the latest in-window snapshot at or before the end (targets the
-        // last few minutes, falling back to the most recent earlier reading).
+        // last few minutes, falling back to the most recent earlier reading). A
+        // provider-anchored window searches up to its real end, so a reset-clipped
+        // block still shows the cap it hit after the clip boundary but before the
+        // reset was detected; scoping guarantees no foreign readings leak in.
         let closeReading = isPast
-            ? history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart)
+            ? (isProviderAnchored
+                ? scopedHistory?.usageReading(atOrBefore: window.endAt, notBefore: visibleStart)
+                : history?.usageReading(atOrBefore: shownEnd, notBefore: visibleStart))
             : nil
         // Suppress the opening annotation when it is the same capture as the close
         // (single-reading window) so the value isn't shown at both corners.
@@ -94,7 +106,7 @@ struct ActualWindowBlockView: View {
         // latest reading once it is at least 5 min past the start; a completed
         // window marks the moment 5h first hit 100%.
         let floatingReading = Self.floatingReading(
-            history: history,
+            history: scopedHistory,
             isCurrent: isCurrent,
             isPast: isPast,
             shownStart: shownStart,
@@ -595,10 +607,13 @@ struct ActualWindowBlockView: View {
     private static let middleLeadSeconds: TimeInterval = 5 * 60
 
     /// The floating, time-anchored reading for the Day view. A current window
-    /// that has hit 100% freezes at the moment 5h first reached 100%; while still
-    /// below 100% it shows its latest in-window reading once that reading is at
-    /// least `middleLeadSeconds` past the start. A completed window marks the
-    /// moment 5h first reached 100%. Future windows show nothing.
+    /// at the cap freezes at the start of the trailing run of 100% readings so
+    /// the row stops sliding to each new poll, and unpins when a later reading
+    /// drops below 100% (a same-window re-baseline, e.g. extra usage bought
+    /// mid-window). While below 100% it shows its latest in-window reading once
+    /// that reading is at least `middleLeadSeconds` past the start. A completed
+    /// window marks the trailing capped run the same way. Future windows show
+    /// nothing.
     private static func floatingReading(
         history: UsageHistorySeries?,
         isCurrent: Bool,
@@ -609,11 +624,14 @@ struct ActualWindowBlockView: View {
         usageAnchor: Date
     ) -> (capturedAt: Date, fiveHour: Double, sevenDay: Double?)? {
         if isCurrent {
-            // Once the cap is hit, freeze the row at the first 100% moment so it
-            // stops sliding to each new poll. Below 100%, keep showing the live
-            // latest reading.
-            if let hit = history?.firstFiveHourReaching(100, from: visibleStart, to: usageAnchor) {
-                return hit
+            // Freeze the row at the start of the trailing capped run while the
+            // cap still holds. Below 100%, keep showing the live latest reading.
+            if let capped = history?.trailingFiveHourRunStart(
+                reaching: 100,
+                from: visibleStart,
+                to: usageAnchor
+            ) {
+                return capped
             }
             guard let latest = history?.usageReading(atOrBefore: usageAnchor, notBefore: visibleStart),
                   latest.capturedAt >= shownStart.addingTimeInterval(middleLeadSeconds)
@@ -621,13 +639,21 @@ struct ActualWindowBlockView: View {
             return latest
         }
         if isPast {
-            return history?.firstFiveHourReaching(100, from: visibleStart, to: shownEnd)
+            return history?.trailingFiveHourRunStart(reaching: 100, from: visibleStart, to: shownEnd)
         }
         return nil
     }
 
     private var effectiveSegmentStart: Date {
         segmentStart == .distantPast ? window.startAt : segmentStart
+    }
+
+    /// True when the window's end came from a provider-reported reset time
+    /// (detected from usage, or promoted to exact by a trigger), so in-window
+    /// snapshots are expected to confirm it. Manual and legacy placeholder
+    /// windows keep the unscoped series: no snapshot could confirm their ends.
+    private var isProviderAnchored: Bool {
+        window.source == .detectedFromUsage || window.confidence == .exact
     }
 
     private var brandColor: Color {

@@ -119,7 +119,7 @@ public enum ActualWindow5hDisplayResolver {
         // The latest in-window point that confirms this is the active 5h window.
         guard let confirmIndex = points.lastIndex(where: {
             $0.capturedAt < end
-                && confirmsActiveFiveHourWindow($0, endingAt: end, tolerance: tolerance)
+                && $0.confirmsActiveFiveHourWindow(endingAt: end, tolerance: tolerance)
         }) else {
             return nil
         }
@@ -131,17 +131,6 @@ public enum ActualWindow5hDisplayResolver {
             $0.capturedAt > confirmedAt && $0.capturedAt < end
         }?.capturedAt
         return rolledOffAt
-    }
-
-    /// True when `point` confirms `end` is the active 5h window: it reports an
-    /// active window whose reset end is within `tolerance` of `end`.
-    private static func confirmsActiveFiveHourWindow(
-        _ point: UsagePoint,
-        endingAt end: Date,
-        tolerance: TimeInterval
-    ) -> Bool {
-        point.hasActiveFiveHourWindow
-            && (point.fiveHourResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false)
     }
 
     private static func resetWindow(
