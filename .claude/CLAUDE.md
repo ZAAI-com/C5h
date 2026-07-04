@@ -161,6 +161,32 @@ https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml
 `Toolkit/Release/release.sh`; S2 uploads it alongside the DMG so the
 `releases/latest/download/` URL always serves the newest release's feed.
 
+### Feed failover (mirror feeds)
+
+`C5h/Info.plist` lists mirror feeds in `C5hFallbackFeedURLs`, tried in order
+after `SUFeedURL` when the current feed cannot be loaded (host unreachable,
+DNS failure, 404, malformed or unsigned XML). `FeedFailoverController` in
+`C5h/Core/Services/UpdaterService.swift` is the `SPUUpdaterDelegate` that drives
+this: it restarts the check against the next mirror only when a feed never
+loaded, so "you are up to date" and post-download errors do not trigger a
+pointless re-check. The current feed is sticky (it stays on a mirror that works
+until that mirror fails, then wraps back toward the primary) because resetting
+to the primary after every success makes Sparkle fire an immediate re-check,
+which becomes a tight loop during a sustained primary outage. Requirements for
+a mirror:
+
+- It must serve the same EdDSA-signed `appcast.xml` (same private key), so copy
+  the S2 artifact verbatim; do not re-sign with a different key.
+- Enclosure URLs in that appcast still point at the GitHub release download
+  (from `--download-url-prefix`), so a mirror feed helps when the `latest`
+  redirect is flaky or rate-limited, not when GitHub is fully down (the DMG
+  download would still fail). To fully mirror the binary too, host the DMGs on
+  the mirror and regenerate its appcast with that host's download prefix.
+
+The current fallback is `https://zaai.com/c5h/appcast.xml`; until that host
+serves the mirrored appcast, failover is a no-op (the primary GitHub feed is
+used as before).
+
 One-time key setup (prerequisite before the first Sparkle release):
 
 1. Download the pinned tools:

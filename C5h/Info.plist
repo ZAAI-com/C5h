@@ -41,5 +41,11 @@
 	<true/>
 	<key>SUAutomaticallyUpdate</key>
 	<true/>
+	<!-- Mirror feeds tried in order after SUFeedURL when the primary feed
+	     cannot be reached. Each must serve the same EdDSA-signed appcast. -->
+	<key>C5hFallbackFeedURLs</key>
+	<array>
+		<string>https://zaai.com/c5h/appcast.xml</string>
+	</array>
 </dict>
 </plist>
