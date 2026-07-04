@@ -33,6 +33,7 @@ final class AppEnvironment {
     private(set) var providerRegistry: ProviderRegistry?
     private(set) var schedulerDriver: AppSchedulerDriver?
     private(set) var schedulerTicker: SchedulerTicker?
+    private(set) var databaseChangeMonitor: DatabaseChangeMonitor?
     private(set) var providerStatuses: [ProviderID: ProviderStatus] = [:]
     private(set) var providerStatusLoading: Set<ProviderID> = []
     private(set) var providerPromptFiring: Set<ProviderID> = []
@@ -49,6 +50,14 @@ final class AppEnvironment {
             self.paths = paths
             let db = try Database.open(at: paths.databaseURL)
             self.database = db
+            // Reuse the monitor across bootstrap retries: replacing it would
+            // deallocate an instance whose raw pointer is still registered with
+            // the Darwin notify center.
+            if databaseChangeMonitor == nil {
+                let changeMonitor = DatabaseChangeMonitor()
+                self.databaseChangeMonitor = changeMonitor
+                changeMonitor.start()
+            }
             try await Seed.runIfNeeded(database: db)
 
             let providerRepo = GRDBProviderRepository(database: db)
