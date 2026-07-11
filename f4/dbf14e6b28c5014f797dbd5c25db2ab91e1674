@@ -1,0 +1,55 @@
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeUsageStatus.swift
+  s_8f18187dd5c1ce::t_1c856c86763c03 20-30
+Packages/C5hCore/Tests/C5hCoreTests/UsageCheckGateTests.swift
+  s_8f18187dd5c1ce::t_f93a2c6a3adacb 9-33,37-42,45-59,65,74-86,93,103-104,116-117,122-127,131-132
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_8f18187dd5c1ce::t_2f4d97c0a9bb04 51-53
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeLocalActivityDetectorTests.swift
+  s_8f18187dd5c1ce::t_7440181dd60a32 1-165
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_8f18187dd5c1ce::t_48ad09db1ada74 13-15,26-31,35-41,43-56,68-97
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_8f18187dd5c1ce::t_70b91216beedbc 197-202
+  s_8f18187dd5c1ce::t_35672583c8fab6 149-152
+  s_8f18187dd5c1ce::t_44267691e667e6 162
+  s_8f18187dd5c1ce::t_3f79e491538960 122-123
+  s_8f18187dd5c1ce::t_fe184149d2709d 171-172,182-184,203-204
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_8f18187dd5c1ce::t_6906da5488460c 8-9,33-35,59-61,72-314,344-349
+  s_8f18187dd5c1ce::t_d93ef0d4f556f2 350-351
+Packages/C5hCore/Sources/C5hCore/Models/ProviderID.swift
+  s_8f18187dd5c1ce::t_02e7fcb8fbde02 29-41
+Packages/C5hCore/Sources/C5hCore/Providers/ClaudeUsageCollector.swift
+  s_8f18187dd5c1ce::t_3edfca487b97ca 275-282
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeLocalActivityDetector.swift
+  s_8f18187dd5c1ce::t_c306db3e0144bf 1-129
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_8f18187dd5c1ce::t_f87ee0deeedb76 138-140,145-147
+  s_8f18187dd5c1ce::t_f1286e05b48cbc 169-173
+C5h/UI/Providers/ProviderCardView.swift
+  s_8f18187dd5c1ce::t_6cb3f156bf342b 152-164
+  s_8f18187dd5c1ce::t_1806516f2f6d2d 249-251
+  s_8f18187dd5c1ce::t_e8c6cee04b67ff 137
+  s_8f18187dd5c1ce::t_99303926349468 273
+  s_8f18187dd5c1ce::t_464ddfc1cc3125 302
+Packages/C5hCore/Sources/C5hCore/Usage/UsageCheckGate.swift
+  s_8f18187dd5c1ce::t_113cc7be125ad5 3-14,23-30,35,40-41,46,50-52,60-68
+Packages/C5hCore/Sources/C5hCore/Usage/UsageNormalizer.swift
+  s_8f18187dd5c1ce::t_2236300beafd64 81-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "f4dbf14e6b28c5014f797dbd5c25db2ab91e1674",
+  "prompts": {},
+  "sessions": {
+    "s_8f18187dd5c1ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6fa376af-6ad8-4362-acde-44f4a7fab420",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
