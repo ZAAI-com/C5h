@@ -362,6 +362,7 @@ private struct WeekDayColumnView: View {
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
+                    let renderedTop = stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
                     Button {
                         onSelectPlanned(window)
                     } label: {
@@ -374,13 +375,14 @@ private struct WeekDayColumnView: View {
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
                             segmentStart: segment.start,
-                            widthOverride: providerContentWidth
+                            widthOverride: providerContentWidth,
+                            renderedTopOffset: renderedTop
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(1)
                 }
@@ -391,6 +393,7 @@ private struct WeekDayColumnView: View {
                     start: actualSegment.startAt,
                     durationSeconds: actualSegment.durationSeconds
                 ) {
+                    let renderedTop = stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
                     Button {
                         onSelectActual(window)
                     } label: {
@@ -409,13 +412,14 @@ private struct WeekDayColumnView: View {
                             marksResetEnd: actualSegment.marksResetEnd,
                             condensed: true,
                             widthOverride: providerContentWidth,
-                            isReset: resetWindowIDs.contains(actualSegment.id)
+                            isReset: resetWindowIDs.contains(actualSegment.id),
+                            renderedTopOffset: renderedTop
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(2)
                 }

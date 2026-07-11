@@ -212,4 +212,41 @@ struct CalendarPositioningTests {
             .init(yOffset: 88),
         ])
     }
+
+    @Test("now line offset matches time delta at natural placement")
+    func nowLineOffsetNaturalPlacement() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let segmentStart = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10))!
+        let now = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10, minute: 30))!
+        let ppm: CGFloat = 1.0
+        let renderedTop = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm, calendar: cal)
+        let offset = CalendarPositioning.nowLineOffset(
+            inBlockTop: renderedTop,
+            now: now,
+            pixelsPerMinute: ppm,
+            calendar: cal
+        )
+        #expect(offset == 30.0)
+        #expect(renderedTop + offset == CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm, calendar: cal))
+    }
+
+    @Test("now line absolute Y stays at now when block is vertically stacked")
+    func nowLineOffsetStackedPlacement() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let segmentStart = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10))!
+        let now = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10, minute: 30))!
+        let ppm: CGFloat = 1.0
+        let timeTop = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm, calendar: cal)
+        let renderedTop = timeTop + 26 // pushed down by vertical stacking
+        let offset = CalendarPositioning.nowLineOffset(
+            inBlockTop: renderedTop,
+            now: now,
+            pixelsPerMinute: ppm,
+            calendar: cal
+        )
+        #expect(offset == 4.0)
+        #expect(renderedTop + offset == CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm, calendar: cal))
+    }
 }

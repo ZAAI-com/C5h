@@ -19,6 +19,17 @@ public enum CalendarPositioning {
         CGFloat(minutesSinceStartOfDay(date, calendar: calendar)) * pixelsPerMinute
     }
 
+    /// Vertical offset of the current-time line inside a block, given the block's
+    /// top edge in column coordinates (after vertical stacking).
+    public static func nowLineOffset(
+        inBlockTop renderedTop: CGFloat,
+        now: Date,
+        pixelsPerMinute: CGFloat,
+        calendar: Calendar = .current
+    ) -> CGFloat {
+        yOffset(for: now, pixelsPerMinute: pixelsPerMinute, calendar: calendar) - renderedTop
+    }
+
     public static func blockHeight(
         durationSeconds: Int,
         pixelsPerMinute: CGFloat,

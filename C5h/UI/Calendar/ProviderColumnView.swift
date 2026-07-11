@@ -55,6 +55,7 @@ struct ProviderColumnView: View {
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
                 if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
+                    let renderedTop = stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
                     PlannedWindowBlockView(
                         window: window,
                         now: now,
@@ -66,7 +67,8 @@ struct ProviderColumnView: View {
                         segmentStart: segment.start,
                         displayStart: draggingPlannedID == window.id ? displayStart : nil,
                         emphasizeEndTime: true,
-                        widthOverride: blockContentWidth
+                        widthOverride: blockContentWidth,
+                        renderedTopOffset: renderedTop
                     )
                     .overlay(alignment: .topTrailing) {
                         if isActive {
@@ -79,7 +81,7 @@ struct ProviderColumnView: View {
                     }
                     .offset(
                         x: blockContentX,
-                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
                     .zIndex(draggingPlannedID == window.id ? 3 : 1)
@@ -117,6 +119,7 @@ struct ProviderColumnView: View {
             ForEach(actualSegments) { actualSegment in
                 let window = actualSegment.window
                 if let segment = visibleSegment(start: actualSegment.startAt, durationSeconds: actualSegment.durationSeconds) {
+                    let renderedTop = stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
                     ActualWindowBlockView(
                         window: window,
                         history: history,
@@ -131,11 +134,12 @@ struct ProviderColumnView: View {
                         displayEnd: actualSegment.endAt,
                         marksResetEnd: actualSegment.marksResetEnd,
                         widthOverride: blockContentWidth,
-                        isReset: resetWindowIDs.contains(actualSegment.id)
+                        isReset: resetWindowIDs.contains(actualSegment.id),
+                        renderedTopOffset: renderedTop
                     )
                     .offset(
                         x: blockContentX,
-                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(2)
                 }
