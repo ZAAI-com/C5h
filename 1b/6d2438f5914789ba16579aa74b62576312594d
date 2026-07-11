@@ -1,0 +1,19 @@
+C5h/UI/Calendar/DayCalendarScreen.swift
+  s_e03fbf98877e73::t_17863d5b7c1d29 103-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "1b6d2438f5914789ba16579aa74b62576312594d",
+  "prompts": {},
+  "sessions": {
+    "s_e03fbf98877e73": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ae449d8d-b951-441c-94c2-721ed1bbb79e",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
