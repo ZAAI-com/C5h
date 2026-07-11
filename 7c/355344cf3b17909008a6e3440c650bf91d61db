@@ -1,0 +1,47 @@
+C5h/App/AppEnvironment.swift
+  s_eb2021aec76f9c::t_22dfb951af9831 222,246,282
+C5h/Core/Providers/CLIBackedProviderAdapter.swift
+  s_eb2021aec76f9c::t_f23e33d4f57230 14,24,45,55,58,83,94,103
+C5h/Core/Providers/ClaudeProviderAdapter.swift
+  s_eb2021aec76f9c::t_9823ab311d1cd8 31-32,34,45,52-53
+C5h/Core/Providers/CodexProviderAdapter.swift
+  s_eb2021aec76f9c::t_cf4c40a68ae4c4 31-32,34,44,51,60
+C5h/Core/Services/AppSchedulerDriver.swift
+  s_eb2021aec76f9c::t_871cbae774e395 34,66
+C5h/UI/Providers/ProviderCardView.swift
+  s_eb2021aec76f9c::t_b81ed97ee75060 228,236,244,256
+Packages/C5hCore/Sources/C5hCore/Models/CommandRun.swift
+  s_eb2021aec76f9c::t_900fa7c729ff1f 64-67
+Packages/C5hCore/Sources/C5hCore/Process/ProviderCommands.swift
+  s_eb2021aec76f9c::t_2ac39821a2d192 4,25,42,72,121,193,296,329
+Packages/C5hCore/Sources/C5hCore/Providers/ProviderAdapter.swift
+  s_eb2021aec76f9c::t_c067c3ad637d82 7-10,14-15
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_eb2021aec76f9c::t_3e524bf4cd1e5f 4,28,36
+Packages/C5hCore/Tests/C5hCoreTests/CommandRunnerTests.swift
+  s_eb2021aec76f9c::t_88e77204c45e52 44,67,86,107,129,153,172,191
+Packages/C5hCore/Tests/C5hCoreTests/ProviderCommandsTests.swift
+  s_eb2021aec76f9c::t_7aa86960ad9850 10,12,14,18,20,22,24,27,29-30,33-34,39,45-46,48-49,54,60,66,74,76,83,87-88,97,105,138,191,209,213-214,218,220-221,225
+Packages/C5hCore/Tests/C5hCoreTests/SchedulerServiceTests.swift
+  s_eb2021aec76f9c::t_4a45d5821bf141 77
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_eb2021aec76f9c::t_bcbadb0c11df2d 239,294,322
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_eb2021aec76f9c::t_882e2e59c17e88 16,27,41,48,78,87,96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7c355344cf3b17909008a6e3440c650bf91d61db",
+  "prompts": {},
+  "sessions": {
+    "s_eb2021aec76f9c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "s_eb2021aec76f9c",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
