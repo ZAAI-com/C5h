@@ -1,0 +1,51 @@
+Packages/C5hCore/Sources/C5hCore/Usage/UsageCheckGate.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 5-23,33-34,43-49,54-55,57-59,64-66,72-73,76-82,90-98,100
+  s_b42acb44bbb529::t_3d3f0439abf68d 99
+Packages/C5hCore/Tests/C5hCoreTests/PlannedWindowValidatorTests.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 152-293
+Packages/C5hCore/Sources/C5hCore/Validation/PlannedWindowValidator.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 3-31,34,36-43,87-136
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_b42acb44bbb529::t_a286cfa6725d51 405-486
+  s_b42acb44bbb529::t_e985eeb0d7639c 221-404,487-498
+  s_b42acb44bbb529::t_69c84b9ed7f190 93-95,128
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 35,81-115
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 265-386
+C5h/UI/Calendar/DayCalendarScreen.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 103-119
+Packages/C5hCore/Tests/C5hCoreTests/UsageCheckGateTests.swift
+  s_b42acb44bbb529::t_e985eeb0d7639c 122-205,210-212,218-220
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_b42acb44bbb529::t_5c9c44f582a7a2 191-197,202-207,210-212
+  s_b42acb44bbb529::t_e985eeb0d7639c 14-17,22-30,36-51,94,183-190,198-201,208-209,213-217,231-242
+  s_b42acb44bbb529::t_a544ed597edb41 250-260,269-278
+  s_b42acb44bbb529::t_5169d68f90017a 243
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_b42acb44bbb529::t_36883039ab0331 258,260
+  s_b42acb44bbb529::t_4d9add495efabb 297
+  s_b42acb44bbb529::t_ae34a2f92391f5 71,78-88
+  s_b42acb44bbb529::t_e985eeb0d7639c 16-17,20,89,343-383
+  s_b42acb44bbb529::t_bd9ea8244af167 259
+  s_b42acb44bbb529::t_db4fec994a4077 336
+  s_b42acb44bbb529::t_519ac1d3c23851 18-19,21-23
+  s_b42acb44bbb529::t_09ace2ea903c07 90
+  s_b42acb44bbb529::t_ef5f0d30c4da71 384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "607086a8f61e54d8c679e5cba48247faa18b30e9",
+  "prompts": {},
+  "sessions": {
+    "s_b42acb44bbb529": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6913b52d-3cae-41fd-b256-aac988ca3304",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
