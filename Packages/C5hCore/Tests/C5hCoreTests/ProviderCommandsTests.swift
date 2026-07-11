@@ -138,7 +138,11 @@ struct ProviderCommandsTests {
         let usage = UsageCommand(
             providerID: .claude,
             executableURL: script,
-            timeoutSeconds: 0.5,
+            // 2s (not 0.5s): the collector drains the PTY every 0.1s until the
+            // deadline, so a very short timeout captures too few reads and the
+            // transcript can come back empty under concurrent test load. The
+            // fake script sleeps 5s, so the probe still times out well before it.
+            timeoutSeconds: 2,
             lockConfiguration: UsageProbeLockConfiguration(directory: dir.appendingPathComponent("locks"))
         )
 

@@ -45,12 +45,15 @@ final class UpdaterService {
         #if DEBUG
         isEnabled = false
         #else
-        isEnabled = true
+        isEnabled = Self.isSparkleConfigured()
         #endif
         let feedFailover = FeedFailoverController(feeds: Self.configuredFeeds())
         self.feedFailover = feedFailover
+        // Never pass startingUpdater: true — SPUStandardUpdaterController shows a
+        // modal "Unable to Check For Updates" alert when startUpdater fails.
+        // Call SPUUpdater.start() directly so misconfiguration is logged only.
         let controller = SPUStandardUpdaterController(
-            startingUpdater: isEnabled,
+            startingUpdater: false,
             updaterDelegate: feedFailover,
             userDriverDelegate: nil
         )
@@ -58,6 +61,10 @@ final class UpdaterService {
         automaticallyChecksForUpdates = controller.updater.automaticallyChecksForUpdates
         automaticallyDownloadsUpdates = controller.updater.automaticallyDownloadsUpdates
         lastUpdateCheckDate = controller.updater.lastUpdateCheckDate
+
+        if isEnabled {
+            startUpdaterQuietly()
+        }
 
         controller.updater.publisher(for: \.canCheckForUpdates)
             .receive(on: DispatchQueue.main)
@@ -86,6 +93,31 @@ final class UpdaterService {
         automaticallyChecksForUpdates = controller.updater.automaticallyChecksForUpdates
         automaticallyDownloadsUpdates = controller.updater.automaticallyDownloadsUpdates
         lastUpdateCheckDate = controller.updater.lastUpdateCheckDate
+    }
+
+    /// Starts Sparkle without surfacing SPUStandardUpdaterController's fatal
+    /// misconfiguration alert. Failures are logged and leave canCheckForUpdates
+    /// false so menu items stay disabled.
+    private func startUpdaterQuietly() {
+        do {
+            try controller.updater.start()
+        } catch {
+            NSLog("UpdaterService: Sparkle failed to start: \(error)")
+        }
+    }
+
+    /// Release builds only run the updater when Info.plist has real Sparkle keys.
+    private static func isSparkleConfigured() -> Bool {
+        guard let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+              !publicKey.isEmpty,
+              publicKey != "REPLACE_WITH_GENERATE_KEYS_PUBLIC_KEY" else {
+            return false
+        }
+        guard let feedURL = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+              !feedURL.isEmpty else {
+            return false
+        }
+        return true
     }
 
     /// The primary feed (SUFeedURL) followed by any C5hFallbackFeedURLs, in

@@ -32,11 +32,8 @@
 	<string>NSApplication</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml</string>
-	<!-- TODO: replace with the public key printed by Sparkle's generate_keys
-	     before the first Sparkle-enabled release. Sparkle refuses to install
-	     updates whose appcast signature does not match this key. -->
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_GENERATE_KEYS_PUBLIC_KEY</string>
+	<string>pFX9RhGOWNCnJx+pFvFMVmC7V2yIXAjLXMGpGbYZj6U=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUAutomaticallyUpdate</key>

@@ -128,7 +128,7 @@ struct SettingsView: View {
                         .font(C5hTypography.captionFont)
                         .foregroundStyle(C5hColors.fgTertiary)
                 } else {
-                    Text("Automatic updates are disabled in Debug builds.")
+                    Text("Automatic updates are unavailable in this build.")
                         .font(C5hTypography.captionFont)
                         .foregroundStyle(C5hColors.fgTertiary)
                 }

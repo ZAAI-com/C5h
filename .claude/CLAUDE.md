@@ -187,7 +187,8 @@ The current fallback is `https://zaai.com/c5h/appcast.xml`; until that host
 serves the mirrored appcast, failover is a no-op (the primary GitHub feed is
 used as before).
 
-One-time key setup (prerequisite before the first Sparkle release):
+One-time key setup (done for this repo on 2026-07-11; regenerate only if the
+private key is lost):
 
 1. Download the pinned tools:
    `https://github.com/sparkle-project/Sparkle/releases/download/2.9.4/Sparkle-2.9.4.tar.xz`

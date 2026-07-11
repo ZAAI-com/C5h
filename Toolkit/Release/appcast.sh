@@ -101,7 +101,7 @@ if ! grep -q 'sparkle:edSignature=' "${APPCAST}"; then
   echo "ERROR: appcast has no sparkle:edSignature; the DMG was not signed with the EdDSA key." >&2
   exit 3
 fi
-if ! grep -q "sparkle:version=\"${VERSION}\"" "${APPCAST}"; then
+if ! grep -Eq "<sparkle:version>${VERSION}</sparkle:version>|sparkle:version=\"${VERSION}\"" "${APPCAST}"; then
   echo "ERROR: appcast sparkle:version does not match ${VERSION}; the DMG embeds a different CFBundleVersion." >&2
   exit 3
 fi
