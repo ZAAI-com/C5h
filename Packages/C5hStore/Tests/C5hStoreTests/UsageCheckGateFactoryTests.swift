@@ -262,6 +262,128 @@ struct UsageCheckGateFactoryTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
+    @Test("An upcoming planned window suppresses Claude probing despite strong evidence")
+    func upcomingPlannedWindowWithinHorizonSuppressesClaude() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        // Strongest pro-probe evidence: fresh local activity AND a snapshot
+        // that believes a window is open.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-300),
+            windowEndsAt: now.addingTimeInterval(3600)
+        ))
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+
+        // A planned window 2h out puts us inside the quiet period.
+        try await plannedRepo.create(PlannedWindow(
+            providerID: .claude,
+            startAt: now.addingTimeInterval(2 * 3600),
+            status: .scheduled
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("A planned window at the horizon boundary does not suppress")
+    func plannedWindowAtHorizonBoundaryDoesNotSuppress() async throws {
+        // Exactly at the horizon: the overlap query is half-open on start_at,
+        // so this window is outside the quiet period and the believed-active
+        // snapshot keeps the gate open.
+        let gate = try await makeQuietPeriodGate(
+            plannedWindow: PlannedWindow(
+                providerID: .claude,
+                startAt: now.addingTimeInterval(UsageCheckGate.preWindowQuietHorizon),
+                status: .scheduled
+            )
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A terminal planned window inside the horizon does not suppress")
+    func terminalPlannedWindowDoesNotSuppress() async throws {
+        let gate = try await makeQuietPeriodGate(
+            plannedWindow: PlannedWindow(
+                providerID: .claude,
+                startAt: now.addingTimeInterval(2 * 3600),
+                status: .cancelled
+            )
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    /// Gate over one planned window plus a believed-active snapshot (window end
+    /// an hour out), with idle checking off, so `shouldCheck` is true unless the
+    /// quiet period suppresses it.
+    private func makeQuietPeriodGate(plannedWindow: PlannedWindow) async throws -> UsageCheckGate {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: false)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-300),
+            windowEndsAt: now.addingTimeInterval(3600)
+        ))
+        try await plannedRepo.create(plannedWindow)
+
+        return UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: Self.emptyDetector()
+        )
+    }
+
+    @Test("An upcoming planned window does not suppress Codex's read-only probe")
+    func upcomingPlannedWindowDoesNotSuppressCodex() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .codex), value: true)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+
+        try await plannedRepo.create(PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(2 * 3600),
+            status: .scheduled
+        ))
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: Self.emptyDetector()
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
     private static func emptyDetector() -> ClaudeLocalActivityDetector {
         ClaudeLocalActivityDetector(
             projectsDirectory: FileManager.default.temporaryDirectory

@@ -11,14 +11,43 @@ import Foundation
 /// `CommandRun`, and a later usage poll persists the real window once the
 /// provider reports it. The resolver never pins a synthetic `[trigger, +5h]`
 /// block, so it cannot create a phantom window that overlaps the real one.
+///
+/// The resolver's `snapshotFetch` deliberately bypasses `UsageCheckGate`
+/// (including its pre-window quiet period): a prompt just ran, so the account
+/// is active and this probe only anchors the window that run landed in.
 public struct ActiveWindowResolver: Sendable {
     public typealias FetchSnapshot = @Sendable (ProviderID) async throws -> UsageSnapshot
     public typealias FetchActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
+
+    /// How far before the trigger a provider-reported window start may lie and
+    /// still be credited to the trigger. Measured from the top of the UTC hour
+    /// containing the trigger time because Claude anchors fresh windows to the
+    /// hour: a wake prompt at 02:30 legitimately opens a window reported as
+    /// starting 02:00. The tolerance absorbs scheduler tick latency, the
+    /// post-trigger probe's runtime, and minute-level rounding of the
+    /// provider's reported reset time.
+    public static let triggerAnchorTolerance: TimeInterval = 10 * 60
 
     public let fetcher: UsageFetcher
     public let snapshotFetch: FetchSnapshot
     public let activeWindowFetch: FetchActiveWindow
     public let updateActualWindow: @Sendable (ActualWindow5h) async throws -> Void
+
+    /// Whether a window starting at `startAt` could have been opened by a
+    /// trigger that ran at `now`. A start earlier than the hour floor of `now`
+    /// minus `tolerance` means the window predates the trigger: it is the
+    /// provider's boundary chained onto a previous window's end, not a window
+    /// this trigger opened.
+    public static func isPlausiblyTriggerAnchored(
+        startAt: Date,
+        now: Date,
+        tolerance: TimeInterval = triggerAnchorTolerance
+    ) -> Bool {
+        let hourFloor = Date(
+            timeIntervalSince1970: (now.timeIntervalSince1970 / 3600).rounded(.down) * 3600
+        )
+        return startAt >= hourFloor.addingTimeInterval(-tolerance)
+    }
 
     public init(
         fetcher: UsageFetcher,
@@ -62,7 +91,7 @@ public struct ActiveWindowResolver: Sendable {
                 commandRunID: commandRunID,
                 now: now
             ) {
-                NSLog("ActiveWindowResolver: promoted real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
+                NSLog("ActiveWindowResolver: anchored real \(providerID.rawValue) window [\(promoted.startAt) … \(promoted.endAt)] for command \(commandRunID)")
                 return promoted
             }
         } catch {
@@ -151,6 +180,41 @@ public struct ActiveWindowResolver: Sendable {
         // No active 5h window in this snapshot: report nil rather than promoting
         // a stale row from a previous poll, so the caller falls back to reuse.
         guard let derived5h else { return nil }
+        let usedPercentage = Self.usedPercentage5h(from: snapshot) ?? 0
+        if usedPercentage <= 0,
+           !Self.isPlausiblyTriggerAnchored(startAt: derived5h.startAt, now: now) {
+            // The reported window started well before the trigger with zero
+            // recorded usage: that is the provider's idle rolling boundary
+            // chained onto the previous window's end, not a window this wake
+            // prompt opened. Stamping it `c5hTriggered`/`exact` would show a
+            // block C5h never started (the "planned 05:00, calendar shows
+            // 03:10" confusion). Force the row back to `detectedFromUsage`/
+            // `estimated`: the upsert above may have merged into a previously
+            // stamped `c5hTriggered` row (upsertByEndAt preserves that source
+            // and upgrades confidence), so trusting the read-back row would
+            // silently keep the stamp. Link the run for traceability and
+            // return non-nil so the caller does NOT fall through to
+            // `reuseActiveWindow`.
+            NSLog("ActiveWindowResolver: \(providerID.rawValue) window [\(derived5h.startAt) … \(derived5h.endAt)] predates command \(commandRunID) with zero recorded usage; keeping it detectedFromUsage instead of promoting")
+            guard var active = try await activeWindowFetch(providerID, now) else {
+                return derived5h
+            }
+            var needsWrite = false
+            if active.source != .detectedFromUsage || active.confidence != .estimated {
+                active.source = .detectedFromUsage
+                active.confidence = .estimated
+                needsWrite = true
+            }
+            if active.commandRunID == nil {
+                active.commandRunID = commandRunID
+                needsWrite = true
+            }
+            if needsWrite {
+                active.updatedAt = now
+                try await updateActualWindow(active)
+            }
+            return active
+        }
         guard var active = try await activeWindowFetch(providerID, now) else {
             // The real window was already upserted; report it so the caller does
             // not also write a duplicate row.
@@ -164,15 +228,36 @@ public struct ActiveWindowResolver: Sendable {
         return active
     }
 
+    /// Reported 5h used percentage from the raw snapshot payload, used to tell
+    /// an idle rolling boundary (0%) from a window with real consumption.
+    private static func usedPercentage5h(from snapshot: UsageSnapshot) -> Double? {
+        switch snapshot.providerID {
+        case .claude:
+            (try? ClaudeUsageStatus.parsePayload(snapshot.rawJSON))?
+                .fiveHour.usedPercentage
+        case .codex:
+            (try? CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt))?
+                .primary.usedPercentage
+        }
+    }
+
     /// When a fresh snapshot cannot supply a real window (the usage CLI failed,
     /// or reported no active window), attach the trigger to an existing active
     /// window (persisted by an earlier poll) that already covers `now`, rather
     /// than fabricating a fresh `[now, +5h]` estimate. The triggered run happened
     /// inside that window, so promoting it to `c5hTriggered` keeps the calendar to
     /// one accurate row and avoids a phantom whose bounds are offset from the real
-    /// window's (and therefore never merge). Confidence is left untouched: with no
-    /// fresh snapshot we cannot upgrade it to `exact`. Returns `nil` when no active
-    /// window covers `now`, so the caller records nothing for this trigger.
+    /// window's (and therefore never merge). Promotion only applies when the
+    /// window's start is plausibly trigger-anchored: a window that started well
+    /// before the trigger (typically the provider's chained idle boundary) was
+    /// not opened by C5h, so it keeps its source and only gains the run link.
+    /// This matters because the post-trigger snapshot commonly fails with
+    /// `usageRefreshAlreadyRunning` (the UI's usage polls share the probe
+    /// lock), and an unconditional stamp here would re-introduce the false
+    /// "C5h started a block at 03:10" record. Confidence is left untouched:
+    /// with no fresh snapshot we cannot upgrade it to `exact`. Returns `nil`
+    /// when no active window covers `now`, so the caller records nothing for
+    /// this trigger.
     private func reuseActiveWindow(
         providerID: ProviderID,
         commandRunID: UUID,
@@ -181,10 +266,16 @@ public struct ActiveWindowResolver: Sendable {
         guard var active = try await activeWindowFetch(providerID, now) else {
             return nil
         }
-        active.source = .c5hTriggered
-        active.commandRunID = commandRunID
-        active.updatedAt = now
-        try await updateActualWindow(active)
+        if Self.isPlausiblyTriggerAnchored(startAt: active.startAt, now: now) {
+            active.source = .c5hTriggered
+            active.commandRunID = commandRunID
+            active.updatedAt = now
+            try await updateActualWindow(active)
+        } else if active.commandRunID == nil {
+            active.commandRunID = commandRunID
+            active.updatedAt = now
+            try await updateActualWindow(active)
+        }
         return active
     }
 }

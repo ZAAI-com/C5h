@@ -32,28 +32,11 @@ public extension UsageCheckGate {
                 let windows = try await actual5hRepository.fetchWindows(
                     for: DateInterval(start: now, duration: 1)
                 )
-                let hasRecordedWindow = windows.contains {
+                return windows.contains {
                     $0.providerID == providerID
                         && $0.startAt <= now
                         && $0.endAt >= now.addingTimeInterval(margin)
                 }
-                if hasRecordedWindow {
-                    return true
-                }
-                // Believed-active fallback for consuming providers: a window
-                // whose usage rounds to 0% never produces a recorded row
-                // (UsageFetcher drops idle-looking reports), but the latest
-                // snapshot's reported window end still marks it as open, and
-                // probing inside an open window is free.
-                guard providerID.usageProbeConsumesQuota,
-                      let snapshot = try await usageSnapshotRepository.fetchLatest(
-                        providerID: providerID
-                      ),
-                      let windowEndsAt = UsageNormalizer.decode(snapshot.normalizedJSON)?.windowEndsAt
-                else {
-                    return false
-                }
-                return windowEndsAt >= now.addingTimeInterval(margin)
             },
             hasPendingPlannedWindow: { providerID, now in
                 let windows = try await plannedWindowRepository.fetchWindows(
@@ -95,6 +78,41 @@ public extension UsageCheckGate {
                     .max()
                 let reference = max(lastRecordedEnd ?? .distantPast, floor)
                 return await localActivityDetector.hasActivity(since: reference)
+            },
+            isBelievedActiveFromSnapshot: { providerID, now in
+                // Believed-active fallback for consuming providers: a window
+                // whose usage rounds to 0% never produces a recorded row
+                // (UsageFetcher drops idle-looking reports), but the latest
+                // snapshot's reported window end still marks it as open, and
+                // probing inside an open window is free.
+                guard providerID.usageProbeConsumesQuota,
+                      let snapshot = try await usageSnapshotRepository.fetchLatest(
+                        providerID: providerID
+                      ),
+                      let windowEndsAt = UsageNormalizer.decode(snapshot.normalizedJSON)?.windowEndsAt
+                else {
+                    return false
+                }
+                return windowEndsAt >= now.addingTimeInterval(
+                    UsageCheckGate.consumingProbeEndMargin
+                )
+            },
+            hasUpcomingPlannedWindow: { providerID, now in
+                // Pre-window quiet period lookup: any non-terminal planned
+                // window starting inside (now, now + horizon). The repository
+                // overlap query is half-open on start_at, so a window starting
+                // exactly at the horizon does not suppress.
+                let windows = try await plannedWindowRepository.fetchWindows(
+                    for: DateInterval(
+                        start: now,
+                        duration: UsageCheckGate.preWindowQuietHorizon
+                    )
+                )
+                return windows.contains {
+                    $0.providerID == providerID
+                        && !$0.status.isTerminal
+                        && $0.startAt > now
+                }
             }
         )
     }

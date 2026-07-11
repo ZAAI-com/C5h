@@ -119,17 +119,105 @@ struct UsageCheckGateTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
+    @Test("Quiet period suppresses Claude even with local activity and a believed-active snapshot")
+    func quietPeriodSuppressesConsumingProbeBeforePlannedWindow() async {
+        // The strongest possible pro-probe evidence must lose to the quiet
+        // period: only a recorded active window or a planned window covering
+        // now may probe during the run-up to a planned start.
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: true,
+            believedActive: true,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Quiet period does not apply to read-only probes")
+    func quietPeriodDoesNotApplyToReadOnlyProbes() async {
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("A recorded active window overrides the quiet period")
+    func recordedActiveWindowOverridesQuietPeriod() async {
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: true,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A planned window covering now overrides the quiet period")
+    func plannedWindowCoveringNowOverridesQuietPeriod() async {
+        // Probing resumes at the planned start even while the upcoming lookup
+        // still sees later planned windows within the horizon.
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: false,
+            hasPending: true,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Quiet-period lookup errors fail open")
+    func quietPeriodLookupErrorFailsOpen() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false },
+            isBelievedActiveFromSnapshot: { _, _ in true },
+            hasUpcomingPlannedWindow: { _, _ in throw Boom() }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A believed-active snapshot allows probing regardless of the idle setting")
+    func believedActiveSnapshotAllowsProbing() async {
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: true,
+            hasUpcoming: false
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     private func makeGate(
         idleEnabled: Bool,
         hasActive: Bool,
         hasPending: Bool,
-        hasActivity: Bool
+        hasActivity: Bool,
+        believedActive: Bool = false,
+        hasUpcoming: Bool = false
     ) -> UsageCheckGate {
         UsageCheckGate(
             isIdleCheckEnabled: { _ in idleEnabled },
             hasActiveWindow: { _, _ in hasActive },
             hasPendingPlannedWindow: { _, _ in hasPending },
-            hasRecentLocalActivity: { _, _ in hasActivity }
+            hasRecentLocalActivity: { _, _ in hasActivity },
+            isBelievedActiveFromSnapshot: { _, _ in believedActive },
+            hasUpcomingPlannedWindow: { _, _ in hasUpcoming }
         )
     }
 }

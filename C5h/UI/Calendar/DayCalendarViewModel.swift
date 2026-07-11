@@ -13,6 +13,14 @@ final class DayCalendarViewModel {
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
     var selection: CalendarSelection?
     var lastError: String?
+    /// Advisory (non-blocking) message about the last planned/moved window,
+    /// e.g. a chain-risk warning that the block may effectively be shorter
+    /// than planned. Recomputed on every reload and cleared when its window
+    /// leaves the visible day or is deleted.
+    var lastWarning: String?
+    /// The planned window `lastWarning` describes, so reloads can recompute or
+    /// clear the advisory instead of letting it go stale.
+    private var warningWindowID: UUID?
 
     private let plannedRepository: any PlannedWindowRepository
     private let actual5hRepository: any ActualWindow5hRepository
@@ -60,10 +68,24 @@ final class DayCalendarViewModel {
             if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
             if self.actual != fetchedActual { self.actual = fetchedActual }
             self.lastError = nil
+            await refreshChainRiskAdvisory()
         } catch {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
+    }
+
+    /// Keeps the chain-risk advisory in sync with the data it describes:
+    /// recomputed from current windows on every reload, cleared once its
+    /// window is no longer on the visible day.
+    private func refreshChainRiskAdvisory() async {
+        guard let id = warningWindowID else { return }
+        guard let window = planned.first(where: { $0.id == id }) else {
+            warningWindowID = nil
+            lastWarning = nil
+            return
+        }
+        lastWarning = await chainRiskWarning(for: window)
     }
 
     private func loadUsageHistories() async {
@@ -233,6 +255,9 @@ final class DayCalendarViewModel {
             try await scheduledRepository.cancelPendingAndDetachPrompts(plannedWindowID: id)
             try await plannedRepository.delete(id: id)
             lastError = nil
+            // The advisory may describe the window just deleted.
+            warningWindowID = nil
+            lastWarning = nil
             await loadLocalWindows()
         } catch {
             lastError = errorMessage(error)
@@ -269,6 +294,7 @@ final class DayCalendarViewModel {
                 throw error
             }
             lastError = nil
+            warningWindowID = moved.id
             await loadLocalWindows()
         } catch {
             lastError = errorMessage(error)
@@ -307,9 +333,52 @@ final class DayCalendarViewModel {
                 throw error
             }
             self.lastError = nil
+            self.warningWindowID = window.id
             await loadLocalWindows()
         } catch {
             self.lastError = errorMessage(error)
+        }
+    }
+
+    /// Best-effort chain-risk advisory for a just-planned or just-moved window:
+    /// warns when its start lands inside the previous window's chained slot, so
+    /// the effective block may end earlier than planned (the "planned 05:00 but
+    /// the block started 03:10" trap). Returns nil when context can't be
+    /// loaded: the plan itself already succeeded and must not fail here.
+    private func chainRiskWarning(for window: PlannedWindow) async -> String? {
+        let lookback = DateInterval(
+            start: window.startAt.addingTimeInterval(-TimeInterval(window.durationSeconds)),
+            end: window.startAt.addingTimeInterval(1)
+        )
+        guard let actual = try? await actual5hRepository.fetchWindows(for: lookback),
+              let planned = try? await plannedRepository.fetchWindows(for: lookback) else {
+            return nil
+        }
+        guard let risk = PlannedWindowValidator.chainRisk(
+            candidate: window,
+            against: planned,
+            actualWindows: actual
+        ) else {
+            return nil
+        }
+        let gap = formatDuration(window.startAt.timeIntervalSince(risk.previousWindowEnd))
+        let shortfall = formatDuration(window.endAt.timeIntervalSince(risk.projectedEffectiveEnd))
+        return "Starts \(gap) after the previous 5h window ended at "
+            + "\(BlockFormatters.formatTime(risk.previousWindowEnd)). If the provider chains "
+            + "the block, it may effectively end at \(BlockFormatters.formatTime(risk.projectedEffectiveEnd)) "
+            + "instead of \(BlockFormatters.formatTime(window.endAt)) (\(shortfall) short). "
+            + "Consider starting at \(BlockFormatters.formatTime(risk.previousWindowEnd)) "
+            + "or \(BlockFormatters.formatTime(risk.projectedEffectiveEnd))."
+    }
+
+    private func formatDuration(_ interval: TimeInterval) -> String {
+        let totalMinutes = Int((interval / 60).rounded())
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        switch (hours, minutes) {
+        case (0, _): return "\(minutes)m"
+        case (_, 0): return "\(hours)h"
+        default: return "\(hours)h \(minutes)m"
         }
     }
 
