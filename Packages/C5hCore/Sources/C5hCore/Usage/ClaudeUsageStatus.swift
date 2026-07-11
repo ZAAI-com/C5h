@@ -17,12 +17,17 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
         fiveHour.resetsAt.addingTimeInterval(-TimeInterval(Self.fiveHourDurationSeconds))
     }
 
-    /// True when the reported 5h window reflects real consumption. Claude's
-    /// statusLine keeps reporting a rolling `five_hour` boundary even while idle
-    /// (used_percentage stays 0); deriving a window from those reports fabricates
-    /// phantom 5h windows. Analogous to Codex's `hasActivePrimaryWindow`, but
-    /// Claude anchors `resets_at` to a boundary even when idle, so usage (not the
-    /// remaining-time heuristic) is the reliable signal here.
+    /// True when the reported 5h window reflects real consumption. The boundary
+    /// Claude reports is a real anchored window, not a rolling placeholder:
+    /// historically C5h's own REPL probes kept the account non-idle (each probe's
+    /// startup makes an API request, and on an idle account that opens a fresh
+    /// window at the previous expiry bucket), which made idle reports look like
+    /// a rolling boundary. Probes are now gated so they only run once a window
+    /// is already open (`UsageCheckGate`), and this guard stays as
+    /// defense-in-depth: a 0%-usage report is dropped rather than recorded as a
+    /// user window, so a mis-gated probe cannot fabricate one. The
+    /// trigger-anchoring path bypasses it on purpose via
+    /// `requireActiveWindow: false` (a wake prompt just opened the window).
     public var hasActiveFiveHourWindow: Bool {
         fiveHour.usedPercentage > 0
     }

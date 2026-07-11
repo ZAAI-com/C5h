@@ -272,6 +272,14 @@ public struct ClaudeUsageCollector: Sendable {
     /// directory on startup, which trips TCC prompts for `~/Library/Containers/*`
     /// ("access data from other apps") and file-provider mounts like `~/OneDrive`.
     /// The app's Application Support directory is owned by C5h and TCC-safe.
+    ///
+    /// Public because `ClaudeLocalActivityDetector` must exclude the session
+    /// files Claude Code writes for this cwd (each probe creates one) when it
+    /// scans `~/.claude/projects` for real user activity.
+    public static func probeWorkingDirectory() -> URL? {
+        safeWorkingDirectory()
+    }
+
     private static func safeWorkingDirectory() -> URL? {
         let fm = FileManager.default
         guard let support = try? fm.url(

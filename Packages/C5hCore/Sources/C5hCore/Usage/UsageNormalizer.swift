@@ -78,4 +78,13 @@ public enum UsageNormalizer {
         let data = (try? encoder.encode(value)) ?? Data()
         return String(data: data, encoding: .utf8) ?? "{}"
     }
+
+    /// Inverse of `encode`. Returns nil for payloads that do not decode as
+    /// `NormalizedUsage` (older or hand-edited rows).
+    public static func decode(_ normalizedJSON: String) -> NormalizedUsage? {
+        guard let data = normalizedJSON.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try? decoder.decode(NormalizedUsage.self, from: data)
+    }
 }

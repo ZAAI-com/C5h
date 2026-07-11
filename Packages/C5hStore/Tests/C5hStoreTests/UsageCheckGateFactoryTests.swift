@@ -5,6 +5,8 @@ import Testing
 
 @Suite("UsageCheckGate factory")
 struct UsageCheckGateFactoryTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
     @Test("Pending planned windows must overlap now when idle checking is disabled")
     func pendingPlannedWindowsMustOverlapNow() async throws {
         let db = try Database.inMemory()
@@ -12,7 +14,6 @@ struct UsageCheckGateFactoryTests {
         let settings = GRDBAppSettingsRepository(database: db)
         let plannedRepo = GRDBPlannedWindowRepository(database: db)
         let actualRepo = GRDBActualWindow5hRepository(database: db)
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
         try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: false)
 
         try await plannedRepo.create(PlannedWindow(
@@ -29,7 +30,9 @@ struct UsageCheckGateFactoryTests {
         let gate = UsageCheckGate.make(
             appSettings: settings,
             actual5hRepository: actualRepo,
-            plannedWindowRepository: plannedRepo
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: Self.emptyDetector()
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
 
@@ -43,7 +46,6 @@ struct UsageCheckGateFactoryTests {
 
     @Test("Pending planned lookup uses a targeted overlap query")
     func pendingPlannedLookupUsesTargetedQuery() async throws {
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
         let plannedRepo = RecordingPlannedWindowRepository(windows: [
             PlannedWindow(
                 providerID: .claude,
@@ -54,7 +56,9 @@ struct UsageCheckGateFactoryTests {
         let gate = UsageCheckGate.make(
             appSettings: StaticAppSettingsRepository(idleCheckEnabled: false),
             actual5hRepository: EmptyActualWindow5hRepository(),
-            plannedWindowRepository: plannedRepo
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: EmptyUsageSnapshotRepository(),
+            localActivityDetector: Self.emptyDetector()
         )
 
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
@@ -64,6 +68,249 @@ struct UsageCheckGateFactoryTests {
         #expect(intervals.first?.start == now)
         #expect(intervals.first?.duration == 1)
         #expect(await plannedRepo.fetchAllCallCount() == 0)
+    }
+
+    @Test("Claude with idle checking on probes only after fresh local activity")
+    func claudeIdleOnRequiresFreshLocalActivity() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        // Regression test for 24/7 window chaining: idle setting alone must
+        // not open the gate for Claude's quota-consuming probe.
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "session.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Claude ignores local activity older than the last recorded window end")
+    func claudeIgnoresActivityOlderThanRecordedWindowEnd() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        // A recorded window that ended 10 minutes ago (within the lookback).
+        let windowEnd = now.addingTimeInterval(-600)
+        try await actualRepo.create(ActualWindow5h(
+            providerID: .claude,
+            startAt: windowEnd.addingTimeInterval(-5 * 3600),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        // Activity from inside the closed window must not reopen probing.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "inside-window.jsonl",
+            modifiedAt: windowEnd.addingTimeInterval(-60)
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        // Activity after the window end means a new window is open.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "after-window.jsonl",
+            modifiedAt: windowEnd.addingTimeInterval(60)
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Claude ignores local activity older than the lookback")
+    func claudeIgnoresActivityOlderThanLookback() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        // Default refresh interval is 300s, so the lookback floor is 900s.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "stale.jsonl",
+            modifiedAt: now.addingTimeInterval(-1000)
+        )
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Codex with idle checking on never consults the local activity detector")
+    func codexIdleOnDoesNotTouchDetector() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .codex), value: true)
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: Self.emptyDetector()
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("A Claude window ending within the probe margin is not active; a Codex one is")
+    func claudeWindowEndingWithinMarginIsNotActive() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: false)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .codex), value: false)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        // Both windows end 30s from now, inside the 90s consuming-probe margin.
+        for providerID in [ProviderID.claude, .codex] {
+            try await actualRepo.create(ActualWindow5h(
+                providerID: providerID,
+                startAt: now.addingTimeInterval(30 - 5 * 3600),
+                source: .detectedFromUsage,
+                confidence: .estimated
+            ))
+        }
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: Self.emptyDetector()
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Claude is believed active from the latest snapshot's window end")
+    func claudeBelievedActiveFromLatestSnapshot() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: false)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: Self.emptyDetector()
+        )
+
+        // A window whose usage rounds to 0% never produced a recorded row, but
+        // the snapshot still reports its end an hour out: believed open.
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-300),
+            windowEndsAt: now.addingTimeInterval(3600)
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+
+        // A newer snapshot whose window end falls inside the probe margin must
+        // not count as active.
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-60),
+            windowEndsAt: now.addingTimeInterval(30)
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    private static func emptyDetector() -> ClaudeLocalActivityDetector {
+        ClaudeLocalActivityDetector(
+            projectsDirectory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("c5h-tests-missing-\(UUID().uuidString)", isDirectory: true),
+            excludedProjectPaths: []
+        )
+    }
+
+    private func makeSnapshot(capturedAt: Date, windowEndsAt: Date) -> UsageSnapshot {
+        let normalized = NormalizedUsage(
+            providerID: .claude,
+            capturedAt: capturedAt,
+            windowStartedAt: windowEndsAt.addingTimeInterval(-5 * 3600),
+            windowEndsAt: windowEndsAt,
+            usedPercentage: 0
+        )
+        return UsageSnapshot(
+            providerID: .claude,
+            capturedAt: capturedAt,
+            rawJSON: "{}",
+            normalizedJSON: UsageNormalizer.encode(normalized)
+        )
+    }
+
+    private func makeProjectsDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("c5h-tests-projects-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func makeTranscript(
+        in projects: URL,
+        project: String,
+        name: String,
+        modifiedAt: Date
+    ) throws {
+        let directory = projects.appendingPathComponent(project, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent(name)
+        try Data("{}\n".utf8).write(to: file)
+        try FileManager.default.setAttributes(
+            [.modificationDate: modifiedAt],
+            ofItemAtPath: file.path
+        )
+    }
+
+    private func removeDirectory(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
     }
 }
 
@@ -92,6 +339,14 @@ private struct EmptyActualWindow5hRepository: ActualWindow5hRepository {
     func update(_ window: ActualWindow5h) async throws {}
 
     func upsertByEndAt(_ window: ActualWindow5h, tolerance: TimeInterval) async throws {}
+}
+
+private struct EmptyUsageSnapshotRepository: UsageSnapshotRepository {
+    func create(_ snapshot: UsageSnapshot) async throws {}
+
+    func fetchLatest(providerID: ProviderID) async throws -> UsageSnapshot? { nil }
+
+    func fetchInRange(providerID: ProviderID, interval: DateInterval) async throws -> [UsageSnapshot] { [] }
 }
 
 private actor RecordingPlannedWindowRepository: PlannedWindowRepository {

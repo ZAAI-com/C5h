@@ -48,7 +48,9 @@ final class DashboardViewModel {
         self.usageGate = UsageCheckGate.make(
             appSettings: appSettingsRepository,
             actual5hRepository: actual5hRepository,
-            plannedWindowRepository: plannedWindowRepository
+            plannedWindowRepository: plannedWindowRepository,
+            usageSnapshotRepository: usageSnapshotRepository,
+            localActivityDetector: .standard
         )
         self.fetcher = UsageFetcher(
             persistSnapshot: { snapshot in

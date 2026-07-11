@@ -134,7 +134,7 @@ struct ProviderCardView: View {
             }
             GridRow {
                 Color.clear.frame(width: 0, height: 0)
-                Text("When off, C5h only checks usage while this provider has an active or planned window.")
+                Text(checkWhenIdleCaption)
                     .font(C5hTypography.captionFont)
                     .foregroundStyle(C5hColors.fgTertiary)
             }
@@ -147,6 +147,19 @@ struct ProviderCardView: View {
 
     private var checkWhenIdleBinding: Binding<Bool> {
         Binding(get: { checkWhenIdle }, set: { onSetCheckWhenIdle($0) })
+    }
+
+    /// Claude's usage probe drives the real CLI and would open a fresh 5-hour
+    /// window on an idle account, so its idle checking is a read-only watch of
+    /// local session files instead of a probe. Codex's probe is read-only, so
+    /// its idle checking simply polls.
+    private var checkWhenIdleCaption: String {
+        switch id {
+        case .claude:
+            "When on, C5h watches local Claude session files (a read-only check) and probes usage only once a 5-hour window is already open. Idle checking never starts a new window."
+        case .codex:
+            "When off, C5h only checks usage while this provider has an active or planned window."
+        }
     }
 
     private var header: some View {
@@ -233,6 +246,9 @@ struct ProviderCardView: View {
                 detail: usageDetail,
                 isRunning: isUsageLoading,
                 isDisabled: isUsageLoading,
+                runHelp: id.usageProbeConsumesQuota
+                    ? "Run Usage now. If Claude is idle, this starts a new 5-hour window."
+                    : nil,
                 action: onUsage
             )
             commandRow(
@@ -254,6 +270,7 @@ struct ProviderCardView: View {
         detail: String? = nil,
         isRunning: Bool = false,
         isDisabled: Bool = false,
+        runHelp: String? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: C5hSpacing.sm) {
@@ -282,7 +299,7 @@ struct ProviderCardView: View {
                     Label("Run", systemImage: "play.fill")
                 }
                 .labelStyle(.iconOnly)
-                .help("Run \(title)")
+                .help(runHelp ?? "Run \(title)")
                 .buttonStyle(.glass)
                 .disabled(isDisabled)
             }

@@ -119,7 +119,8 @@ struct HelperMain {
             cmdRepo: cmdRepo,
             logWriter: logWriter,
             actual5hRepo: actual5hRepo,
-            plannedRepo: plannedRepo
+            plannedRepo: plannedRepo,
+            usageSnapshotRepo: usageRepo
         )
 
         // Heartbeat + tick loop. Sleep 30s between iterations. Exit after a bounded
@@ -145,8 +146,10 @@ struct HelperMain {
 
 /// Polls each provider's usage on its own configured cadence so the "current 5h
 /// window" we display stays accurate even when the main app isn't open. Honors
-/// the per-provider "check when idle" setting: when off, a provider is skipped
-/// unless it has an active or pending planned window.
+/// the per-provider "check when idle" setting via `UsageCheckGate`: when off, a
+/// provider is skipped unless it has an active or pending planned window, and
+/// Claude's quota-consuming probe additionally requires evidence that a window
+/// is already open (otherwise the probe itself would open one).
 actor HelperUsageRefresher {
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
@@ -156,6 +159,7 @@ actor HelperUsageRefresher {
     let gate: UsageCheckGate
 
     private var lastRefreshAt: [ProviderID: Date] = [:]
+    private var lastSkipLogAt: [ProviderID: Date] = [:]
 
     init(
         resolver: any CLIPathResolving,
@@ -164,7 +168,8 @@ actor HelperUsageRefresher {
         cmdRepo: any CommandRunRepository,
         logWriter: any FileLogWriting,
         actual5hRepo: any ActualWindow5hRepository,
-        plannedRepo: any PlannedWindowRepository
+        plannedRepo: any PlannedWindowRepository,
+        usageSnapshotRepo: any UsageSnapshotRepository
     ) {
         self.resolver = resolver
         self.settingsRepo = settingsRepo
@@ -174,7 +179,9 @@ actor HelperUsageRefresher {
         self.gate = UsageCheckGate.make(
             appSettings: settingsRepo,
             actual5hRepository: actual5hRepo,
-            plannedWindowRepository: plannedRepo
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: usageSnapshotRepo,
+            localActivityDetector: .standard
         )
     }
 
@@ -187,6 +194,14 @@ actor HelperUsageRefresher {
             // Don't consume the interval when gated off: re-evaluate next tick so
             // a newly active or planned window resumes polling promptly.
             guard await gate.shouldCheck(providerID: providerID, now: now) else {
+                // Log gated-off consuming probes at the refresh cadence (the
+                // gate re-evaluates every 30s tick) so overnight behavior is
+                // verifiable without flooding the log.
+                if providerID.usageProbeConsumesQuota,
+                   lastSkipLogAt[providerID].map({ now.timeIntervalSince($0) >= interval }) ?? true {
+                    lastSkipLogAt[providerID] = now
+                    NSLog("C5hHelper: skipped \(providerID.rawValue) usage probe (no active/planned window, no local activity)")
+                }
                 continue
             }
             if await refresh(providerID: providerID, now: now) {

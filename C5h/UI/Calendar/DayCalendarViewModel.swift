@@ -135,12 +135,16 @@ final class DayCalendarViewModel {
               let actual7dRepo = actual7dRepository else { return }
         let actual5hRepo = actual5hRepository
         // When settings are available, honor the per-provider "check when idle"
-        // gate; without them, fall back to refreshing (default behavior).
+        // gate; without them, only providers with read-only probes may fall
+        // back to refreshing (an ungated Claude probe on an idle account would
+        // open a fresh 5h window).
         let gate = appSettings.map {
             UsageCheckGate.make(
                 appSettings: $0,
                 actual5hRepository: actual5hRepo,
-                plannedWindowRepository: plannedRepository
+                plannedWindowRepository: plannedRepository,
+                usageSnapshotRepository: usageRepo,
+                localActivityDetector: .standard
             )
         }
         let fetcher = UsageFetcher(
@@ -162,7 +166,11 @@ final class DayCalendarViewModel {
                age < interval {
                 continue
             }
-            if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
+            if let gate {
+                if await gate.shouldCheck(providerID: providerID, now: now) == false {
+                    continue
+                }
+            } else if providerID.usageProbeConsumesQuota {
                 continue
             }
             do {
