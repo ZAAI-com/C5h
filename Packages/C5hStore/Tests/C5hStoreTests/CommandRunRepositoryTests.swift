@@ -13,7 +13,7 @@ struct CommandRunRepositoryTests {
 
         let run = CommandRun(
             providerID: .claude,
-            commandName: .promptCommand,
+            commandName: .prompt,
             command: "/opt/homebrew/bin/claude",
             argumentsJSON: "[\"-p\",\"hi\"]",
             workingDirectory: "/tmp",
@@ -24,7 +24,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(run)
 
         let fetched = try await repo.fetch(id: run.id)
-        #expect(fetched?.commandName == .promptCommand)
+        #expect(fetched?.commandName == .prompt)
         #expect(fetched?.toolVersion == "claude 1.2.3")
         #expect(fetched?.status == .running)
         #expect(fetched?.workingDirectory == "/tmp")
@@ -38,14 +38,14 @@ struct CommandRunRepositoryTests {
 
         try await repo.create(CommandRun(
             providerID: .claude,
-            commandName: .promptCommand,
+            commandName: .prompt,
             command: "claude",
             argumentsJSON: "[]",
             status: .running
         ))
         try await repo.create(CommandRun(
             providerID: .codex,
-            commandName: .versionCommand,
+            commandName: .version,
             command: "codex",
             argumentsJSON: "[]",
             status: .succeeded
@@ -75,7 +75,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: liveRunID,
             providerID: .claude,
-            commandName: .promptCommand,
+            commandName: .prompt,
             command: "claude",
             argumentsJSON: "[]",
             status: .running,
@@ -84,7 +84,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: deadRunID,
             providerID: .claude,
-            commandName: .promptCommand,
+            commandName: .prompt,
             command: "claude",
             argumentsJSON: "[]",
             status: .running,
@@ -93,7 +93,7 @@ struct CommandRunRepositoryTests {
         try await repo.create(CommandRun(
             id: legacyRunID,
             providerID: .codex,
-            commandName: .promptCommand,
+            commandName: .prompt,
             command: "codex",
             argumentsJSON: "[]",
             status: .running,

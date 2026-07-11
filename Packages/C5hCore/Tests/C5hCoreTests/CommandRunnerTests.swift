@@ -41,7 +41,7 @@ struct CommandRunnerTests {
         let (runner, recorder) = Self.makeRunner(directory: dir)
         let result = try await runner.run(CommandSpec(
             providerID: .claude,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["succeed"],
             timeoutSeconds: 5
@@ -64,7 +64,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .codex,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["fail", "7"],
             timeoutSeconds: 5
@@ -83,7 +83,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .codex,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["echo-stderr", "problem details"],
             timeoutSeconds: 5
@@ -104,7 +104,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .claude,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["echo-env", "C5H_TEST_ENV"],
             environment: environment,
@@ -126,7 +126,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .claude,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["pwd"],
             workingDirectory: workdir,
@@ -150,7 +150,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .claude,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["spam", "262144"],
             timeoutSeconds: 5
@@ -169,7 +169,7 @@ struct CommandRunnerTests {
 
         let result = try await runner.run(CommandSpec(
             providerID: .claude,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: url,
             arguments: ["sleep", "10"],
             timeoutSeconds: 0.5
@@ -188,7 +188,7 @@ struct CommandRunnerTests {
         let task = Task {
             try await runner.run(CommandSpec(
                 providerID: .claude,
-                commandName: .versionCommand,
+                commandName: .version,
                 executableURL: url,
                 arguments: ["sleep", "10"],
                 timeoutSeconds: 30

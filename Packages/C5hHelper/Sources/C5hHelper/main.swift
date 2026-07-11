@@ -236,7 +236,7 @@ actor HelperUsageRefresher {
             let snapshot: UsageSnapshot
             let repo = cmdRepo
             let writer = logWriter
-            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+            snapshot = try await Usage(providerID: providerID, executableURL: cliURL).collect(
                 logWriter: writer,
                 onStart: { run in try await repo.create(run) },
                 onComplete: { run in try await repo.update(run) }
@@ -291,7 +291,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let cliURL = try await resolveCLI(for: prompt.providerID)
-        return try await runner.run(PromptCommand(
+        return try await runner.run(Prompt(
             providerID: prompt.providerID,
             executableURL: cliURL,
             input: TriggerPromptInput(
@@ -319,7 +319,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
                     settingsRepo: settingsRepo,
                     resolver: cliResolver
                 )
-                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                return try await Usage(providerID: providerID, executableURL: cliURL).collect(
                     logWriter: logWriter,
                     onStart: { run in try await cmdRepo.create(run) },
                     onComplete: { run in try await cmdRepo.update(run) }

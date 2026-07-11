@@ -225,7 +225,7 @@ struct ProviderCardView: View {
         VStack(alignment: .leading, spacing: C5hSpacing.sm) {
             commandRow(
                 title: "Version",
-                preview: VersionCommand.displayCommand(providerID: id),
+                preview: Version.displayCommand(providerID: id),
                 systemImage: "number",
                 isRunning: isStatusLoading,
                 isDisabled: isStatusLoading,
@@ -233,7 +233,7 @@ struct ProviderCardView: View {
             )
             commandRow(
                 title: "Auth status",
-                preview: AuthStatusCommand.displayCommand(providerID: id),
+                preview: AuthStatus.displayCommand(providerID: id),
                 systemImage: "person.badge.key",
                 isRunning: isStatusLoading,
                 isDisabled: isStatusLoading,
@@ -241,7 +241,7 @@ struct ProviderCardView: View {
             )
             commandRow(
                 title: "Usage",
-                preview: UsageCommand.displayCommand(providerID: id),
+                preview: Usage.displayCommand(providerID: id),
                 systemImage: "chart.line.uptrend.xyaxis",
                 detail: usageDetail,
                 isRunning: isUsageLoading,
@@ -253,7 +253,7 @@ struct ProviderCardView: View {
             )
             commandRow(
                 title: "Prompt template",
-                preview: PromptCommand.displayCommand(providerID: id, prompt: promptPreview),
+                preview: Prompt.displayCommand(providerID: id, prompt: promptPreview),
                 systemImage: "text.bubble",
                 detail: promptFireDetail,
                 isRunning: isPromptFiring,

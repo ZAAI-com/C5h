@@ -61,10 +61,10 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
 }
 
 public enum CommandName: String, Codable, Sendable, CaseIterable {
-    case versionCommand = "VersionCommand"
-    case authStatusCommand = "AuthStatusCommand"
-    case usageCommand = "UsageCommand"
-    case promptCommand = "PromptCommand"
+    case version = "Version"
+    case authStatus = "AuthStatus"
+    case usage = "Usage"
+    case prompt = "Prompt"
 }
 
 public enum CommandRunStatus: String, Codable, Sendable, CaseIterable {

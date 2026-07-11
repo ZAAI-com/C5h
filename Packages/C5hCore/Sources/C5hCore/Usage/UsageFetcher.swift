@@ -1,7 +1,7 @@
 import Foundation
 
 /// Shared between the main app (`DashboardViewModel`) and the helper background
-/// loop. Wraps a single `runUsageCommand()` call: persists the resulting raw
+/// loop. Wraps a single `runUsage()` call: persists the resulting raw
 /// `UsageSnapshot` and upserts the derived rolling 5h + weekly quota rows so
 /// repeated polling collapses to one row per real provider window.
 public struct UsageFetcher: Sendable {
@@ -25,7 +25,7 @@ public struct UsageFetcher: Sendable {
         self.upsertActualWindow7d = upsertActualWindow7d
     }
 
-    /// Calls `adapter.runUsageCommand()`, persists the snapshot, then derives
+    /// Calls `adapter.runUsage()`, persists the snapshot, then derives
     /// and upserts the primary 5h + (when reported) weekly quota rows.
     /// Returns the snapshot that was persisted.
     @discardableResult
@@ -33,7 +33,7 @@ public struct UsageFetcher: Sendable {
         adapter: any ProviderAdapter,
         now: Date = .now
     ) async throws -> UsageSnapshot {
-        let snapshot = try await adapter.runUsageCommand()
+        let snapshot = try await adapter.runUsage()
         try await persistSnapshot(snapshot)
 
         if let window = try derived5h(from: snapshot, now: now) {

@@ -31,7 +31,7 @@ struct AppSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let adapter = try await MainActor.run { try registry.adapter(for: prompt.providerID) }
-        return try await adapter.runPromptCommand(
+        return try await adapter.runPrompt(
             TriggerPromptInput(
                 prompt: prompt.prompt,
                 projectPath: prompt.projectPath,
@@ -63,7 +63,7 @@ struct AppSchedulerDriver: SchedulerDriver {
             fetcher: fetcher,
             snapshotFetch: { providerID in
                 let adapter = try await MainActor.run { try registry.adapter(for: providerID) }
-                return try await adapter.runUsageCommand()
+                return try await adapter.runUsage()
             },
             activeWindowFetch: { providerID, now in
                 // Search around `now` rather than a 1-second slice so we don't

@@ -219,7 +219,7 @@ final class AppEnvironment {
 
         do {
             let adapter = try providerAdapter(for: id)
-            var status = await adapter.runVersionCommand()
+            var status = await adapter.runVersion()
             if status.isInstalled {
                 status.isAuthenticated = providerStatuses[id]?.isAuthenticated
             }
@@ -243,7 +243,7 @@ final class AppEnvironment {
 
         do {
             let adapter = try providerAdapter(for: id)
-            let authStatus = await adapter.runAuthStatusCommand()
+            let authStatus = await adapter.runAuthStatus()
             let existing = providerStatuses[id]
             let status = ProviderStatus(
                 providerID: id,
@@ -279,7 +279,7 @@ final class AppEnvironment {
             let prompt = await currentWakePrompt(for: id)
             let adapter = try providerAdapter(for: id)
             let input = TriggerPromptInput(prompt: prompt, projectPath: nil, mode: .newSession)
-            let run = try await adapter.runPromptCommand(input)
+            let run = try await adapter.runPrompt(input)
             providerPromptLastFiredAt[id] = .now
             providerPromptLastError[id] = nil
             // Anchor a 5h window for this manual trigger the same way the
