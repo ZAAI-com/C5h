@@ -1,0 +1,41 @@
+Packages/C5hCore/Tests/C5hCoreTests/ProviderCommandsTests.swift
+  s_126d3e11b45560::t_8d2e60c60bcbf1 141-145
+.claude/CLAUDE.md
+  s_618d82ff94d4dd::t_a4873875f0c505 190-191
+C5h.xcodeproj/project.pbxproj
+  s_618d82ff94d4dd::t_33ee87c2bf3c36 750,761,779,791
+C5h/Core/Services/UpdaterService.swift
+  s_618d82ff94d4dd::t_f586565a319648 48,52-54,56,65-68,98-122
+C5h/Info.plist
+  s_618d82ff94d4dd::t_f1ea7e71bdc581 36
+C5h/UI/Settings/SettingsView.swift
+  s_618d82ff94d4dd::t_348d0c607b5c0b 131
+Packages/C5hCore/Sources/C5hCore/Providers/CodexAppServerClient.swift
+  s_618d82ff94d4dd::t_ca546379b30d8e 31
+Toolkit/Release/appcast.sh
+  s_618d82ff94d4dd::t_082adf81a6872d 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "2cd215f4e260e1e93ecc58ee2490a459b76b5dcb",
+  "prompts": {},
+  "sessions": {
+    "s_126d3e11b45560": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46218082-ae69-4cad-bf8a-e2f5fa277d00",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_618d82ff94d4dd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "acc3e753-8d1f-4d5d-9c1c-386772d10a48",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
