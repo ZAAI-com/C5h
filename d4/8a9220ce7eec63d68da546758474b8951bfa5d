@@ -1,0 +1,29 @@
+C5h/UI/Calendar/ActualWindowBlockView.swift
+  s_4af35a2b502ada::t_90206c014661bb 42-43,196-198
+C5h/UI/Calendar/PlannedWindowBlockView.swift
+  s_4af35a2b502ada::t_4b199708225cd6 25-26,85-87
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_4af35a2b502ada::t_40602142c439ed 58,70-71,84,122,137-138,142
+C5h/UI/Calendar/WeekCalendarView.swift
+  s_4af35a2b502ada::t_f57762cdfa7073 365,378-379,385,396,415-416,422
+Packages/C5hCore/Sources/C5hCore/Calendar/CalendarPositioning.swift
+  s_4af35a2b502ada::t_b2798b5f4e0265 22-32
+Packages/C5hCore/Tests/C5hCoreTests/CalendarPositioningTests.swift
+  s_4af35a2b502ada::t_ebe277fba96273 215-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "d48a9220ce7eec63d68da546758474b8951bfa5d",
+  "prompts": {},
+  "sessions": {
+    "s_4af35a2b502ada": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46a55b04-13f6-4c89-bc5a-6533df5be473",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
