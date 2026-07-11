@@ -100,23 +100,13 @@ struct DayCalendarScreen: View {
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                if let err = viewModel.lastError {
-                    Label(err, systemImage: "exclamationmark.triangle")
-                        .font(C5hTypography.captionFont)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, C5hSpacing.lg)
-                        .padding(.vertical, C5hSpacing.xs)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if let warning = viewModel.lastWarning {
-                    Label(warning, systemImage: "exclamationmark.triangle")
-                        .font(C5hTypography.captionFont)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, C5hSpacing.lg)
-                        .padding(.vertical, C5hSpacing.xs)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            if let err = viewModel.lastError {
+                Label(err, systemImage: "exclamationmark.triangle")
+                    .font(C5hTypography.captionFont)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, C5hSpacing.lg)
+                    .padding(.vertical, C5hSpacing.xs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .toolbar { actionToolbar(viewModel: viewModel) }
