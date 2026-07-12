@@ -1,0 +1,21 @@
+C5h.xcodeproj/project.pbxproj
+  s_89c520d38deec7::t_24b8da230c18d4 750,761,779,791
+Packages/C5hCore/Sources/C5hCore/Providers/CodexAppServerClient.swift
+  s_89c520d38deec7::t_c372e9fe7de380 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7829e62e5caa1ec02e80dfbbe345c5fd9bfc3867",
+  "prompts": {},
+  "sessions": {
+    "s_89c520d38deec7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1be500c2-07da-4ae5-aa95-514635c84212",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
