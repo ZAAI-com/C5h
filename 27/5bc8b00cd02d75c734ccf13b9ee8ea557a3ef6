@@ -1,0 +1,59 @@
+C5h/UI/Calendar/DayCalendarView.swift
+  s_73846280db7d87::t_918c2dbea185aa 10,51,60
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_73846280db7d87::t_f1a498b22e049d 8,19,44,432-459
+C5h/UI/Calendar/WeekCalendarViewModel.swift
+  s_73846280db7d87::t_49cb668ab55d93 82-83,94-95
+Packages/C5hCore/Tests/C5hCoreTests/ActualWindow7dTests.swift
+  s_73846280db7d87::t_6937a2fb849e57 1-27
+Packages/C5hCore/Tests/C5hCoreTests/UsageFetcherTests.swift
+  s_73846280db7d87::t_6335548d6b3d4f 128-148
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_73846280db7d87::t_d5e9d2f11e0056 770-858,884,891-894,896,898-899
+C5h.xcodeproj/project.pbxproj
+  s_074ff8143e4528::t_0991552704407c 36,111,316,571
+C5h/UI/Calendar/DayCalendarScreen.swift
+  s_074ff8143e4528::t_de7d4f52632532 98-103
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_074ff8143e4528::t_8d7fe8ac54faec 14-15,69-96,241-249
+C5h/UI/Calendar/WeeklyWindowBlockView.swift
+  s_074ff8143e4528::t_c24d2b3376ac6f 1-132
+C5h/UI/Calendar/WindowInspectorView.swift
+  s_074ff8143e4528::t_be8d15284fa074 7,13,42-43,76-86
+Packages/C5hCore/Sources/C5hCore/Models/ActualWindow7d.swift
+  s_074ff8143e4528::t_6275269acea9a8 45-54
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_074ff8143e4528::t_30d6160e4c6362 240
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_074ff8143e4528::t_06efcc0737cc72 9,17,50-52,56-58,60,77-78,86-88,90,125-134,200-202,217-218,222,224,235,249-250,318-327,343-364,403-414
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_074ff8143e4528::t_11f144bf439282 69-71
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_074ff8143e4528::t_feb022932de249 48-80,122-133,184-219,310,312
+Packages/C5hCore/Tests/C5hCoreTests/CodexUsageStatusTests.swift
+  s_074ff8143e4528::t_9a072927e47c33 14-15,25-26,35,119-120,139-140,142-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "275bc8b00cd02d75c734ccf13b9ee8ea557a3ef6",
+  "prompts": {},
+  "sessions": {
+    "s_074ff8143e4528": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "63c8b159-bb46-43ed-aacc-4e3f94a8ac26",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_73846280db7d87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f589a-6ef9-75e2-baf9-c6214a1d5770",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
