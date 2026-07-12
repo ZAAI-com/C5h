@@ -767,6 +767,95 @@ struct UsageHistorySeriesTests {
         #expect(scoped.sevenDayPercent(at: Date(timeIntervalSince1970: 2_000)) == nil)
     }
 
+    @Test("A scoped weekly series keeps only matching reset-end points")
+    func scopedWeeklySeriesFiltersByResetEnd() {
+        let matching = codexSnapshot(
+            primaryPercent: 10,
+            secondaryPercent: 30,
+            secondaryResetsAt: 1_778_968_800,
+            capturedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let foreign = codexSnapshot(
+            primaryPercent: 20,
+            secondaryPercent: 40,
+            secondaryResetsAt: 1_779_000_000,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [matching, foreign])
+
+        let scoped = series.scoped(toWeeklyWindowEndingAt: Date(timeIntervalSince1970: 1_778_968_800))
+
+        #expect(scoped.points.count == 1)
+        #expect(scoped.points[0].sevenDay == 30)
+    }
+
+    @Test("weeklyOpeningReading returns carry-in from before segment start")
+    func weeklyOpeningReadingUsesLatestBeforeStart() {
+        let beforeDay = codexSnapshot(
+            primaryPercent: nil,
+            secondaryPercent: 100,
+            secondaryResetsAt: 1_778_968_800,
+            capturedAt: Date(timeIntervalSince1970: 500)
+        )
+        let onDay = codexSnapshot(
+            primaryPercent: nil,
+            secondaryPercent: 10,
+            secondaryResetsAt: 1_778_968_800,
+            capturedAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [beforeDay, onDay])
+            .scoped(toWeeklyWindowEndingAt: Date(timeIntervalSince1970: 1_778_968_800))
+
+        let carryIn = series.weeklyOpeningReading(
+            at: Date(timeIntervalSince1970: 1_500),
+            within: 60
+        )
+
+        #expect(carryIn?.used == 100)
+    }
+
+    @Test("latestDistinctWeeklyReading skips carry-in value on the same day")
+    func latestDistinctWeeklyReadingFindsChangedValue() {
+        let dayStart = Date(timeIntervalSince1970: 86_400)
+        let early = codexSnapshot(
+            primaryPercent: nil,
+            secondaryPercent: 100,
+            secondaryResetsAt: 1_778_968_800,
+            capturedAt: dayStart.addingTimeInterval(100)
+        )
+        let later = codexSnapshot(
+            primaryPercent: nil,
+            secondaryPercent: 10,
+            secondaryResetsAt: 1_778_968_800,
+            capturedAt: dayStart.addingTimeInterval(7_200)
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [early, later])
+            .scoped(toWeeklyWindowEndingAt: Date(timeIntervalSince1970: 1_778_968_800))
+
+        let reading = series.latestDistinctWeeklyReading(on: dayStart, carryInUsed: 100)
+
+        #expect(reading?.used == 10)
+        #expect(reading?.capturedAt == dayStart.addingTimeInterval(7_200))
+    }
+
+    @Test("ProviderUsageLimits marks Codex secondary-only snapshots")
+    func providerUsageLimitsWeeklyOnly() {
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 100),
+            rawJSON: """
+            {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+            """,
+            normalizedJSON: "{}"
+        )
+
+        let limits = ProviderUsageLimits.from(snapshot: snapshot)
+
+        #expect(limits?.hasFiveHourLimit == false)
+        #expect(limits?.hasWeeklyLimit == true)
+        #expect(limits?.isWeeklyOnly == true)
+    }
+
     // MARK: - Helpers
 
     private func claudeSnapshot(
@@ -792,20 +881,22 @@ struct UsageHistorySeriesTests {
     }
 
     private func codexSnapshot(
-        primaryPercent: Double,
+        primaryPercent: Double?,
         primaryResetsAt: TimeInterval = 1_778_364_750,
         secondaryPercent: Double? = nil,
         secondaryResetsAt: TimeInterval = 1_778_968_800,
         capturedAt: Date
     ) -> UsageSnapshot {
         let timestampString = DateTimeService.formatUTC(capturedAt)
-        let secondaryFragment: String
-        if let secondaryPercent {
-            secondaryFragment = #","secondary":{"used_percent":\#(secondaryPercent),"window_minutes":10080,"resets_at":\#(Int(secondaryResetsAt))}"#
-        } else {
-            secondaryFragment = ""
+        var parts: [String] = []
+        if let primaryPercent {
+            parts.append(#""primary":{"used_percent":\#(primaryPercent),"window_minutes":300,"resets_at":\#(Int(primaryResetsAt))}"#)
         }
-        let json = #"{"timestamp":"\#(timestampString)","rate_limits":{"primary":{"used_percent":\#(primaryPercent),"window_minutes":300,"resets_at":\#(Int(primaryResetsAt))}\#(secondaryFragment)}}"#
+        if let secondaryPercent {
+            parts.append(#""secondary":{"used_percent":\#(secondaryPercent),"window_minutes":10080,"resets_at":\#(Int(secondaryResetsAt))}"#)
+        }
+        let rateLimitsBody = parts.joined(separator: ",")
+        let json = #"{"timestamp":"\#(timestampString)","rate_limits":{\#(rateLimitsBody)}}"#
         return UsageSnapshot(
             providerID: .codex,
             capturedAt: capturedAt,

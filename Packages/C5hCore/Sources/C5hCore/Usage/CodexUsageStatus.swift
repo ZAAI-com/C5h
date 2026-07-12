@@ -6,7 +6,7 @@ public struct CodexUsageStatus: Sendable, Hashable {
     public static let maxEventAgeSeconds: TimeInterval = 5 * 60 * 60
 
     public var eventTimestamp: Date
-    public var primary: RateLimitWindow
+    public var primary: RateLimitWindow?
     public var secondary: RateLimitWindow?
     public var primaryWindowMinutes: Int?
     public var secondaryWindowMinutes: Int?
@@ -14,7 +14,7 @@ public struct CodexUsageStatus: Sendable, Hashable {
 
     public init(
         eventTimestamp: Date,
-        primary: RateLimitWindow,
+        primary: RateLimitWindow? = nil,
         secondary: RateLimitWindow? = nil,
         primaryWindowMinutes: Int? = nil,
         secondaryWindowMinutes: Int? = nil,
@@ -47,16 +47,17 @@ public struct CodexUsageStatus: Sendable, Hashable {
         return minutes * 60
     }
 
-    public var fiveHourStartAt: Date {
-        primary.resetsAt.addingTimeInterval(-TimeInterval(primaryDurationSeconds))
+    public var fiveHourStartAt: Date? {
+        guard let primary else { return nil }
+        return primary.resetsAt.addingTimeInterval(-TimeInterval(primaryDurationSeconds))
     }
 
     /// True when Codex appears to be reporting a real, anchored 5h window;
-    /// false when the reported `resetsAt` is the synthetic "fresh slot" value
-    /// (`eventTimestamp + primaryDuration`) that Codex returns before any usage
-    /// has anchored the current window. Without this gate every poll would
-    /// write a phantom `ActualWindow5h` whose end slides with the clock.
+    /// false when no primary limit was reported or the reported `resetsAt` is
+    /// the synthetic "fresh slot" value (`eventTimestamp + primaryDuration`)
+    /// that Codex returns before any usage has anchored the current window.
     public var hasActivePrimaryWindow: Bool {
+        guard let primary else { return false }
         // Synthetic "fresh slot" reports `resetsAt ≈ eventTimestamp + duration`,
         // so remaining time ≈ full duration. A real anchored window has a
         // smaller remaining time. Use a small tolerance (5s) to avoid the
@@ -73,8 +74,8 @@ public struct CodexUsageStatus: Sendable, Hashable {
             providerID: providerID,
             capturedAt: capturedAt,
             windowStartedAt: fiveHourStartAt,
-            windowEndsAt: primary.resetsAt,
-            usedPercentage: primary.usedPercentage,
+            windowEndsAt: primary?.resetsAt,
+            usedPercentage: primary?.usedPercentage,
             rawNotes: "Codex session token_count rate_limits"
         )
     }
@@ -82,10 +83,11 @@ public struct CodexUsageStatus: Sendable, Hashable {
     public func actualWindow(
         providerID: ProviderID = .codex,
         createdAt: Date = .now
-    ) -> ActualWindow5h {
-        ActualWindow5h(
+    ) -> ActualWindow5h? {
+        guard let startAt = fiveHourStartAt else { return nil }
+        return ActualWindow5h(
             providerID: providerID,
-            startAt: fiveHourStartAt,
+            startAt: startAt,
             durationSeconds: primaryDurationSeconds,
             source: .detectedFromUsage,
             confidence: .estimated,
@@ -120,15 +122,17 @@ public struct CodexUsageStatus: Sendable, Hashable {
     }
 
     public func encodedPayload() -> String {
-        var primaryPayload: [String: Any] = [
-            "used_percent": primary.usedPercentage,
-            "resets_at": Int(primary.resetsAt.timeIntervalSince1970)
-        ]
-        if let primaryWindowMinutes {
-            primaryPayload["window_minutes"] = primaryWindowMinutes
+        var rateLimits: [String: Any] = [:]
+        if let primary {
+            var primaryPayload: [String: Any] = [
+                "used_percent": primary.usedPercentage,
+                "resets_at": Int(primary.resetsAt.timeIntervalSince1970)
+            ]
+            if let primaryWindowMinutes {
+                primaryPayload["window_minutes"] = primaryWindowMinutes
+            }
+            rateLimits["primary"] = primaryPayload
         }
-
-        var rateLimits: [String: Any] = ["primary": primaryPayload]
         if let secondary {
             var secondaryPayload: [String: Any] = [
                 "used_percent": secondary.usedPercentage,
@@ -193,16 +197,9 @@ public struct CodexUsageStatus: Sendable, Hashable {
             throw CodexUsageStatusParseError.invalidUTF8
         }
         let response = try JSONDecoder().decode(AppServerRateLimitsResponse.self, from: data)
-        guard let primary = response.rateLimits.primary else {
-            throw CodexUsageStatusParseError.missingPrimaryLimit
-        }
-        return CodexUsageStatus(
-            eventTimestamp: capturedAt,
-            primary: try primary.toRateLimitWindow(capturedAt: capturedAt),
-            secondary: try response.rateLimits.secondary?.toRateLimitWindow(capturedAt: capturedAt),
-            primaryWindowMinutes: primary.windowDurationMins,
-            secondaryWindowMinutes: response.rateLimits.secondary?.windowDurationMins,
-            planType: response.rateLimits.planType
+        return try makeStatus(
+            timestamp: capturedAt,
+            rateLimits: response.rateLimits.toCodexRateLimitsPayload()
         )
     }
 
@@ -217,14 +214,14 @@ public struct CodexUsageStatus: Sendable, Hashable {
         timestamp: Date,
         rateLimits: CodexRateLimitsPayload
     ) throws -> CodexUsageStatus {
-        guard let primaryPayload = rateLimits.primary else {
-            throw CodexUsageStatusParseError.missingPrimaryLimit
+        guard rateLimits.primary != nil || rateLimits.secondary != nil else {
+            throw CodexUsageStatusParseError.missingRateLimit
         }
         return CodexUsageStatus(
             eventTimestamp: timestamp,
-            primary: try primaryPayload.toRateLimitWindow(eventTimestamp: timestamp),
+            primary: try rateLimits.primary?.toRateLimitWindow(eventTimestamp: timestamp),
             secondary: try rateLimits.secondary?.toRateLimitWindow(eventTimestamp: timestamp),
-            primaryWindowMinutes: primaryPayload.windowMinutes,
+            primaryWindowMinutes: rateLimits.primary?.windowMinutes,
             secondaryWindowMinutes: rateLimits.secondary?.windowMinutes,
             planType: rateLimits.planType
         )
@@ -235,6 +232,7 @@ public enum CodexUsageStatusParseError: LocalizedError, Sendable {
     case invalidUTF8
     case invalidTimestamp(String)
     case missingRateLimits
+    case missingRateLimit
     case missingPrimaryLimit
     case missingResetTime
     case notTokenCountEvent
@@ -248,6 +246,8 @@ public enum CodexUsageStatusParseError: LocalizedError, Sendable {
             "Codex usage payload contained an invalid timestamp: \(value)"
         case .missingRateLimits:
             "Codex usage payload did not include rate_limits"
+        case .missingRateLimit:
+            "Codex usage payload did not include a primary or secondary rate limit"
         case .missingPrimaryLimit:
             "Codex usage payload did not include rate_limits.primary"
         case .missingResetTime:
@@ -315,6 +315,16 @@ private struct CodexRateLimitsPayload: Decodable {
     var secondary: CodexRateLimitPayload?
     var planType: String?
 
+    init(
+        primary: CodexRateLimitPayload? = nil,
+        secondary: CodexRateLimitPayload? = nil,
+        planType: String? = nil
+    ) {
+        self.primary = primary
+        self.secondary = secondary
+        self.planType = planType
+    }
+
     enum CodingKeys: String, CodingKey {
         case primary
         case secondary
@@ -330,6 +340,28 @@ private struct AppServerRateLimitsSnapshot: Decodable {
     var primary: AppServerRateLimitWindow?
     var secondary: AppServerRateLimitWindow?
     var planType: String?
+
+    func toCodexRateLimitsPayload() -> CodexRateLimitsPayload {
+        CodexRateLimitsPayload(
+            primary: primary.map {
+                CodexRateLimitPayload(
+                    usedPercentage: $0.usedPercent,
+                    windowMinutes: $0.windowDurationMins,
+                    resetsAt: $0.resetsAt,
+                    resetsInSeconds: nil
+                )
+            },
+            secondary: secondary.map {
+                CodexRateLimitPayload(
+                    usedPercentage: $0.usedPercent,
+                    windowMinutes: $0.windowDurationMins,
+                    resetsAt: $0.resetsAt,
+                    resetsInSeconds: nil
+                )
+            },
+            planType: planType
+        )
+    }
 }
 
 private struct AppServerRateLimitWindow: Decodable {
@@ -367,6 +399,18 @@ private struct CodexRateLimitPayload: Decodable {
     var windowMinutes: Int?
     var resetsAt: Double?
     var resetsInSeconds: Double?
+
+    init(
+        usedPercentage: Double,
+        windowMinutes: Int? = nil,
+        resetsAt: Double? = nil,
+        resetsInSeconds: Double? = nil
+    ) {
+        self.usedPercentage = usedPercentage
+        self.windowMinutes = windowMinutes
+        self.resetsAt = resetsAt
+        self.resetsInSeconds = resetsInSeconds
+    }
 
     enum CodingKeys: String, CodingKey {
         case usedPercentage = "used_percent"

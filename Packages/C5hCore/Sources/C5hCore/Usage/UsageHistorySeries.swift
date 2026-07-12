@@ -45,6 +45,39 @@ public struct UsagePoint: Sendable, Hashable {
     }
 }
 
+/// Which quota limits a provider explicitly reported in a usage snapshot.
+public struct ProviderUsageLimits: Sendable, Hashable {
+    public let hasFiveHourLimit: Bool
+    public let hasWeeklyLimit: Bool
+
+    public var isWeeklyOnly: Bool { hasWeeklyLimit && !hasFiveHourLimit }
+
+    public init(hasFiveHourLimit: Bool, hasWeeklyLimit: Bool) {
+        self.hasFiveHourLimit = hasFiveHourLimit
+        self.hasWeeklyLimit = hasWeeklyLimit
+    }
+
+    public static func from(snapshot: UsageSnapshot) -> ProviderUsageLimits? {
+        switch snapshot.providerID {
+        case .claude:
+            guard let status = try? ClaudeUsageStatus.parsePayload(snapshot.rawJSON) else { return nil }
+            return ProviderUsageLimits(
+                hasFiveHourLimit: true,
+                hasWeeklyLimit: status.sevenDay != nil
+            )
+        case .codex:
+            guard let status = try? CodexUsageStatus.parseAny(
+                snapshot.rawJSON,
+                capturedAt: snapshot.capturedAt
+            ) else { return nil }
+            return ProviderUsageLimits(
+                hasFiveHourLimit: status.primary != nil,
+                hasWeeklyLimit: status.secondary != nil
+            )
+        }
+    }
+}
+
 /// Sorted, in-memory time series of (5h%, 7d%) values for one provider, built
 /// by parsing `UsageSnapshot.rawJSON`. UI uses this to render usage readings
 /// at the time they were captured.
@@ -82,6 +115,18 @@ public struct UsageHistorySeries: Sendable, Hashable {
             providerID: providerID,
             points: points.filter {
                 $0.confirmsActiveFiveHourWindow(endingAt: end, tolerance: tolerance)
+            }
+        )
+    }
+
+    public func scoped(
+        toWeeklyWindowEndingAt end: Date,
+        tolerance: TimeInterval = ActualWindow5hDisplayResolver.resetEndTolerance
+    ) -> UsageHistorySeries {
+        UsageHistorySeries(
+            providerID: providerID,
+            points: points.filter {
+                $0.sevenDayResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false
             }
         )
     }
@@ -134,6 +179,42 @@ public struct UsageHistorySeries: Sendable, Hashable {
             }
         }
         return nil
+    }
+
+    /// Earliest sample captured in `[start, start + seconds]` with a 7d reading,
+    /// falling back to the latest point at or before `start` when none fall in
+    /// the opening window. Used for the carry-in reading at the top of a weekly
+    /// calendar block.
+    public func weeklyOpeningReading(
+        at start: Date,
+        within seconds: TimeInterval
+    ) -> (capturedAt: Date, used: Double)? {
+        let upper = start.addingTimeInterval(seconds)
+        for point in points where point.capturedAt >= start && point.capturedAt <= upper {
+            if let sevenDay = point.sevenDay {
+                return (point.capturedAt, sevenDay)
+            }
+        }
+        guard let point = lastPoint(atOrBefore: start), let sevenDay = point.sevenDay else { return nil }
+        return (point.capturedAt, sevenDay)
+    }
+
+    /// Latest in-day 7d reading whose used value differs from `carryInUsed`.
+    /// Returns nil when every sample on `day` matches the carry-in or lacks 7d.
+    public func latestDistinctWeeklyReading(
+        on day: Date,
+        carryInUsed: Double?,
+        calendar: Calendar = .current
+    ) -> (capturedAt: Date, used: Double)? {
+        let dayBounds = CalendarPositioning.dayInterval(for: day, calendar: calendar)
+        var latest: (capturedAt: Date, used: Double)?
+        for point in points
+            where point.capturedAt >= dayBounds.start && point.capturedAt < dayBounds.end {
+            guard let sevenDay = point.sevenDay else { continue }
+            if let carryInUsed, sevenDay == carryInUsed { continue }
+            latest = (point.capturedAt, sevenDay)
+        }
+        return latest
     }
 
     /// Earliest sample captured in `[start, start + seconds]`, used for the
@@ -226,9 +307,9 @@ public struct UsageHistorySeries: Sendable, Hashable {
             ) else { return nil }
             return UsagePoint(
                 capturedAt: snapshot.capturedAt,
-                fiveHour: status.primary.usedPercentage,
+                fiveHour: status.primary?.usedPercentage,
                 sevenDay: status.secondary?.usedPercentage,
-                fiveHourResetsAt: status.primary.resetsAt,
+                fiveHourResetsAt: status.primary?.resetsAt,
                 hasActiveFiveHourWindow: status.hasActivePrimaryWindow,
                 sevenDayResetsAt: status.secondary?.resetsAt
             )

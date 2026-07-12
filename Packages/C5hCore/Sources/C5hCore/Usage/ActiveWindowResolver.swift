@@ -237,7 +237,7 @@ public struct ActiveWindowResolver: Sendable {
                 .fiveHour.usedPercentage
         case .codex:
             (try? CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt))?
-                .primary.usedPercentage
+                .primary?.usedPercentage
         }
     }
 

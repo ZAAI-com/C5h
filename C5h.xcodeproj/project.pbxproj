@@ -33,6 +33,7 @@
 		0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000009 /* CalendarLayoutConfig.swift */; };
 		0A0012020301000000000012 /* WeekCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000012 /* WeekCalendarView.swift */; };
 		0A0012020301000000000030 /* WeekWindowBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000030 /* WeekWindowBarView.swift */; };
+		0A0012020301000000000031 /* WeeklyWindowBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000031 /* WeeklyWindowBlockView.swift */; };
 		0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011020301000000000013 /* WeekCalendarViewModel.swift */; };
 		0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000002 /* AppSchedulerDriver.swift */; };
 		0A0012060000000000000003 /* SchedulerTicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0011060000000000000003 /* SchedulerTicker.swift */; };
@@ -107,6 +108,7 @@
 		0A0011020301000000000009 /* CalendarLayoutConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarLayoutConfig.swift; sourceTree = "<group>"; };
 		0A0011020301000000000012 /* WeekCalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000030 /* WeekWindowBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekWindowBarView.swift; sourceTree = "<group>"; };
+		0A0011020301000000000031 /* WeeklyWindowBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyWindowBlockView.swift; sourceTree = "<group>"; };
 		0A0011020301000000000013 /* WeekCalendarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekCalendarViewModel.swift; sourceTree = "<group>"; };
 		0A0011060000000000000002 /* AppSchedulerDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSchedulerDriver.swift; sourceTree = "<group>"; };
 		0A0011060000000000000003 /* SchedulerTicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerTicker.swift; sourceTree = "<group>"; };
@@ -311,6 +313,7 @@
 				0A0011020301000000000009 /* CalendarLayoutConfig.swift */,
 				0A0011020301000000000012 /* WeekCalendarView.swift */,
 				0A0011020301000000000030 /* WeekWindowBarView.swift */,
+				0A0011020301000000000031 /* WeeklyWindowBlockView.swift */,
 				0A0011020301000000000013 /* WeekCalendarViewModel.swift */,
 			);
 			path = Calendar;
@@ -565,6 +568,7 @@
 				0A0012020301000000000009 /* CalendarLayoutConfig.swift in Sources */,
 				0A0012020301000000000012 /* WeekCalendarView.swift in Sources */,
 				0A0012020301000000000030 /* WeekWindowBarView.swift in Sources */,
+				0A0012020301000000000031 /* WeeklyWindowBlockView.swift in Sources */,
 				0A0012020301000000000013 /* WeekCalendarViewModel.swift in Sources */,
 				0A0012060000000000000002 /* AppSchedulerDriver.swift in Sources */,
 				0A0012060000000000000003 /* SchedulerTicker.swift in Sources */,

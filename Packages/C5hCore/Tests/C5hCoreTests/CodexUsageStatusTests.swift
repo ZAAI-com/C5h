@@ -11,8 +11,8 @@ struct CodexUsageStatusTests {
         """)
 
         #expect(status.eventTimestamp.timeIntervalSince1970 == 1_778_357_943.777)
-        #expect(status.primary.usedPercentage == 82)
-        #expect(status.primary.resetsAt.timeIntervalSince1970 == 1_778_364_750)
+        #expect(status.primary?.usedPercentage == 82)
+        #expect(status.primary?.resetsAt.timeIntervalSince1970 == 1_778_364_750)
         #expect(status.primaryWindowMinutes == 300)
     }
 
@@ -22,8 +22,8 @@ struct CodexUsageStatusTests {
         {"timestamp":"2026-05-09T20:00:00.000Z","rate_limits":{"primary":{"used_percent":"3","window_minutes":299,"resets_in_seconds":3600}}}
         """)
 
-        #expect(status.primary.usedPercentage == 3)
-        #expect(status.primary.resetsAt.timeIntervalSince1970 == 1_778_360_400)
+        #expect(status.primary?.usedPercentage == 3)
+        #expect(status.primary?.resetsAt.timeIntervalSince1970 == 1_778_360_400)
         #expect(status.primaryWindowMinutes == 299)
     }
 
@@ -32,7 +32,7 @@ struct CodexUsageStatusTests {
         let status = try CodexUsageStatus.parsePayload("""
         {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750}}}
         """)
-        let window = status.actualWindow(createdAt: Date(timeIntervalSince1970: 100))
+        let window = try #require(status.actualWindow(createdAt: Date(timeIntervalSince1970: 100)))
 
         #expect(window.providerID == .codex)
         #expect(window.source == .detectedFromUsage)
@@ -116,8 +116,8 @@ struct CodexUsageStatusTests {
         let status = try CodexUsageStatus.parseAppServerResponse(result, capturedAt: capturedAt)
 
         #expect(status.eventTimestamp == capturedAt)
-        #expect(status.primary.usedPercentage == 2)
-        #expect(status.primary.resetsAt.timeIntervalSince1970 == 1_779_365_844)
+        #expect(status.primary?.usedPercentage == 2)
+        #expect(status.primary?.resetsAt.timeIntervalSince1970 == 1_779_365_844)
         #expect(status.primaryWindowMinutes == 300)
         #expect(status.secondary?.usedPercentage == 12)
         #expect(status.secondary?.resetsAt.timeIntervalSince1970 == 1_779_838_110)
@@ -136,9 +136,41 @@ struct CodexUsageStatusTests {
         #expect(status.secondaryDurationSeconds == 10080 * 60)
     }
 
-    @Test("App-server response raises on missing primary")
-    func appServerResponseMissingPrimary() {
+    @Test("App-server response parses secondary-only payload")
+    func appServerResponseSecondaryOnly() throws {
         let result = #"{"rateLimits":{"secondary":{"usedPercent":1,"windowDurationMins":10080,"resetsAt":1779838110}}}"#
+        let status = try CodexUsageStatus.parseAppServerResponse(result)
+
+        #expect(status.primary == nil)
+        #expect(status.secondary?.usedPercentage == 1)
+        #expect(status.secondaryWindowMinutes == 10080)
+    }
+
+    @Test("Legacy payload parses secondary-only shape")
+    func legacyPayloadSecondaryOnly() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+        """)
+
+        #expect(status.primary == nil)
+        #expect(status.secondary?.usedPercentage == 45)
+        #expect(status.hasActivePrimaryWindow == false)
+        #expect(status.actualWindow() == nil)
+        let weekly = try #require(status.secondaryActualWindow())
+        #expect(weekly.usedPercentage == 45)
+    }
+
+    @Test("Rejects payloads with neither primary nor secondary limit")
+    func rejectsPayloadWithNoLimits() {
+        let result = #"{"rateLimits":{"planType":"plus"}}"#
+        #expect(throws: CodexUsageStatusParseError.self) {
+            _ = try CodexUsageStatus.parseAppServerResponse(result)
+        }
+    }
+
+    @Test("App-server response raises on missing primary when secondary also missing")
+    func appServerResponseMissingLimits() {
+        let result = #"{"rateLimits":{"planType":"plus"}}"#
         #expect(throws: CodexUsageStatusParseError.self) {
             _ = try CodexUsageStatus.parseAppServerResponse(result)
         }

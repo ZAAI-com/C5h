@@ -66,7 +66,9 @@ public struct UsageFetcher: Sendable {
         case .codex:
             let status = try CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt)
             guard status.hasActivePrimaryWindow else { return nil }
-            let window = status.actualWindow(providerID: .codex, createdAt: snapshot.capturedAt)
+            guard let window = status.actualWindow(providerID: .codex, createdAt: snapshot.capturedAt) else {
+                return nil
+            }
             return window.endAt > now ? window : nil
         }
     }

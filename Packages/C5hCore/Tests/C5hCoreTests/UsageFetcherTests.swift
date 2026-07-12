@@ -125,6 +125,27 @@ struct UsageFetcherTests {
         #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
     }
 
+    @Test("Secondary-only Codex snapshot persists weekly row without 5h row")
+    func secondaryOnlyCodexSnapshot() throws {
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 100),
+            rawJSON: """
+            {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(from: snapshot, now: Date(timeIntervalSince1970: 0))
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+
+        #expect(derived5h == nil)
+        #expect(weekly.durationSeconds == 10080 * 60)
+        #expect(weekly.usedPercentage == 45)
+        #expect(weekly.usageSnapshotID == snapshot.id)
+    }
+
     private func makeClaudeIdleSnapshot() -> UsageSnapshot {
         UsageSnapshot(
             providerID: .claude,

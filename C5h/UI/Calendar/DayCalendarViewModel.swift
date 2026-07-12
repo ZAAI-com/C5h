@@ -11,6 +11,8 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
+    var latestProviderLimits: [ProviderID: ProviderUsageLimits] = [:]
+    var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
 
@@ -64,6 +66,34 @@ final class DayCalendarViewModel {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
+        await loadWeeklyContext(now: .now)
+    }
+
+    private func loadWeeklyContext(now: Date) async {
+        guard let actual7dRepo = actual7dRepository else { return }
+        var windows: [ProviderID: ActualWindow7d] = [:]
+        var limits: [ProviderID: ProviderUsageLimits] = [:]
+        if let usageRepo = usageSnapshotRepository {
+            for providerID in ProviderID.allCases {
+                if let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
+                   let parsed = ProviderUsageLimits.from(snapshot: snapshot) {
+                    limits[providerID] = parsed
+                }
+            }
+        }
+        for providerID in ProviderID.allCases {
+            if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
+               window.endAt >= now,
+               CalendarPositioning.windowOverlaps(
+                   start: window.startAt,
+                   durationSeconds: window.durationSeconds,
+                   day: date
+               ) {
+                windows[providerID] = window
+            }
+        }
+        if self.latestProviderLimits != limits { self.latestProviderLimits = limits }
+        if self.weeklyWindows != windows { self.weeklyWindows = windows }
     }
 
     private func loadUsageHistories() async {
@@ -206,6 +236,15 @@ final class DayCalendarViewModel {
             as: Int.self
         )) ?? nil
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
+    }
+
+    /// Weekly-only fallback block for Today when the latest payload reports
+    /// weekly data without a 5h limit and a persisted weekly window overlaps
+    /// the displayed day.
+    func weeklyFallbackWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
+        guard latestProviderLimits[providerID]?.isWeeklyOnly == true else { return nil }
+        guard let window = weeklyWindows[providerID], window.endAt >= now else { return nil }
+        return window
     }
 
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {

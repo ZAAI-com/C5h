@@ -5,6 +5,7 @@ struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
     let actualSegments: [ActualWindow5hDisplaySegment]
+    var weeklyWindow: ActualWindow7d? = nil
     let history: UsageHistorySeries?
     /// IDs of actual windows that followed a detected quota reset, marked with a
     /// subtle neutral glyph on their block.
@@ -15,6 +16,7 @@ struct ProviderColumnView: View {
     let columnWidth: CGFloat
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    var onSelectWeekly: ((ActualWindow7d) -> Void)? = nil
     let onMovePlanned: (PlannedWindow, Date) -> Void
     var onQuickPlan: ((Date) -> Void)? = nil
 
@@ -39,6 +41,7 @@ struct ProviderColumnView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
+            weeklyBlock
             ghostPlanBlock
             // Continuous current-time line for the empty timeline; it sits above
             // the column background but below the window blocks (zIndex 1/2), so
@@ -424,6 +427,34 @@ struct ProviderColumnView: View {
                 actualWindows: actualSegments.map(\.window)
             )
             .hasConflict
+    }
+
+    @ViewBuilder
+    private var weeklyBlock: some View {
+        if let weeklyWindow,
+           let segment = visibleSegment(
+               start: weeklyWindow.startAt,
+               durationSeconds: weeklyWindow.durationSeconds
+           ) {
+            WeeklyWindowBlockView(
+                window: weeklyWindow,
+                history: history,
+                date: date,
+                now: now,
+                columnWidth: columnWidth,
+                layout: layout,
+                visibleDurationSeconds: segment.durationSeconds,
+                clipsTop: segment.clippedStart,
+                clipsBottom: segment.clippedEnd,
+                segmentStart: segment.start,
+                onSelect: { onSelectWeekly?(weeklyWindow) }
+            )
+            .offset(
+                x: blockContentX,
+                y: yOffset(for: segment.start)
+            )
+            .zIndex(0)
+        }
     }
 
     private var background: some View {
