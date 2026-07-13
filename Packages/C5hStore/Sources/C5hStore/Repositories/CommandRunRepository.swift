@@ -93,7 +93,10 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
             }
             return try request.limit(limit).fetchAll(db)
         }
-        return try records.map { try $0.toCommandRun() }
+        // Skip rows that no longer decode (e.g. a run_type/status written by an
+        // older build whose enum raw values were later renamed) so a single stale
+        // row can't blank the entire Logs/Dashboard list.
+        return records.compactMap { try? $0.toCommandRun() }
     }
 
     public func sweepStaleRunning(

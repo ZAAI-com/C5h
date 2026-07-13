@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import GRDB
 @testable import C5hStore
 @testable import C5hCore
 
@@ -116,5 +117,46 @@ struct CommandRunRepositoryTests {
         let legacy = try await repo.fetch(id: legacyRunID)
         #expect(legacy?.status == .cancelled)
         #expect(legacy?.errorMessage == "orphaned")
+    }
+
+    @Test("fetchRecent skips un-decodable rows instead of failing the whole fetch")
+    func skipsUndecodableRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        let valid = CommandRun(
+            providerID: .codex,
+            commandName: .usage,
+            command: "codex",
+            argumentsJSON: "[]",
+            startedAt: Date(timeIntervalSince1970: 1_730_000_000),
+            status: .succeeded
+        )
+        try await repo.create(valid)
+
+        // Simulate a row written by an older build: run_type holds the
+        // pre-rename raw value "UsageCommand", which no longer maps to a
+        // CommandName case, so toCommandRun() would throw for this row.
+        let legacyID = UUID().uuidString
+        try await db.writer.write { gdb in
+            try gdb.execute(
+                sql: """
+                INSERT INTO command_runs
+                (id, provider_id, run_type, command, arguments_json, started_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    legacyID, "codex", "UsageCommand", "codex", "[]",
+                    "2026-07-13T20:45:31.000Z", "succeeded"
+                ]
+            )
+        }
+
+        // The stale row is skipped rather than aborting the entire fetch.
+        let recent = try await repo.fetchRecent(limit: 500, filter: CommandRunFilter())
+        #expect(recent.count == 1)
+        #expect(recent.first?.id == valid.id)
+        #expect(!recent.contains { $0.id.uuidString == legacyID })
     }
 }
