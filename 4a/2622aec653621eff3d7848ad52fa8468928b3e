@@ -1,0 +1,27 @@
+.github/workflows/S2-Release-GitHub.yml
+  s_877a8eb9f7671b::t_b62e0be9a35a82 10-13,34,37,44-47,111,116
+.claude/CLAUDE.md
+  s_877a8eb9f7671b::t_b62e0be9a35a82 164-177
+Toolkit/Release/appcast.sh
+  s_877a8eb9f7671b::t_b62e0be9a35a82 13,19-39,50,66,123-141,144
+C5h.xcodeproj/project.pbxproj
+  s_877a8eb9f7671b::t_b62e0be9a35a82 754,783
+Toolkit/Release/release.sh
+  s_877a8eb9f7671b::t_b62e0be9a35a82 13-14,18-38,93-94,107,155,157-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "4a2622aec653621eff3d7848ad52fa8468928b3e",
+  "prompts": {},
+  "sessions": {
+    "s_877a8eb9f7671b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5d53-ffae-7fb2-bf4e-3d07d0c88f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
