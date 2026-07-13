@@ -154,10 +154,27 @@ struct CodexUsageStatusTests {
 
         #expect(status.primary == nil)
         #expect(status.secondary?.usedPercentage == 45)
+        #expect(status.primaryDurationSeconds == nil)
         #expect(status.hasActivePrimaryWindow == false)
         #expect(status.actualWindow() == nil)
         let weekly = try #require(status.secondaryActualWindow())
         #expect(weekly.usedPercentage == 45)
+    }
+
+    @Test("Normalizer falls back to weekly data when primary is absent")
+    func normalizerUsesSecondaryOnlyPayload() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_778_357_943)
+        let normalized = UsageNormalizer.normalize(
+            rawJSON: """
+            {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+            """,
+            providerID: .codex,
+            capturedAt: capturedAt
+        )
+
+        #expect(normalized.windowStartedAt?.timeIntervalSince1970 == 1_778_968_800 - Double(10080 * 60))
+        #expect(normalized.windowEndsAt?.timeIntervalSince1970 == 1_778_968_800)
+        #expect(normalized.usedPercentage == 45)
     }
 
     @Test("Rejects payloads with neither primary nor secondary limit")

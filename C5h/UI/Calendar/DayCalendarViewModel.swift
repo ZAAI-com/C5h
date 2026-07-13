@@ -83,7 +83,8 @@ final class DayCalendarViewModel {
         }
         for providerID in ProviderID.allCases {
             if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
-               window.endAt >= now,
+               window.startAt <= now,
+               now < window.endAt,
                CalendarPositioning.windowOverlaps(
                    start: window.startAt,
                    durationSeconds: window.durationSeconds,
@@ -242,8 +243,11 @@ final class DayCalendarViewModel {
     /// weekly data without a 5h limit and a persisted weekly window overlaps
     /// the displayed day.
     func weeklyFallbackWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
+        guard Calendar.current.isDateInToday(date) else { return nil }
         guard latestProviderLimits[providerID]?.isWeeklyOnly == true else { return nil }
-        guard let window = weeklyWindows[providerID], window.endAt >= now else { return nil }
+        guard let window = weeklyWindows[providerID], window.startAt <= now, now < window.endAt else {
+            return nil
+        }
         return window
     }
 

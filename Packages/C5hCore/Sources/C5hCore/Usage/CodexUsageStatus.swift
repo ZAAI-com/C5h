@@ -31,7 +31,8 @@ public struct CodexUsageStatus: Sendable, Hashable {
     /// Duration in seconds for the primary window. Prefers the CLI-provided
     /// `window_minutes`/`windowDurationMins` field; falls back to the historical
     /// 5h constant when the CLI doesn't report a duration.
-    public var primaryDurationSeconds: Int {
+    public var primaryDurationSeconds: Int? {
+        guard primary != nil else { return nil }
         guard let minutes = primaryWindowMinutes, minutes > 0 else {
             return Self.fiveHourDurationSeconds
         }
@@ -48,8 +49,8 @@ public struct CodexUsageStatus: Sendable, Hashable {
     }
 
     public var fiveHourStartAt: Date? {
-        guard let primary else { return nil }
-        return primary.resetsAt.addingTimeInterval(-TimeInterval(primaryDurationSeconds))
+        guard let primary, let duration = primaryDurationSeconds else { return nil }
+        return primary.resetsAt.addingTimeInterval(-TimeInterval(duration))
     }
 
     /// True when Codex appears to be reporting a real, anchored 5h window;
@@ -57,25 +58,28 @@ public struct CodexUsageStatus: Sendable, Hashable {
     /// the synthetic "fresh slot" value (`eventTimestamp + primaryDuration`)
     /// that Codex returns before any usage has anchored the current window.
     public var hasActivePrimaryWindow: Bool {
-        guard let primary else { return false }
+        guard let primary, let duration = primaryDurationSeconds else { return false }
         // Synthetic "fresh slot" reports `resetsAt ≈ eventTimestamp + duration`,
         // so remaining time ≈ full duration. A real anchored window has a
         // smaller remaining time. Use a small tolerance (5s) to avoid the
         // ~60s false-negative window right after anchoring.
         let remaining = primary.resetsAt.timeIntervalSince(eventTimestamp)
-        return remaining < TimeInterval(primaryDurationSeconds) - 5
+        return remaining < TimeInterval(duration) - 5
     }
 
     public func normalizedUsage(
         providerID: ProviderID = .codex,
         capturedAt: Date = .now
     ) -> NormalizedUsage {
-        NormalizedUsage(
+        let secondaryStartAt = secondary.map {
+            $0.resetsAt.addingTimeInterval(-TimeInterval(secondaryDurationSeconds))
+        }
+        return NormalizedUsage(
             providerID: providerID,
             capturedAt: capturedAt,
-            windowStartedAt: fiveHourStartAt,
-            windowEndsAt: primary?.resetsAt,
-            usedPercentage: primary?.usedPercentage,
+            windowStartedAt: fiveHourStartAt ?? secondaryStartAt,
+            windowEndsAt: primary?.resetsAt ?? secondary?.resetsAt,
+            usedPercentage: primary?.usedPercentage ?? secondary?.usedPercentage,
             rawNotes: "Codex session token_count rate_limits"
         )
     }
@@ -84,11 +88,12 @@ public struct CodexUsageStatus: Sendable, Hashable {
         providerID: ProviderID = .codex,
         createdAt: Date = .now
     ) -> ActualWindow5h? {
-        guard let startAt = fiveHourStartAt else { return nil }
+        guard let startAt = fiveHourStartAt,
+              let duration = primaryDurationSeconds else { return nil }
         return ActualWindow5h(
             providerID: providerID,
             startAt: startAt,
-            durationSeconds: primaryDurationSeconds,
+            durationSeconds: duration,
             source: .detectedFromUsage,
             confidence: .estimated,
             createdAt: createdAt,
