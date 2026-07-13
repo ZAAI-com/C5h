@@ -1,0 +1,22 @@
+Packages/C5hStore/Sources/C5hStore/Repositories/CommandRunRepository.swift
+  s_322ea3ad412683::t_975f566a48966d 96-99
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_322ea3ad412683::t_8d55a2b3bfa7f8 3
+  s_322ea3ad412683::t_fa607660b9b419 121-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "3964b2c11693866c6e5952dc1cef68a9cdd997d3",
+  "prompts": {},
+  "sessions": {
+    "s_322ea3ad412683": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1a8f437-5e6b-47e0-94f4-54a928c31df5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
