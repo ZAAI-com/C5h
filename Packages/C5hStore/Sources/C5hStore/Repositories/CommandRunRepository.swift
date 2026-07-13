@@ -22,11 +22,35 @@ public struct CommandRunFilter: Sendable {
     }
 }
 
+/// A single row fetched for the Logs list. Most rows decode into a
+/// `CommandRun`; a row whose stored columns no longer map to the current
+/// domain types (e.g. a `run_type`/`status` written by an older build whose
+/// enum raw values were later renamed) is surfaced as `.unreadable` so it
+/// stays visible in the list instead of silently disappearing.
+public enum CommandRunEntry: Sendable, Identifiable {
+    case readable(CommandRun)
+    case unreadable(id: String, startedAt: Date?)
+
+    public var id: String {
+        switch self {
+        case .readable(let run): run.id.uuidString
+        case .unreadable(let id, _): id
+        }
+    }
+
+    /// The decoded run, or `nil` for an unreadable row.
+    public var run: CommandRun? {
+        if case .readable(let run) = self { return run }
+        return nil
+    }
+}
+
 public protocol CommandRunRepository: Sendable {
     func create(_ run: CommandRun) async throws
     func update(_ run: CommandRun) async throws
     func fetch(id: UUID) async throws -> CommandRun?
     func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun]
+    func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry]
     func sweepStaleRunning(message: String, isAlive: @Sendable (Int32) -> Bool) async throws -> Int
 }
 
@@ -77,6 +101,12 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
     }
 
     public func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun] {
+        // Drop un-decodable rows so a single stale row can't blank the list.
+        // The Logs view uses fetchRecentEntries to keep them visible instead.
+        try await fetchRecentEntries(limit: limit, filter: filter).compactMap(\.run)
+    }
+
+    public func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry] {
         let records = try await writer.read { db in
             var request = CommandRunRecord.all().order(Column("started_at").desc)
             if let pid = filter.providerID {
@@ -93,10 +123,10 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
             }
             return try request.limit(limit).fetchAll(db)
         }
-        // Skip rows that no longer decode (e.g. a run_type/status written by an
-        // older build whose enum raw values were later renamed) so a single stale
-        // row can't blank the entire Logs/Dashboard list.
-        return records.compactMap { try? $0.toCommandRun() }
+        // A row that no longer decodes (e.g. a run_type/status written by an
+        // older build whose enum raw values were later renamed) is surfaced as
+        // .unreadable rather than dropped, so the Logs list can show it.
+        return records.map { $0.toEntry() }
     }
 
     public func sweepStaleRunning(

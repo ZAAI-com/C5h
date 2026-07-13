@@ -159,4 +159,51 @@ struct CommandRunRepositoryTests {
         #expect(recent.first?.id == valid.id)
         #expect(!recent.contains { $0.id.uuidString == legacyID })
     }
+
+    @Test("fetchRecentEntries surfaces un-decodable rows as unreadable entries")
+    func surfacesUnreadableEntries() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        let valid = CommandRun(
+            providerID: .codex,
+            commandName: .usage,
+            command: "codex",
+            argumentsJSON: "[]",
+            startedAt: Date(timeIntervalSince1970: 1_730_000_000),
+            status: .succeeded
+        )
+        try await repo.create(valid)
+
+        // A legacy row (pre-rename run_type) with a newer started_at, so it
+        // sorts ahead of the valid run.
+        let legacyID = "FCB14858-F599-4BF0-B55A-5142398B7431"
+        try await db.writer.write { gdb in
+            try gdb.execute(
+                sql: """
+                INSERT INTO command_runs
+                (id, provider_id, run_type, command, arguments_json, started_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    legacyID, "codex", "UsageCommand", "codex", "[]",
+                    "2026-07-13T20:45:31.000Z", "succeeded"
+                ]
+            )
+        }
+
+        let entries = try await repo.fetchRecentEntries(limit: 500, filter: CommandRunFilter())
+        #expect(entries.count == 2)
+
+        // Ordered by started_at desc: the legacy row (2026) comes first as an
+        // unreadable entry carrying its raw id and a best-effort timestamp.
+        if case .unreadable(let id, let startedAt)? = entries.first {
+            #expect(id == legacyID)
+            #expect(startedAt != nil)
+        } else {
+            Issue.record("expected the first entry to be .unreadable")
+        }
+        #expect(entries.last?.run?.id == valid.id)
+    }
 }
