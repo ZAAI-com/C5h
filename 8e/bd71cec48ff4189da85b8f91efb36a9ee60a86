@@ -1,0 +1,36 @@
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_322ea3ad412683::t_cef2d6a6027e1a 162-208
+Packages/C5hStore/Sources/C5hStore/Records/CommandRunRecord.swift
+  s_322ea3ad412683::t_be863586338705 63-73
+C5h/UI/Logs/LogsViewModel.swift
+  s_322ea3ad412683::t_17b687472ec8a6 27,29,32-44
+  s_322ea3ad412683::t_f67b7e15d75be8 59-61,63
+  s_322ea3ad412683::t_8e844646caaf11 9-10
+Packages/C5hStore/Sources/C5hStore/Repositories/CommandRunRepository.swift
+  s_322ea3ad412683::t_4eb84609990a2b 25-47,53
+  s_322ea3ad412683::t_3bb3a4c0ebd9a8 104-109,126-129
+C5h/UI/Logs/LogsView.swift
+  s_322ea3ad412683::t_47be96d327c626 108,111
+  s_322ea3ad412683::t_7dc596247116ce 50
+C5h/UI/Logs/CommandRunTable.swift
+  s_322ea3ad412683::t_2e128110b2c84d 3,6-7,10-12,16-17,21-22,26-27,31-74,78-100
+C5h/UI/Logs/CommandRunDetailView.swift
+  s_322ea3ad412683::t_62daa41c4466e4 3,6,9-10,12-19,23-52
+  s_322ea3ad412683::t_35552a891040ac 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "8ebd71cec48ff4189da85b8f91efb36a9ee60a86",
+  "prompts": {},
+  "sessions": {
+    "s_322ea3ad412683": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1a8f437-5e6b-47e0-94f4-54a928c31df5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
