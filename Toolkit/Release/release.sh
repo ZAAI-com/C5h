@@ -10,11 +10,32 @@
 #   APPLE_TEAM_ID="ABCDEFGHIJ"
 #   APPLE_APP_PASSWORD="app-specific password"  # for notarytool
 #
-# Usage: ./Toolkit/Release/release.sh 0.1.0
+# Usage: ./Toolkit/Release/release.sh <version> <build-number>
+# Example: ./Toolkit/Release/release.sh 2.0.0 5
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VERSION="${1:?usage: release.sh <version>}"
+usage() {
+  echo "usage: release.sh <version> <build-number>" >&2
+}
+
+if [ "$#" -ne 2 ]; then
+  usage
+  exit 2
+fi
+
+VERSION="$1"
+BUILD_NUMBER="$2"
+
+if ! [[ "${VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "ERROR: version must be strict semver without leading zeros (for example, 2.0.0). Got: ${VERSION}" >&2
+  exit 2
+fi
+if ! [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: build number must be a positive integer (for example, 5). Got: ${BUILD_NUMBER}" >&2
+  exit 2
+fi
+
 SCHEME="C5h"
 WORKSPACE="C5h.xcworkspace"
 ARCHIVE="build/C5h-${VERSION}.xcarchive"
@@ -69,9 +90,8 @@ if [ -z "$TEAM_ID" ]; then
 fi
 
 echo "==> Archive main app"
-# CURRENT_PROJECT_VERSION becomes CFBundleVersion, which Sparkle compares to
-# decide whether an update is newer. Pinning it to the release version (strict
-# X.Y.Z is a valid CFBundleVersion) keeps the update feed ordering correct.
+# Sparkle compares the globally increasing CFBundleVersion to decide whether an
+# update is newer. Keep it independent from the user-visible marketing version.
 xcodebuild \
   -workspace "${WORKSPACE}" \
   -scheme "${SCHEME}" \
@@ -84,7 +104,7 @@ xcodebuild \
   DEVELOPMENT_TEAM="${TEAM_ID}" \
   ENABLE_HARDENED_RUNTIME=YES \
   MARKETING_VERSION="${VERSION}" \
-  CURRENT_PROJECT_VERSION="${VERSION}"
+  CURRENT_PROJECT_VERSION="${BUILD_NUMBER}"
 
 echo "==> Embed helper binary"
 HELPER_DST="${ARCHIVE}/Products/Applications/${SCHEME}.app/Contents/Helpers"
@@ -132,9 +152,14 @@ done
 codesign --verify --strict --verbose=2 "${SPARKLE_FW}"
 
 INFO_PLIST="${APP}/Contents/Info.plist"
+SHORT_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}")"
 BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${INFO_PLIST}")"
-if [ "${BUNDLE_VERSION}" != "${VERSION}" ]; then
-  echo "ERROR: CFBundleVersion is '${BUNDLE_VERSION}', expected '${VERSION}'; Sparkle would misorder this release." >&2
+if [ "${SHORT_VERSION}" != "${VERSION}" ]; then
+  echo "ERROR: CFBundleShortVersionString is '${SHORT_VERSION}', expected '${VERSION}'." >&2
+  exit 3
+fi
+if [ "${BUNDLE_VERSION}" != "${BUILD_NUMBER}" ]; then
+  echo "ERROR: CFBundleVersion is '${BUNDLE_VERSION}', expected build '${BUILD_NUMBER}'; Sparkle would misorder this release." >&2
   exit 3
 fi
 for key in SUPublicEDKey SUFeedURL; do

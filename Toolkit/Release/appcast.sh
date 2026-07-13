@@ -10,14 +10,33 @@
 # Required environment (CI):
 #   SPARKLE_ED_PRIVATE_KEY="base64 EdDSA private key"  # from generate_keys -x
 #
-# Usage: ./Toolkit/Release/appcast.sh <version> [--ed-key-file <path>]
+# Usage: ./Toolkit/Release/appcast.sh <version> <build-number> [--ed-key-file <path>]
 #   --ed-key-file reads the private key from a file instead of
 #   SPARKLE_ED_PRIVATE_KEY (local testing only; never commit key files).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VERSION="${1:?usage: appcast.sh <version> [--ed-key-file <path>]}"
-shift
+usage() {
+  echo "usage: appcast.sh <version> <build-number> [--ed-key-file <path>]" >&2
+}
+
+if [ "$#" -lt 2 ]; then
+  usage
+  exit 2
+fi
+
+VERSION="$1"
+BUILD_NUMBER="$2"
+shift 2
+
+if ! [[ "${VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "ERROR: version must be strict semver without leading zeros (for example, 2.0.0). Got: ${VERSION}" >&2
+  exit 2
+fi
+if ! [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: build number must be a positive integer (for example, 5). Got: ${BUILD_NUMBER}" >&2
+  exit 2
+fi
 
 ED_KEY_FILE=""
 while [ "$#" -gt 0 ]; do
@@ -28,7 +47,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
-      echo "usage: appcast.sh <version> [--ed-key-file <path>]" >&2
+      usage
       exit 2
       ;;
   esac
@@ -44,7 +63,7 @@ SPARKLE_TOOLS_DIR="build/sparkle-tools-${SPARKLE_TOOLS_VERSION}"
 SPARKLE_TOOLS_TARBALL="build/Sparkle-${SPARKLE_TOOLS_VERSION}.tar.xz"
 
 if [ ! -f "${DMG}" ]; then
-  echo "ERROR: ${DMG} not found; run ./Toolkit/Release/release.sh ${VERSION} first." >&2
+  echo "ERROR: ${DMG} not found; run ./Toolkit/Release/release.sh ${VERSION} ${BUILD_NUMBER} first." >&2
   exit 2
 fi
 
@@ -101,11 +120,28 @@ if ! grep -q 'sparkle:edSignature=' "${APPCAST}"; then
   echo "ERROR: appcast has no sparkle:edSignature; the DMG was not signed with the EdDSA key." >&2
   exit 3
 fi
-if ! grep -Eq "<sparkle:version>${VERSION}</sparkle:version>|sparkle:version=\"${VERSION}\"" "${APPCAST}"; then
-  echo "ERROR: appcast sparkle:version does not match ${VERSION}; the DMG embeds a different CFBundleVersion." >&2
+
+appcast_value() {
+  local element="$1"
+  local value
+  value="$(xmllint --xpath "string((//*[local-name()='${element}'])[1])" "${APPCAST}")"
+  if [ -z "${value}" ]; then
+    value="$(xmllint --xpath "string((//*[local-name()='enclosure']/@*[local-name()='${element}'])[1])" "${APPCAST}")"
+  fi
+  printf '%s' "${value}"
+}
+
+APPCAST_BUILD_NUMBER="$(appcast_value version)"
+APPCAST_SHORT_VERSION="$(appcast_value shortVersionString)"
+if [ "${APPCAST_BUILD_NUMBER}" != "${BUILD_NUMBER}" ]; then
+  echo "ERROR: appcast sparkle:version is '${APPCAST_BUILD_NUMBER}', expected build '${BUILD_NUMBER}'; the DMG embeds a different CFBundleVersion." >&2
   exit 3
 fi
-if ! grep -q "url=\"https://github.com/ZAAI-com/C5h/releases/download/${VERSION}/C5h-${VERSION}.dmg\"" "${APPCAST}"; then
+if [ "${APPCAST_SHORT_VERSION}" != "${VERSION}" ]; then
+  echo "ERROR: appcast sparkle:shortVersionString is '${APPCAST_SHORT_VERSION}', expected '${VERSION}'; the DMG embeds a different CFBundleShortVersionString." >&2
+  exit 3
+fi
+if ! grep -Fq "url=\"https://github.com/ZAAI-com/C5h/releases/download/${VERSION}/C5h-${VERSION}.dmg\"" "${APPCAST}"; then
   echo "ERROR: appcast enclosure URL is not the versioned DMG download URL." >&2
   exit 3
 fi

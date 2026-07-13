@@ -161,6 +161,20 @@ https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml
 `Toolkit/Release/release.sh`; S2 uploads it alongside the DMG so the
 `releases/latest/download/` URL always serves the newest release's feed.
 
+S2 requires two independent release identifiers:
+
+- **Version** becomes `MARKETING_VERSION` / `CFBundleShortVersionString` and is
+  shown to users (for example, `2.0.0`).
+- **Build number** becomes `CURRENT_PROJECT_VERSION` / `CFBundleVersion` and is
+  what Sparkle compares (for example, `5`). It must be a positive integer that
+  increases globally for every published build, regardless of the marketing
+  version.
+
+The scripts take the same pair: `release.sh <version> <build-number>` followed
+by `appcast.sh <version> <build-number>`. The generated appcast must use the
+build number as `sparkle:version` and the marketing version as
+`sparkle:shortVersionString`.
+
 ### Feed failover (mirror feeds)
 
 `C5h/Info.plist` lists mirror feeds in `C5hFallbackFeedURLs`, tried in order

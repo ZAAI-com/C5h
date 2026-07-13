@@ -7,6 +7,10 @@ on:
         description: "Release version (strict semver, no v prefix, e.g. 0.5.0)"
         required: true
         type: string
+      build_number:
+        description: "Globally increasing build number (positive integer, e.g. 5)"
+        required: true
+        type: string
       prerelease:
         description: "Mark the GitHub release as a prerelease (kept out of latest and the appcast feed)"
         required: false
@@ -27,13 +31,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate version
+      - name: Validate release identifiers
         env:
           VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
           if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "Version must be strict semver, no leading zeros (e.g. 0.5.0). Got: $VERSION"
+            exit 1
+          fi
+          if ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Build number must be a positive integer (e.g. 5). Got: $BUILD_NUMBER"
             exit 1
           fi
 
@@ -99,12 +108,12 @@ jobs:
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./Toolkit/Release/release.sh "${{ inputs.version }}"
+        run: ./Toolkit/Release/release.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
 
       - name: Generate and sign Sparkle appcast
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}"
+        run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
 
       - name: Clean up keychain
         if: always()
