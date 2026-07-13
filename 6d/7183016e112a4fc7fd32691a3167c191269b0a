@@ -1,0 +1,35 @@
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_dd4d8d7c7ea3ed::t_ccc71be0aaee4c 86-87,246,248-250
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_dd4d8d7c7ea3ed::t_ccc71be0aaee4c 34-35,52-53,61,67,74-76,80-82,91-92,96
+  s_dd4d8d7c7ea3ed::t_456cc20f36fc5d 77
+Packages/C5hCore/Tests/C5hCoreTests/CodexUsageStatusTests.swift
+  s_dd4d8d7c7ea3ed::t_ccc71be0aaee4c 157,164-177
+  s_dd4d8d7c7ea3ed::t_ff158176d57af7 178-179
+C5h.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+  s_e79a29e6d3f807::t_f7ad0d77417347 2,12-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "6d7183016e112a4fc7fd32691a3167c191269b0a",
+  "prompts": {},
+  "sessions": {
+    "s_dd4d8d7c7ea3ed": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f57e6-6543-7400-b5e3-f8add5cf72a7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_e79a29e6d3f807": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b710c8d-2a52-4351-98e5-25d4994ae1d5",
+        "model": "unknown"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
