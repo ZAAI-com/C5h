@@ -97,6 +97,72 @@ struct UsageFetcherTests {
         #expect(weekly.usageSnapshotID == snapshot.id)
     }
 
+    @Test("Drops 5h row when both Codex slots are weekly")
+    func dropsFiveHourRowWhenBothCodexSlotsAreWeekly() throws {
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 1_779_300_000),
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":20,"windowDurationMins":10080,"resetsAt":1779838000},"secondary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1779838110},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt)
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+
+        #expect(derived5h == nil)
+        #expect(weekly.usedPercentage == 30)
+        #expect(weekly.endAt.timeIntervalSince1970 == 1_779_838_110)
+    }
+
+    @Test("Routes primary-only Codex weekly slot to 7d row")
+    func routesPrimaryOnlyCodexWeeklySlot() throws {
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 1_779_300_000),
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":20,"windowDurationMins":10080,"resetsAt":1779838000},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let derived5h = try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt)
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+
+        #expect(derived5h == nil)
+        #expect(weekly.usedPercentage == 20)
+        #expect(weekly.endAt.timeIntervalSince1970 == 1_779_838_000)
+    }
+
+    @Test("Uses short secondary Codex slot and respects active-window requirement")
+    func usesShortSecondaryCodexSlot() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_779_300_000)
+        let syntheticReset = Int(capturedAt.addingTimeInterval(18_000).timeIntervalSince1970)
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":30,"windowDurationMins":10080,"resetsAt":1779838110},"secondary":{"usedPercent":1,"windowDurationMins":300,"resetsAt":\(syntheticReset)},"planType":"plus"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let activeOnly = try fetcher.derived5h(from: snapshot, now: capturedAt)
+        let triggerAnchored = try #require(try fetcher.derived5h(
+            from: snapshot,
+            now: capturedAt,
+            requireActiveWindow: false
+        ))
+
+        #expect(activeOnly == nil)
+        #expect(triggerAnchored.durationSeconds == 5 * 3600)
+        #expect(triggerAnchored.endAt.timeIntervalSince1970 == TimeInterval(syntheticReset))
+    }
+
     @Test("Skips Claude 5h row when the report is idle (0% used)")
     func skipsClaudeIdleWindow() throws {
         // Claude's statusLine keeps reporting a rolling five_hour boundary while

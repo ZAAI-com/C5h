@@ -1,8 +1,14 @@
 import Foundation
 
+private struct ClassifiedRateLimit {
+    let window: RateLimitWindow
+    let durationSeconds: Int
+}
+
 public struct CodexUsageStatus: Sendable, Hashable {
     public static let fiveHourDurationSeconds = 5 * 60 * 60
     public static let defaultSecondaryDurationSeconds = 7 * 24 * 60 * 60
+    public static let weeklyClassThresholdSeconds = 24 * 60 * 60
     public static let maxEventAgeSeconds: TimeInterval = 5 * 60 * 60
 
     public var eventTimestamp: Date
@@ -49,8 +55,8 @@ public struct CodexUsageStatus: Sendable, Hashable {
     }
 
     public var fiveHourStartAt: Date? {
-        guard let primary, let duration = primaryDurationSeconds else { return nil }
-        return primary.resetsAt.addingTimeInterval(-TimeInterval(duration))
+        guard let limit = fiveHourClassLimit else { return nil }
+        return limit.window.resetsAt.addingTimeInterval(-TimeInterval(limit.durationSeconds))
     }
 
     /// True when Codex appears to be reporting a real, anchored 5h window;
@@ -59,27 +65,50 @@ public struct CodexUsageStatus: Sendable, Hashable {
     /// that Codex returns before any usage has anchored the current window.
     public var hasActivePrimaryWindow: Bool {
         guard let primary, let duration = primaryDurationSeconds else { return false }
+        return Self.isActive(window: primary, durationSeconds: duration, eventTimestamp: eventTimestamp)
+    }
+
+    /// True when the duration-classified 5h slot is anchored. This follows the
+    /// selected short window even if Codex reports it in the secondary slot.
+    public var hasActiveFiveHourWindow: Bool {
+        guard let limit = fiveHourClassLimit else { return false }
+        return Self.isActive(
+            window: limit.window,
+            durationSeconds: limit.durationSeconds,
+            eventTimestamp: eventTimestamp
+        )
+    }
+
+    var fiveHourUsedPercentage: Double? {
+        fiveHourClassLimit?.window.usedPercentage
+    }
+
+    private static func isActive(
+        window: RateLimitWindow,
+        durationSeconds: Int,
+        eventTimestamp: Date
+    ) -> Bool {
         // Synthetic "fresh slot" reports `resetsAt ≈ eventTimestamp + duration`,
         // so remaining time ≈ full duration. A real anchored window has a
         // smaller remaining time. Use a small tolerance (5s) to avoid the
         // ~60s false-negative window right after anchoring.
-        let remaining = primary.resetsAt.timeIntervalSince(eventTimestamp)
-        return remaining < TimeInterval(duration) - 5
+        let remaining = window.resetsAt.timeIntervalSince(eventTimestamp)
+        return remaining < TimeInterval(durationSeconds) - 5
     }
 
     public func normalizedUsage(
         providerID: ProviderID = .codex,
         capturedAt: Date = .now
     ) -> NormalizedUsage {
-        let secondaryStartAt = secondary.map {
-            $0.resetsAt.addingTimeInterval(-TimeInterval(secondaryDurationSeconds))
-        }
+        let limit = fiveHourClassLimit ?? weeklyClassLimit
         return NormalizedUsage(
             providerID: providerID,
             capturedAt: capturedAt,
-            windowStartedAt: fiveHourStartAt ?? secondaryStartAt,
-            windowEndsAt: primary?.resetsAt ?? secondary?.resetsAt,
-            usedPercentage: primary?.usedPercentage ?? secondary?.usedPercentage,
+            windowStartedAt: limit.map {
+                $0.window.resetsAt.addingTimeInterval(-TimeInterval($0.durationSeconds))
+            },
+            windowEndsAt: limit?.window.resetsAt,
+            usedPercentage: limit?.window.usedPercentage,
             rawNotes: "Codex session token_count rate_limits"
         )
     }
@@ -88,12 +117,12 @@ public struct CodexUsageStatus: Sendable, Hashable {
         providerID: ProviderID = .codex,
         createdAt: Date = .now
     ) -> ActualWindow5h? {
-        guard let startAt = fiveHourStartAt,
-              let duration = primaryDurationSeconds else { return nil }
+        guard let limit = fiveHourClassLimit else { return nil }
+        let startAt = limit.window.resetsAt.addingTimeInterval(-TimeInterval(limit.durationSeconds))
         return ActualWindow5h(
             providerID: providerID,
             startAt: startAt,
-            durationSeconds: duration,
+            durationSeconds: limit.durationSeconds,
             source: .detectedFromUsage,
             confidence: .estimated,
             createdAt: createdAt,
@@ -106,20 +135,43 @@ public struct CodexUsageStatus: Sendable, Hashable {
         usageSnapshotID: UUID? = nil,
         createdAt: Date = .now
     ) -> ActualWindow7d? {
-        guard let secondary else { return nil }
-        let duration = secondaryDurationSeconds
-        let start = secondary.resetsAt.addingTimeInterval(-TimeInterval(duration))
+        guard let limit = weeklyClassLimit else { return nil }
+        let start = limit.window.resetsAt.addingTimeInterval(-TimeInterval(limit.durationSeconds))
         return ActualWindow7d(
             providerID: providerID,
             startAt: start,
-            durationSeconds: duration,
-            usedPercentage: secondary.usedPercentage,
+            durationSeconds: limit.durationSeconds,
+            usedPercentage: limit.window.usedPercentage,
             source: .detectedFromUsage,
             confidence: .estimated,
             usageSnapshotID: usageSnapshotID,
             createdAt: createdAt,
             updatedAt: createdAt
         )
+    }
+
+    private var fiveHourClassLimit: ClassifiedRateLimit? {
+        if let primary,
+           let duration = primaryDurationSeconds,
+           duration < Self.weeklyClassThresholdSeconds {
+            return ClassifiedRateLimit(window: primary, durationSeconds: duration)
+        }
+        if let secondary, secondaryDurationSeconds < Self.weeklyClassThresholdSeconds {
+            return ClassifiedRateLimit(window: secondary, durationSeconds: secondaryDurationSeconds)
+        }
+        return nil
+    }
+
+    private var weeklyClassLimit: ClassifiedRateLimit? {
+        if let secondary, secondaryDurationSeconds >= Self.weeklyClassThresholdSeconds {
+            return ClassifiedRateLimit(window: secondary, durationSeconds: secondaryDurationSeconds)
+        }
+        if let primary,
+           let duration = primaryDurationSeconds,
+           duration >= Self.weeklyClassThresholdSeconds {
+            return ClassifiedRateLimit(window: primary, durationSeconds: duration)
+        }
+        return nil
     }
 
     public func isStale(now: Date = .now) -> Bool {

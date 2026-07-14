@@ -167,10 +167,14 @@ public struct ActiveWindowResolver: Sendable {
         now: Date
     ) async throws -> ActualWindow5h? {
         try await fetcher.persistSnapshot(snapshot)
-        // A wake prompt just opened this window on purpose, so anchor it even if
-        // usage hasn't registered yet (requireActiveWindow: false). Idle polls
-        // keep the default guard so they can't fabricate a phantom window.
-        let derived5h = try fetcher.derived5h(from: snapshot, now: now, requireActiveWindow: false)
+        // Claude can anchor a wake prompt before usage registers. Codex cannot:
+        // its idle response is a synthetic sliding slot, so keep Codex active-
+        // gated here even though UsageFetcher supports an explicit force-anchor.
+        let derived5h = try fetcher.derived5h(
+            from: snapshot,
+            now: now,
+            requireActiveWindow: providerID == .codex
+        )
         if let window = derived5h {
             try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
         }
@@ -245,7 +249,7 @@ public struct ActiveWindowResolver: Sendable {
                 .fiveHour.usedPercentage
         case .codex:
             (try? CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt))?
-                .primary?.usedPercentage
+                .fiveHourUsedPercentage
         }
     }
 

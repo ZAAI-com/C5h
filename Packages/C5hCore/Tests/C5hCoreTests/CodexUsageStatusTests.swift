@@ -76,6 +76,72 @@ struct CodexUsageStatusTests {
         #expect(window.startAt.timeIntervalSince1970 == 1_778_968_800 - Double(10080 * 60))
     }
 
+    @Test("Routes normal primary and secondary windows by duration")
+    func routesNormalWindowsByDuration() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":82,"window_minutes":300,"resets_at":1778364750},"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+        """)
+
+        let fiveHour = try #require(status.actualWindow())
+        let weekly = try #require(status.secondaryActualWindow())
+
+        #expect(fiveHour.durationSeconds == 5 * 3600)
+        #expect(fiveHour.endAt.timeIntervalSince1970 == 1_778_364_750)
+        #expect(weekly.durationSeconds == 7 * 24 * 3600)
+        #expect(weekly.endAt.timeIntervalSince1970 == 1_778_968_800)
+    }
+
+    @Test("Prefers secondary weekly window when both slots are weekly")
+    func prefersSecondaryWhenBothWindowsAreWeekly() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":22,"window_minutes":10080,"resets_at":1778968700},"secondary":{"used_percent":45,"window_minutes":10080,"resets_at":1778968800}}}
+        """)
+
+        #expect(status.actualWindow() == nil)
+        #expect(status.hasActiveFiveHourWindow == false)
+        let weekly = try #require(status.secondaryActualWindow())
+        #expect(weekly.usedPercentage == 45)
+        #expect(weekly.endAt.timeIntervalSince1970 == 1_778_968_800)
+    }
+
+    @Test("Routes primary-only weekly window to weekly bucket")
+    func routesPrimaryOnlyWeeklyWindow() throws {
+        let status = try CodexUsageStatus.parsePayload("""
+        {"timestamp":"2026-05-09T20:19:03.777Z","rate_limits":{"primary":{"used_percent":22,"window_minutes":10080,"resets_at":1778968700}}}
+        """)
+
+        #expect(status.actualWindow() == nil)
+        let weekly = try #require(status.secondaryActualWindow())
+        #expect(weekly.durationSeconds == 7 * 24 * 3600)
+        #expect(weekly.usedPercentage == 22)
+        #expect(weekly.endAt.timeIntervalSince1970 == 1_778_968_700)
+    }
+
+    @Test("Uses short secondary slot for 5h classification and activity")
+    func usesShortSecondaryWindow() throws {
+        let eventTimestamp = Date(timeIntervalSince1970: 1_000_000)
+        let status = CodexUsageStatus(
+            eventTimestamp: eventTimestamp,
+            primary: RateLimitWindow(
+                usedPercentage: 40,
+                resetsAt: eventTimestamp.addingTimeInterval(600_000)
+            ),
+            secondary: RateLimitWindow(
+                usedPercentage: 12,
+                resetsAt: eventTimestamp.addingTimeInterval(17_000)
+            ),
+            primaryWindowMinutes: 10_080,
+            secondaryWindowMinutes: 300
+        )
+
+        #expect(status.hasActiveFiveHourWindow == true)
+        let fiveHour = try #require(status.actualWindow())
+        #expect(fiveHour.durationSeconds == 5 * 3600)
+        #expect(fiveHour.endAt == eventTimestamp.addingTimeInterval(17_000))
+        let weekly = try #require(status.secondaryActualWindow())
+        #expect(weekly.usedPercentage == 40)
+    }
+
     @Test("Secondary ActualWindow7d defaults to seven days when window_minutes missing")
     func secondaryActualWindowDefaultsToSevenDays() throws {
         let status = try CodexUsageStatus.parsePayload("""
