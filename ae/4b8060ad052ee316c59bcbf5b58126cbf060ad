@@ -1,0 +1,63 @@
+C5h/UI/Calendar/WeeklyWindowBlockView.swift
+  s_8ca1ce9944d5db::t_c6c74057c59a20 115-117
+  s_8ca1ce9944d5db::t_26924dca110272 63,70-73
+  s_8ca1ce9944d5db::t_43af253f08071a 42-47
+Packages/C5hCore/Sources/C5hCore/Providers/CodexUsageCollector.swift
+  s_8ca1ce9944d5db::t_d5396b48daf08b 16
+Packages/C5hCore/Sources/C5hCore/Usage/UsageCheckGate.swift
+  s_8ca1ce9944d5db::t_e60fde414f58a4 57,59-61,68-69,77
+  s_8ca1ce9944d5db::t_bec4f718bf7732 35
+  s_8ca1ce9944d5db::t_78e7f9ea8be2fc 109-118
+Packages/C5hCore/Tests/C5hCoreTests/PlannedWindowValidatorTests.swift
+  s_8ca1ce9944d5db::t_8fe13ab2d60d23 294-336
+Packages/C5hCore/Tests/C5hCoreTests/UsageCheckGateTests.swift
+  s_8ca1ce9944d5db::t_7cb1693f31bf2b 206-251,258-259,267-268
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_8ca1ce9944d5db::t_eda8ff531e77a6 265-311
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_8ca1ce9944d5db::t_67c9dee0a951f1 202-209
+C5h/UI/Providers/ProviderCardView.swift
+  s_8ca1ce9944d5db::t_6a7c7ceb52feba 152-157,159-167
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_8ca1ce9944d5db::t_4e41e0d682d39a 228-246
+  s_8ca1ce9944d5db::t_3563ed04fa3fb0 173
+  s_8ca1ce9944d5db::t_edb094465d9d2a 187
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_8ca1ce9944d5db::t_d71f8532381ea2 203
+Packages/C5hCore/Sources/C5hCore/Providers/CodexAppServerClient.swift
+  s_8ca1ce9944d5db::t_9ed614ce8855c1 36
+  s_8ca1ce9944d5db::t_7c406464abd579 15-19
+Packages/C5hCore/Sources/C5hCore/Validation/PlannedWindowValidator.swift
+  s_8ca1ce9944d5db::t_951ceb095384dc 99-102
+  s_8ca1ce9944d5db::t_c35ef2c3aa210d 114-118,124
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_8ca1ce9944d5db::t_54114a62e9e156 116-137
+C5h/UI/Calendar/DayCalendarScreen.swift
+  s_8ca1ce9944d5db::t_56cf58da37bc98 152-154
+Toolkit/Release/appcast.sh
+  s_8ca1ce9944d5db::t_85c1dd76ddfa5d 40-46
+.github/workflows/S2-Release-GitHub.yml
+  s_8ca1ce9944d5db::t_d852c2da7b9764 48-64
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_8ca1ce9944d5db::t_7a5f021c53c6ca 69-77
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_8ca1ce9944d5db::t_a1f4f156849548 292-331
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeLocalActivityDetectorTests.swift
+  s_8ca1ce9944d5db::t_56d4a238d9075a 107-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "ae4b8060ad052ee316c59bcbf5b58126cbf060ad",
+  "prompts": {},
+  "sessions": {
+    "s_8ca1ce9944d5db": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3d40c63-bdb0-479f-97c6-30cd9d5192c2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
