@@ -1,0 +1,33 @@
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_69212a55e63ce5::t_b351da3c9d0b47 252
+  s_69212a55e63ce5::t_3d52bb1865b02e 170-177
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_69212a55e63ce5::t_b351da3c9d0b47 78,134,154-162
+  s_69212a55e63ce5::t_523597eb93800b 163-164
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_69212a55e63ce5::t_f8e7f2d4b665ec 11,58-59,68-90,95-96,103,107-111,120-121,125,138-139,143-144,153-175
+  s_69212a55e63ce5::t_859c893ce0adf4 3-7
+  s_69212a55e63ce5::t_3bb4a1e68a40c5 176
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_69212a55e63ce5::t_b351da3c9d0b47 68
+Packages/C5hCore/Tests/C5hCoreTests/UsageFetcherTests.swift
+  s_69212a55e63ce5::t_bc986374a8f73a 100-165
+Packages/C5hCore/Tests/C5hCoreTests/CodexUsageStatusTests.swift
+  s_69212a55e63ce5::t_9a2ebce65d4484 79-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.13",
+  "base_commit_sha": "91f7377fdc51c96ab2ec05a60453997b620dbc32",
+  "prompts": {},
+  "sessions": {
+    "s_69212a55e63ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f626e-a53b-7093-87c0-ed31187f1617",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
