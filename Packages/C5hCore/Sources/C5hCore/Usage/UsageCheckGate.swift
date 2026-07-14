@@ -32,6 +32,7 @@ public struct UsageCheckGate: Sendable {
     public typealias HasRecentLocalActivity = @Sendable (ProviderID, Date) async -> Bool
     public typealias IsBelievedActiveFromSnapshot = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias HasUpcomingPlannedWindow = @Sendable (ProviderID, Date) async throws -> Bool
+    public typealias IsSnapshotWindowExpiring = @Sendable (ProviderID, Date) async throws -> Bool
 
     /// End-of-window safety margin for providers whose probe consumes quota: a
     /// probe launched in the final seconds of a believed window can fire its
@@ -53,17 +54,19 @@ public struct UsageCheckGate: Sendable {
     public let hasRecentLocalActivity: HasRecentLocalActivity
     public let isBelievedActiveFromSnapshot: IsBelievedActiveFromSnapshot
     public let hasUpcomingPlannedWindow: HasUpcomingPlannedWindow
+    public let isSnapshotWindowExpiring: IsSnapshotWindowExpiring
 
-    /// The last two closures default to `false` so existing constructions keep
-    /// their behavior: no snapshot fallback and no quiet period unless wired
-    /// (the factory in C5hStore wires both).
+    /// The last three closures default to `false` so existing constructions keep
+    /// their behavior: no snapshot fallback, no quiet period, and no expiring-
+    /// window suppression unless wired (the factory in C5hStore wires all three).
     public init(
         isIdleCheckEnabled: @escaping IsIdleCheckEnabled,
         hasActiveWindow: @escaping HasActiveWindow,
         hasPendingPlannedWindow: @escaping HasPendingPlannedWindow,
         hasRecentLocalActivity: @escaping HasRecentLocalActivity,
         isBelievedActiveFromSnapshot: @escaping IsBelievedActiveFromSnapshot = { _, _ in false },
-        hasUpcomingPlannedWindow: @escaping HasUpcomingPlannedWindow = { _, _ in false }
+        hasUpcomingPlannedWindow: @escaping HasUpcomingPlannedWindow = { _, _ in false },
+        isSnapshotWindowExpiring: @escaping IsSnapshotWindowExpiring = { _, _ in false }
     ) {
         self.isIdleCheckEnabled = isIdleCheckEnabled
         self.hasActiveWindow = hasActiveWindow
@@ -71,6 +74,7 @@ public struct UsageCheckGate: Sendable {
         self.hasRecentLocalActivity = hasRecentLocalActivity
         self.isBelievedActiveFromSnapshot = isBelievedActiveFromSnapshot
         self.hasUpcomingPlannedWindow = hasUpcomingPlannedWindow
+        self.isSnapshotWindowExpiring = isSnapshotWindowExpiring
     }
 
     /// Whether usage should be checked for `providerID` at `now`. Repo errors
@@ -102,6 +106,16 @@ public struct UsageCheckGate: Sendable {
             return false
         }
         if providerID.usageProbeConsumesQuota {
+            // A believed window in its final `consumingProbeEndMargin` was
+            // already rejected by isBelievedActiveFromSnapshot above; suppress
+            // here too so recent local activity cannot re-open probing in that
+            // tail, where the probe's startup request could land after the real
+            // expiry and anchor a fresh window. Fail-open on error (treat as not
+            // expiring) so a transient read failure reverts to the local-activity
+            // fallback rather than silencing all probing.
+            if (try? await isSnapshotWindowExpiring(providerID, now)) == true {
+                return false
+            }
             // The probe would open a fresh 5h window on an idle account. Only
             // run it when local evidence says a window is already open.
             return await hasRecentLocalActivity(providerID, now)

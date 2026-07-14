@@ -200,7 +200,7 @@ actor HelperUsageRefresher {
                 if providerID.usageProbeConsumesQuota,
                    lastSkipLogAt[providerID].map({ now.timeIntervalSince($0) >= interval }) ?? true {
                     lastSkipLogAt[providerID] = now
-                    NSLog("C5hHelper: skipped \(providerID.rawValue) usage probe (no active/planned window, no local activity)")
+                    NSLog("C5hHelper: skipped \(providerID.rawValue) usage probe (gate closed)")
                 }
                 continue
             }

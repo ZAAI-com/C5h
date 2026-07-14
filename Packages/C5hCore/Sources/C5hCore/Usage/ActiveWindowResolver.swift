@@ -199,6 +199,14 @@ public struct ActiveWindowResolver: Sendable {
             guard var active = try await activeWindowFetch(providerID, now) else {
                 return derived5h
             }
+            // `activeWindowFetch` selects by coverage of `now`, so an overlapping
+            // window with a different reset time can come back instead of the row
+            // just upserted. Only demote the row whose bounds match this derived
+            // window; leave an unrelated `c5hTriggered` window untouched.
+            guard abs(active.endAt.timeIntervalSince(derived5h.endAt))
+                <= UsageFetcher.dedupTolerance else {
+                return derived5h
+            }
             var needsWrite = false
             if active.source != .detectedFromUsage || active.confidence != .estimated {
                 active.source = .detectedFromUsage

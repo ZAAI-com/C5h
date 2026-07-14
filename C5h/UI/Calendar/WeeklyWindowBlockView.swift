@@ -5,7 +5,6 @@ struct WeeklyWindowBlockView: View {
     let window: ActualWindow7d
     let history: UsageHistorySeries?
     let date: Date
-    let now: Date
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
     let visibleDurationSeconds: Int
@@ -40,6 +39,12 @@ struct WeeklyWindowBlockView: View {
             on: date,
             carryInUsed: carryIn?.used
         )
+        // The reading is picked from the whole calendar day, but this view
+        // renders only [segmentStart, segmentEnd). A reading outside that span
+        // (e.g. captured just after the reset on a partial last day) would be
+        // clamped onto a block edge by `inDayOffset`, misrepresenting when it
+        // happened, so it is dropped rather than shown at the wrong position.
+        let segmentEnd = segmentStart.addingTimeInterval(TimeInterval(visibleDurationSeconds))
         let remaining = window.remainingPercentage
 
         ZStack(alignment: .topLeading) {
@@ -55,15 +60,17 @@ struct WeeklyWindowBlockView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 if let carryIn {
-                    carryInLabel(used: carryIn.used)
+                    weeklyRemainingLabel(used: carryIn.used)
                 }
                 Spacer(minLength: 0)
             }
             .padding(pad)
             .allowsHitTesting(false)
 
-            if let inDayReading {
-                inDayLabel(used: inDayReading.used)
+            if let inDayReading,
+               inDayReading.capturedAt >= segmentStart,
+               inDayReading.capturedAt < segmentEnd {
+                weeklyRemainingLabel(used: inDayReading.used)
                     .padding(.horizontal, pad)
                     .offset(y: inDayOffset(
                         capturedAt: inDayReading.capturedAt,
@@ -105,14 +112,9 @@ struct WeeklyWindowBlockView: View {
         .buttonStyle(.plain)
     }
 
-    private func carryInLabel(used: Double) -> some View {
-        Text("7d \(BlockFormatters.formatPercent(ActualWindow7d.remainingPercentage(fromUsed: used))) remaining")
-            .font(.system(size: 10, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(C5hColors.fgSecondary)
-    }
-
-    private func inDayLabel(used: Double) -> some View {
+    /// Shared "7d N% remaining" reading label used for both the carry-in and the
+    /// in-day snapshot, so their formatting and styling cannot drift apart.
+    private func weeklyRemainingLabel(used: Double) -> some View {
         Text("7d \(BlockFormatters.formatPercent(ActualWindow7d.remainingPercentage(fromUsed: used))) remaining")
             .font(.system(size: 10, weight: .medium))
             .monospacedDigit()

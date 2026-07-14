@@ -66,7 +66,15 @@ final class DayCalendarViewModel {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
-        await loadWeeklyContext(now: .now)
+        // The weekly fallback only ever renders on Today (weeklyFallbackWindow
+        // returns nil otherwise), so skip the per-provider snapshot and 7d-window
+        // reads on any other day and clear any stale state left from Today.
+        if Calendar.current.isDateInToday(date) {
+            await loadWeeklyContext(now: .now)
+        } else {
+            if !latestProviderLimits.isEmpty { latestProviderLimits = [:] }
+            if !weeklyWindows.isEmpty { weeklyWindows = [:] }
+        }
     }
 
     private func loadWeeklyContext(now: Date) async {

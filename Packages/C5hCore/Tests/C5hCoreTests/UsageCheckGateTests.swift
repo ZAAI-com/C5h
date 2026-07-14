@@ -203,13 +203,60 @@ struct UsageCheckGateTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
+    @Test("An expiring snapshot window suppresses the consuming probe despite local activity")
+    func expiringWindowSuppressesConsumingProbeDespiteLocalActivity() async {
+        // The believed-active check already rejects a window inside its final
+        // safety margin; local activity must not re-open probing in that tail,
+        // where the probe could anchor a fresh window past the real expiry.
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: true,
+            believedActive: false,
+            hasUpcoming: false,
+            expiring: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Expiring-window suppression does not apply to read-only Codex")
+    func expiringWindowDoesNotSuppressReadOnlyProbe() async {
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: false,
+            expiring: true
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Expiring-window lookup error falls open to the local-activity fallback")
+    func expiringWindowLookupErrorFailsOpen() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in true },
+            isBelievedActiveFromSnapshot: { _, _ in false },
+            hasUpcomingPlannedWindow: { _, _ in false },
+            isSnapshotWindowExpiring: { _, _ in throw Boom() }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     private func makeGate(
         idleEnabled: Bool,
         hasActive: Bool,
         hasPending: Bool,
         hasActivity: Bool,
         believedActive: Bool = false,
-        hasUpcoming: Bool = false
+        hasUpcoming: Bool = false,
+        expiring: Bool = false
     ) -> UsageCheckGate {
         UsageCheckGate(
             isIdleCheckEnabled: { _ in idleEnabled },
@@ -217,7 +264,8 @@ struct UsageCheckGateTests {
             hasPendingPlannedWindow: { _, _ in hasPending },
             hasRecentLocalActivity: { _, _ in hasActivity },
             isBelievedActiveFromSnapshot: { _, _ in believedActive },
-            hasUpcomingPlannedWindow: { _, _ in hasUpcoming }
+            hasUpcomingPlannedWindow: { _, _ in hasUpcoming },
+            isSnapshotWindowExpiring: { _, _ in expiring }
         )
     }
 }

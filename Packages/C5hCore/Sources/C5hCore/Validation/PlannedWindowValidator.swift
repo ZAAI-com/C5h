@@ -96,9 +96,10 @@ public enum PlannedWindowValidator {
     /// Detects when `candidate` starts inside the previous same-provider
     /// window's chained slot: `0 < startAt - previousWindowEnd < windowLength`.
     /// The previous end is the latest end at or before the candidate's start,
-    /// from recorded actual windows and earlier non-terminal planned windows
-    /// (their projected ends: a scheduled earlier window will open a real
-    /// block). Gap 0 (back-to-back) and gaps of a full window length or more
+    /// from provider-anchored actual windows and earlier scheduled planned
+    /// windows (their projected ends: a scheduled earlier window will open a
+    /// real block; a manual actual window or a draft plan will not, so both are
+    /// excluded). Gap 0 (back-to-back) and gaps of a full window length or more
     /// are safe. Stale history is self-limiting: anything ending more than a
     /// window length before the start produces no advisory.
     public static func chainRisk(
@@ -110,13 +111,17 @@ public enum PlannedWindowValidator {
         let windowLength = TimeInterval(candidate.durationSeconds)
 
         var previousEnds = actualWindows
-            .filter { $0.providerID == candidate.providerID && $0.durationSeconds >= 0 }
+            .filter {
+                $0.providerID == candidate.providerID
+                    && $0.durationSeconds >= 0
+                    && $0.hasProviderAnchoredUsageWindow
+            }
             .map(\.endAt)
         previousEnds += existing
             .filter { other in
                 other.id != candidate.id
                     && other.providerID == candidate.providerID
-                    && !other.status.isTerminal
+                    && other.status == .scheduled
                     && other.durationSeconds >= 0
                     && other.startAt < candidate.startAt
             }

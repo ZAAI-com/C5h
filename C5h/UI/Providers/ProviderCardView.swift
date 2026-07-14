@@ -149,16 +149,22 @@ struct ProviderCardView: View {
         Binding(get: { checkWhenIdle }, set: { onSetCheckWhenIdle($0) })
     }
 
-    /// Claude's usage probe drives the real CLI and would open a fresh 5-hour
-    /// window on an idle account, so its idle checking is a read-only watch of
-    /// local session files instead of a probe. Codex's probe is read-only, so
-    /// its idle checking simply polls.
+    /// Describes what the current "check when idle" setting does for this
+    /// provider. Claude's usage probe drives the real CLI and would open a fresh
+    /// 5-hour window on an idle account, so its idle checking is a read-only
+    /// watch of local session files instead of a probe; Codex's probe is
+    /// read-only, so its idle checking simply polls. The copy follows the toggle
+    /// so it always describes the state the user is currently in.
     private var checkWhenIdleCaption: String {
-        switch id {
-        case .claude:
-            "When on, C5h watches local Claude session files (a read-only check) and probes usage only once a 5-hour window is already open. Idle checking never starts a new window."
-        case .codex:
-            "When off, C5h only checks usage while this provider has an active or planned window."
+        switch (id, checkWhenIdle) {
+        case (.claude, true):
+            "C5h watches local Claude session files (a read-only check) and probes usage only once a 5-hour window is already open. Idle checking never starts a new window."
+        case (.claude, false):
+            "C5h checks Claude usage only while a 5-hour window is active or a prompt is planned."
+        case (.codex, true):
+            "C5h polls Codex usage even while idle. Codex's usage check is read-only, so it never starts a window."
+        case (.codex, false):
+            "C5h checks Codex usage only while this provider has an active or planned window."
         }
     }
 

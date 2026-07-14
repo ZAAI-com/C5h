@@ -12,6 +12,11 @@ public struct CodexAppServerClient: Sendable {
     public static let methodInitialize = "initialize"
     public static let methodRateLimits = "account/rateLimits/read"
 
+    /// Version advertised to `codex app-server` in the initialize handshake.
+    /// Single source of truth so every construction path (including
+    /// `CodexUsageCollector`, which defaults to this) reports the same value.
+    public static let defaultClientVersion = "2.0.0"
+
     public let executableURL: URL
     public let environment: [String: String]
     public let timeoutSeconds: TimeInterval
@@ -28,7 +33,7 @@ public struct CodexAppServerClient: Sendable {
         timeoutSeconds: TimeInterval = 30,
         initializeTimeoutSeconds: TimeInterval = 30,
         clientName: String = "C5h",
-        clientVersion: String = "2.0.0"
+        clientVersion: String = CodexAppServerClient.defaultClientVersion
     ) {
         self.executableURL = executableURL
         self.environment = environment

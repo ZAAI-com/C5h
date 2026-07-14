@@ -45,6 +45,23 @@ jobs:
             echo "Build number must be a positive integer (e.g. 5). Got: $BUILD_NUMBER"
             exit 1
           fi
+          # Guard against a lower or reused build number silently replacing the
+          # latest feed with an update higher-build Sparkle clients would never
+          # install (Sparkle only upgrades to a strictly greater sparkle:version).
+          # Compare against the highest build already in the published feed; skip
+          # only when no prior feed can be read (first release or feed unreachable).
+          published=$(curl -fsSL "https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml" 2>/dev/null \
+            | grep -oE 'sparkle:version="[0-9]+"' \
+            | grep -oE '[0-9]+' \
+            | sort -n | tail -n1 || true)
+          if [ -n "${published:-}" ]; then
+            if [ "$BUILD_NUMBER" -le "$published" ]; then
+              echo "Build number must be strictly greater than the highest published build ($published); a lower or reused number poisons the Sparkle feed. Got: $BUILD_NUMBER"
+              exit 1
+            fi
+          else
+            echo "::warning::Could not read a published appcast build number (first release or feed unreachable); skipping the monotonic build-number check."
+          fi
 
       - name: Require release credentials
         env:

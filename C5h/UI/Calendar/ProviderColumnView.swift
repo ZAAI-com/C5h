@@ -170,6 +170,7 @@ struct ProviderColumnView: View {
                 switch hit {
                 case .planned(let window): onSelectPlanned(window)
                 case .actual(let window): onSelectActual(window)
+                case .weekly(let window): onSelectWeekly?(window)
                 }
                 hoverY = nil
                 return
@@ -183,6 +184,7 @@ struct ProviderColumnView: View {
     private enum WindowHit {
         case planned(PlannedWindow)
         case actual(ActualWindow5h)
+        case weekly(ActualWindow7d)
     }
 
     /// Resolves a tap location to the window block whose rendered frame (its
@@ -221,6 +223,25 @@ struct ProviderColumnView: View {
                 ).contains(location.y) {
                     return .planned(window)
                 }
+            }
+        }
+        // The weekly block is drawn beneath the planned/actual lanes (zIndex 0),
+        // so it is matched last: a 5h block on top wins any overlap. Without this
+        // the weekly block reads as empty calendar space (a plan ghost is drawn
+        // over it and a tap quick-plans instead of selecting it).
+        if let weeklyWindow,
+           blockContentX <= location.x, location.x <= blockContentX + blockContentWidth,
+           let segment = visibleSegment(
+               start: weeklyWindow.startAt,
+               durationSeconds: weeklyWindow.durationSeconds
+           ) {
+            let top = yOffset(for: segment.start)
+            let height = CalendarPositioning.blockHeight(
+                durationSeconds: segment.durationSeconds,
+                pixelsPerMinute: layout.pixelsPerMinute
+            )
+            if (top...(top + height)).contains(location.y) {
+                return .weekly(weeklyWindow)
             }
         }
         return nil
@@ -440,7 +461,6 @@ struct ProviderColumnView: View {
                 window: weeklyWindow,
                 history: history,
                 date: date,
-                now: now,
                 columnWidth: columnWidth,
                 layout: layout,
                 visibleDurationSeconds: segment.durationSeconds,

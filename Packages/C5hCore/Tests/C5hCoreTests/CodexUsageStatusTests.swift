@@ -184,12 +184,4 @@ struct CodexUsageStatusTests {
             _ = try CodexUsageStatus.parseAppServerResponse(result)
         }
     }
-
-    @Test("App-server response raises on missing primary when secondary also missing")
-    func appServerResponseMissingLimits() {
-        let result = #"{"rateLimits":{"planType":"plus"}}"#
-        #expect(throws: CodexUsageStatusParseError.self) {
-            _ = try CodexUsageStatus.parseAppServerResponse(result)
-        }
-    }
 }

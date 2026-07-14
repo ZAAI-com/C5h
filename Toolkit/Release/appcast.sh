@@ -37,6 +37,13 @@ if ! [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
   echo "ERROR: build number must be a positive integer (for example, 5). Got: ${BUILD_NUMBER}" >&2
   exit 2
 fi
+# Appcast validation below shells out to xmllint (libxml2, preinstalled on the
+# macOS CI runners). Fail early with a clear message if it is ever missing
+# instead of surfacing an opaque error mid-generation.
+if ! command -v xmllint >/dev/null 2>&1; then
+  echo "ERROR: xmllint not found in PATH; appcast validation requires xmllint (libxml2)." >&2
+  exit 2
+fi
 
 ED_KEY_FILE=""
 while [ "$#" -gt 0 ]; do

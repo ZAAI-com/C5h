@@ -113,6 +113,28 @@ public extension UsageCheckGate {
                         && !$0.status.isTerminal
                         && $0.startAt > now
                 }
+            },
+            isSnapshotWindowExpiring: { providerID, now in
+                // Mirror of isBelievedActiveFromSnapshot: true when the latest
+                // snapshot's reported window end falls inside the final
+                // `consumingProbeEndMargin`. shouldCheck uses this to suppress the
+                // local-activity fallback in the expiring tail so C5h's own probe
+                // cannot land its startup request after expiry and anchor a fresh
+                // window.
+                guard providerID.usageProbeConsumesQuota,
+                      let snapshot = try await usageSnapshotRepository.fetchLatest(
+                        providerID: providerID
+                      ),
+                      let windowEndsAt = UsageNormalizer.decode(
+                        snapshot.normalizedJSON
+                      )?.windowEndsAt
+                else {
+                    return false
+                }
+                return windowEndsAt >= now
+                    && windowEndsAt < now.addingTimeInterval(
+                        UsageCheckGate.consumingProbeEndMargin
+                    )
             }
         )
     }

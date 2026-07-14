@@ -262,6 +262,53 @@ struct UsageCheckGateFactoryTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
+    @Test("An expiring snapshot window suppresses Claude even with fresh local activity")
+    func expiringSnapshotSuppressesClaudeDespiteLocalActivity() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        // Fresh local activity that, without the expiring-window guard, would
+        // re-open probing in the window's final margin.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        // Latest snapshot's window ends 30s out: inside the 90s probe margin, so
+        // it is neither active nor believed-active. The probe must stay closed
+        // even though local activity exists.
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-60),
+            windowEndsAt: now.addingTimeInterval(30)
+        ))
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        // Once the reported window has fully expired (not merely expiring), the
+        // guard no longer applies and fresh local activity resumes probing.
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-30),
+            windowEndsAt: now.addingTimeInterval(-1)
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     @Test("An upcoming planned window suppresses Claude probing despite strong evidence")
     func upcomingPlannedWindowWithinHorizonSuppressesClaude() async throws {
         let db = try Database.inMemory()

@@ -291,4 +291,47 @@ struct PlannedWindowValidatorTests {
         )
         #expect(result.chainRisk == nil)
     }
+
+    @Test("Chain risk ignores manually entered actual windows")
+    func chainRiskIgnoresManualActualWindow() {
+        // A user-entered manual window is not a provider-reported chain
+        // boundary, so planning inside its slot must not raise the advisory.
+        let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
+        let manual = ActualWindow5h(
+            providerID: .claude,
+            startAt: previousEnd.addingTimeInterval(-Self.fiveHours),
+            durationSeconds: Int(Self.fiveHours),
+            source: .manual,
+            confidence: .estimated
+        )
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: previousEnd.addingTimeInterval(80 * 60),
+            durationSeconds: Int(Self.fiveHours)
+        )
+        #expect(PlannedWindowValidator.validate(
+            candidate: candidate, against: [], actualWindows: [manual]
+        ).chainRisk == nil)
+    }
+
+    @Test("Chain risk ignores earlier draft planned windows")
+    func chainRiskIgnoresDraftPlannedWindow() {
+        // A draft has no scheduled prompt and will not open a real block, so its
+        // projected end must not seed the advisory (only .scheduled windows do).
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let draft = PlannedWindow(
+            providerID: .claude,
+            startAt: base,
+            durationSeconds: Int(Self.fiveHours),
+            status: .draft
+        )
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: draft.endAt.addingTimeInterval(90 * 60),
+            durationSeconds: Int(Self.fiveHours)
+        )
+        #expect(PlannedWindowValidator.validate(
+            candidate: candidate, against: [draft], actualWindows: []
+        ).chainRisk == nil)
+    }
 }

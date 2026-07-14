@@ -289,6 +289,46 @@ struct ActiveWindowResolverTests {
         #expect(updates.count == 1)
     }
 
+    @Test("Demote path leaves an unrelated overlapping c5hTriggered row untouched")
+    func demotePathIgnoresUnrelatedOverlappingWindow() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(1800)
+        let chainedStart = triggerTime.addingTimeInterval(-80 * 60)
+        let commandRunID = UUID()
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: chainedStart,
+            usedPercentage: 0
+        )
+        // activeWindowFetch selects by coverage of now, so it can return a
+        // different, overlapping c5hTriggered window whose reset time is hours
+        // off from the derived window. That unrelated row must not be demoted.
+        let unrelated = ActualWindow5h(
+            providerID: .claude,
+            startAt: chainedStart.addingTimeInterval(2 * 3600),
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { _, _ in unrelated },
+            updateActualWindow: { window in await recorder.addUpdate(window) }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        // The derived window is returned, not the unrelated row, and nothing is
+        // written back (the unrelated c5hTriggered row keeps its source).
+        let window = try #require(result)
+        #expect(window.id != unrelated.id)
+        #expect(await recorder.updated.isEmpty)
+    }
+
     @Test("Demote path does not overwrite an existing command run link")
     func demotePathKeepsExistingCommandRunLink() async throws {
         let recorder = Recorder()

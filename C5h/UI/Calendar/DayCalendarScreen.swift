@@ -149,6 +149,9 @@ struct DayCalendarScreen: View {
                     } else if viewModel.selection == nil,
                               let firstPlanned = viewModel.planned.first {
                         viewModel.selection = .planned(firstPlanned)
+                    } else if viewModel.selection == nil,
+                              let firstWeekly = viewModel.weeklyWindows.values.first {
+                        viewModel.selection = .weekly(firstWeekly)
                     } else {
                         viewModel.selection = nil
                     }

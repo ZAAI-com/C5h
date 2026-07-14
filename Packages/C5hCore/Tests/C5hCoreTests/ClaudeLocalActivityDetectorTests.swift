@@ -104,6 +104,31 @@ struct ClaudeLocalActivityDetectorTests {
         #expect(await detector.hasActivity(since: reference) == false)
     }
 
+    @Test("Excludes the real usage-probe working directory end to end")
+    func excludesRealProbeWorkingDirectoryEndToEnd() async throws {
+        // Exercise the production wiring (defaultExcludedProjectPaths ->
+        // ClaudeUsageCollector.probeWorkingDirectory() -> encoded name) rather
+        // than a hand-built path, so a drift in the real probe-cwd encoding
+        // would fail here instead of silently breaking self-exclusion.
+        let probeCwd = try #require(ClaudeUsageCollector.probeWorkingDirectory())
+        let encoded = ClaudeLocalActivityDetector.encodedProjectDirectoryName(forPath: probeCwd.path)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        try makeTranscript(
+            in: projects,
+            project: encoded,
+            name: "probe-session.jsonl",
+            modifiedAt: reference.addingTimeInterval(60)
+        )
+        let detector = ClaudeLocalActivityDetector(
+            projectsDirectory: projects,
+            excludedProjectPaths: ClaudeLocalActivityDetector.defaultExcludedProjectPaths
+        )
+        // The default exclusion must actually resolve and encode the probe cwd.
+        #expect(detector.excludedProjectDirectoryNames.contains(encoded))
+        #expect(await detector.hasActivity(since: reference) == false)
+    }
+
     @Test("Encodes project paths like Claude Code")
     func encodesProjectPathsLikeClaudeCode() {
         // Pinned against the real layout: slash, space, and dot all become "-".
