@@ -307,11 +307,11 @@ public struct UsageHistorySeries: Sendable, Hashable {
             ) else { return nil }
             return UsagePoint(
                 capturedAt: snapshot.capturedAt,
-                fiveHour: status.primary?.usedPercentage,
-                sevenDay: status.secondary?.usedPercentage,
-                fiveHourResetsAt: status.primary?.resetsAt,
-                hasActiveFiveHourWindow: status.hasActivePrimaryWindow,
-                sevenDayResetsAt: status.secondary?.resetsAt
+                fiveHour: status.fiveHourUsedPercentage,
+                sevenDay: status.weeklyUsedPercentage,
+                fiveHourResetsAt: status.fiveHourResetsAt,
+                hasActiveFiveHourWindow: status.hasActiveFiveHourWindow,
+                sevenDayResetsAt: status.weeklyResetsAt
             )
         }
     }

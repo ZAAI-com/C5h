@@ -49,6 +49,27 @@ struct UsageHistorySeriesTests {
         #expect(series.points[0].sevenDay == 45)
     }
 
+    @Test("Classifies primary-only weekly Codex readings as 7d history")
+    func buildsPrimaryOnlyWeeklyCodexSeries() {
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 2_000),
+            rawJSON: """
+            {"timestamp":"2026-07-15T10:54:55.483Z","rate_limits":{"primary":{"used_percent":13,"window_minutes":10080,"resets_at":1784666161}}}
+            """,
+            normalizedJSON: "{}"
+        )
+
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [snapshot])
+
+        #expect(series.points.count == 1)
+        #expect(series.points[0].fiveHour == nil)
+        #expect(series.points[0].sevenDay == 13)
+        #expect(series.points[0].fiveHourResetsAt == nil)
+        #expect(series.points[0].hasActiveFiveHourWindow == false)
+        #expect(series.points[0].sevenDayResetsAt?.timeIntervalSince1970 == 1_784_666_161)
+    }
+
     @Test("sevenDayPercent returns nil before any point")
     func sevenDayPercentBeforeAnyPoint() {
         let snapshot = claudeSnapshot(

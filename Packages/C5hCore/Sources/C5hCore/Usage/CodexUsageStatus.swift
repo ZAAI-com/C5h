@@ -83,6 +83,18 @@ public struct CodexUsageStatus: Sendable, Hashable {
         fiveHourClassLimit?.window.usedPercentage
     }
 
+    var fiveHourResetsAt: Date? {
+        fiveHourClassLimit?.window.resetsAt
+    }
+
+    var weeklyUsedPercentage: Double? {
+        weeklyClassLimit?.window.usedPercentage
+    }
+
+    var weeklyResetsAt: Date? {
+        weeklyClassLimit?.window.resetsAt
+    }
+
     private static func isActive(
         window: RateLimitWindow,
         durationSeconds: Int,

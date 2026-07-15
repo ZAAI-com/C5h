@@ -48,7 +48,7 @@ struct DayCalendarView: View {
                                         providerID: providerID,
                                         plannedWindows: cw.planned,
                                         actualSegments: cw.actual,
-                                        weeklyWindow: viewModel.weeklyFallbackWindow(for: providerID, now: now),
+                                        weeklyWindow: viewModel.weeklyWindow(for: providerID, now: now),
                                         history: viewModel.history(for: providerID),
                                         resetWindowIDs: resetWindowIDs(for: cw.actual, providerID: providerID),
                                         date: viewModel.date,

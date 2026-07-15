@@ -11,7 +11,6 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
-    var latestProviderLimits: [ProviderID: ProviderUsageLimits] = [:]
     var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
@@ -66,13 +65,12 @@ final class DayCalendarViewModel {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
-        // The weekly fallback only ever renders on Today (weeklyFallbackWindow
-        // returns nil otherwise), so skip the per-provider snapshot and 7d-window
-        // reads on any other day and clear any stale state left from Today.
-        if Calendar.current.isDateInToday(date) {
+        // The Today and Tomorrow screens both render the active weekly window
+        // when it overlaps their displayed day. Skip unrelated days and clear
+        // state when this view model navigates away from either screen.
+        if Self.isTodayOrTomorrow(date) {
             await loadWeeklyContext(now: .now)
         } else {
-            if !latestProviderLimits.isEmpty { latestProviderLimits = [:] }
             if !weeklyWindows.isEmpty { weeklyWindows = [:] }
         }
     }
@@ -80,15 +78,6 @@ final class DayCalendarViewModel {
     private func loadWeeklyContext(now: Date) async {
         guard let actual7dRepo = actual7dRepository else { return }
         var windows: [ProviderID: ActualWindow7d] = [:]
-        var limits: [ProviderID: ProviderUsageLimits] = [:]
-        if let usageRepo = usageSnapshotRepository {
-            for providerID in ProviderID.allCases {
-                if let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
-                   let parsed = ProviderUsageLimits.from(snapshot: snapshot) {
-                    limits[providerID] = parsed
-                }
-            }
-        }
         for providerID in ProviderID.allCases {
             if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
                window.startAt <= now,
@@ -101,8 +90,11 @@ final class DayCalendarViewModel {
                 windows[providerID] = window
             }
         }
-        if self.latestProviderLimits != limits { self.latestProviderLimits = limits }
         if self.weeklyWindows != windows { self.weeklyWindows = windows }
+    }
+
+    private static func isTodayOrTomorrow(_ date: Date) -> Bool {
+        Calendar.current.isDateInToday(date) || Calendar.current.isDateInTomorrow(date)
     }
 
     private func loadUsageHistories() async {
@@ -247,12 +239,10 @@ final class DayCalendarViewModel {
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
-    /// Weekly-only fallback block for Today when the latest payload reports
-    /// weekly data without a 5h limit and a persisted weekly window overlaps
-    /// the displayed day.
-    func weeklyFallbackWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
-        guard Calendar.current.isDateInToday(date) else { return nil }
-        guard latestProviderLimits[providerID]?.isWeeklyOnly == true else { return nil }
+    /// Active weekly block for the Today and Tomorrow screens when the latest
+    /// persisted weekly window overlaps the displayed day.
+    func weeklyWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
+        guard Self.isTodayOrTomorrow(date) else { return nil }
         guard let window = weeklyWindows[providerID], window.startAt <= now, now < window.endAt else {
             return nil
         }
