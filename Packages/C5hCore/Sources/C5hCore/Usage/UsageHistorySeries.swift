@@ -71,8 +71,8 @@ public struct ProviderUsageLimits: Sendable, Hashable {
                 capturedAt: snapshot.capturedAt
             ) else { return nil }
             return ProviderUsageLimits(
-                hasFiveHourLimit: status.primary != nil,
-                hasWeeklyLimit: status.secondary != nil
+                hasFiveHourLimit: status.hasFiveHourClassLimit,
+                hasWeeklyLimit: status.hasWeeklyClassLimit
             )
         }
     }

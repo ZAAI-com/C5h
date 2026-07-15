@@ -856,6 +856,42 @@ struct UsageHistorySeriesTests {
         #expect(limits?.isWeeklyOnly == true)
     }
 
+    @Test("ProviderUsageLimits marks a weekly-length Codex primary as weekly-only")
+    func providerUsageLimitsWeeklyOnlyInPrimarySlot() {
+        // Weekly-only Codex accounts report the 7-day limit in the primary slot
+        // (window_minutes 10080) with no secondary. Classification must be by
+        // duration, not slot, so this counts as weekly-only, not a 5h limit.
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: Date(timeIntervalSince1970: 100),
+            rawJSON: """
+            {"timestamp":"2026-07-15T10:54:55.483Z","rate_limits":{"primary":{"used_percent":13,"window_minutes":10080,"resets_at":1784666161}}}
+            """,
+            normalizedJSON: "{}"
+        )
+
+        let limits = ProviderUsageLimits.from(snapshot: snapshot)
+
+        #expect(limits?.hasFiveHourLimit == false)
+        #expect(limits?.hasWeeklyLimit == true)
+        #expect(limits?.isWeeklyOnly == true)
+    }
+
+    @Test("ProviderUsageLimits marks a normal Codex 5h+weekly snapshot")
+    func providerUsageLimitsFiveHourAndWeekly() {
+        let snapshot = codexSnapshot(
+            primaryPercent: 20,
+            secondaryPercent: 45,
+            capturedAt: Date(timeIntervalSince1970: 100)
+        )
+
+        let limits = ProviderUsageLimits.from(snapshot: snapshot)
+
+        #expect(limits?.hasFiveHourLimit == true)
+        #expect(limits?.hasWeeklyLimit == true)
+        #expect(limits?.isWeeklyOnly == false)
+    }
+
     // MARK: - Helpers
 
     private func claudeSnapshot(

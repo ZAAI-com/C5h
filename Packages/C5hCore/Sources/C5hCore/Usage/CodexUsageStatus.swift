@@ -150,6 +150,14 @@ public struct CodexUsageStatus: Sendable, Hashable {
         )
     }
 
+    /// True when Codex reported a 5h-class limit in either slot, classified by
+    /// the reported window duration rather than by slot position.
+    public var hasFiveHourClassLimit: Bool { fiveHourClassLimit != nil }
+
+    /// True when Codex reported a weekly-class limit in either slot, classified
+    /// by the reported window duration rather than by slot position.
+    public var hasWeeklyClassLimit: Bool { weeklyClassLimit != nil }
+
     private var fiveHourClassLimit: ClassifiedRateLimit? {
         if let primary,
            let duration = primaryDurationSeconds,
@@ -230,7 +238,7 @@ public struct CodexUsageStatus: Sendable, Hashable {
         return try makeStatus(timestamp: envelope.timestamp, rateLimits: rateLimits)
     }
 
-    /// Parses any supported Codex usage payload shape — tries the current
+    /// Parses any supported Codex usage payload shape: tries the current
     /// `codex app-server` response first, then falls back to the older flattened
     /// `{timestamp, rate_limits}` shape historically read from session JSONL.
     public static func parseAny(
