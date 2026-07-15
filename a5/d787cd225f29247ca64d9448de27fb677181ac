@@ -1,0 +1,27 @@
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_69212a55e63ce5::t_b134c45b06cc64 52-72
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_69212a55e63ce5::t_85bf9bb3dc17e9 86-97
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_69212a55e63ce5::t_85bf9bb3dc17e9 310-314
+C5h/UI/Calendar/DayCalendarView.swift
+  s_69212a55e63ce5::t_85bf9bb3dc17e9 51
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_69212a55e63ce5::t_85bf9bb3dc17e9 68-71,96-99,242-245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a5d787cd225f29247ca64d9448de27fb677181ac",
+  "prompts": {},
+  "sessions": {
+    "s_69212a55e63ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f626e-a53b-7093-87c0-ed31187f1617",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
