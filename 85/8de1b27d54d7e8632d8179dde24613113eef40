@@ -1,0 +1,24 @@
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_a2278cba1ee705::t_3225bb22307f33 74-75
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_a2278cba1ee705::t_633fd3de4e25ea 241
+  s_a2278cba1ee705::t_29532b86fba6fb 153-160
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_a2278cba1ee705::t_b4fb53f80123a0 859-894
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "858de1b27d54d7e8632d8179dde24613113eef40",
+  "prompts": {},
+  "sessions": {
+    "s_a2278cba1ee705": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2299ea8-d40c-468f-a70b-81a2babacff4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
