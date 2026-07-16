@@ -1,0 +1,28 @@
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_c0d34c790f5ba6::t_75db9e77429a5c 82-85,100-109
+  s_c0d34c790f5ba6::t_9f7229449ba358 110-111
+C5h/UI/Calendar/BlockFormatters.swift
+  s_c0d34c790f5ba6::t_aa624b42180f15 17-30
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_c0d34c790f5ba6::t_5e615857698c32 468
+C5h/UI/Calendar/ActualWindowBlockView.swift
+  s_c0d34c790f5ba6::t_71403a890dbf7a 587
+C5h/UI/Calendar/WeeklyWindowBlockView.swift
+  s_c0d34c790f5ba6::t_273ddf3e2714e3 14-18,35,38,40-43,54-61,66,69-84,87-90,93-116,119-121,123,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "4a4047f4bcf920ae9a50e8d43c11f7eac6b1cda7",
+  "prompts": {},
+  "sessions": {
+    "s_c0d34c790f5ba6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1e8227c0-c5de-4b56-b8b6-65c2590a2d8c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
