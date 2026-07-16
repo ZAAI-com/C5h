@@ -460,14 +460,12 @@ struct ProviderColumnView: View {
             WeeklyWindowBlockView(
                 window: weeklyWindow,
                 history: history,
-                date: date,
                 columnWidth: columnWidth,
                 layout: layout,
                 visibleDurationSeconds: segment.durationSeconds,
                 clipsTop: segment.clippedStart,
                 clipsBottom: segment.clippedEnd,
-                segmentStart: segment.start,
-                onSelect: { onSelectWeekly?(weeklyWindow) }
+                segmentStart: segment.start
             )
             .offset(
                 x: blockContentX,

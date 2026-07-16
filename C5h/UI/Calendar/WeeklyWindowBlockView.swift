@@ -4,16 +4,18 @@ import C5hCore
 struct WeeklyWindowBlockView: View {
     let window: ActualWindow7d
     let history: UsageHistorySeries?
-    let date: Date
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
     let visibleDurationSeconds: Int
     let clipsTop: Bool
     let clipsBottom: Bool
     let segmentStart: Date
-    let onSelect: () -> Void
 
-    private static let openingWindowSeconds: TimeInterval = 4 * 60
+    /// Cadence of the reading rows drawn down the block.
+    private static let rowIntervalSeconds: TimeInterval = 2 * 60 * 60
+    /// Estimated rendered height of one reading row, used to clamp rows inside the
+    /// block and to keep the reset row clear of a nearby 2-hour mark.
+    private static let rowHeight: CGFloat = 14
 
     var body: some View {
         let height = CalendarPositioning.blockHeight(
@@ -30,23 +32,15 @@ struct WeeklyWindowBlockView: View {
         )
         let width = max(0, columnWidth - 4)
         let pad: CGFloat = 6
+        let contentWidth = max(0, width - 2 * pad)
         let scopedHistory = history?.scoped(toWeeklyWindowEndingAt: window.endAt)
-        let carryIn = scopedHistory?.weeklyOpeningReading(
-            at: segmentStart,
-            within: Self.openingWindowSeconds
-        )
-        let inDayReading = scopedHistory?.latestDistinctWeeklyReading(
-            on: date,
-            carryInUsed: carryIn?.used
-        )
-        // The reading is picked from the whole calendar day, but this view
-        // renders only [segmentStart, segmentEnd). A reading outside that span
-        // (e.g. captured just after the reset on a partial last day) would be
-        // clamped onto a block edge by `inDayOffset`, misrepresenting when it
-        // happened, so it is dropped rather than shown at the wrong position.
         let segmentEnd = segmentStart.addingTimeInterval(TimeInterval(visibleDurationSeconds))
-        let remaining = window.remainingPercentage
+        let rows = readingRows(segmentEnd: segmentEnd)
 
+        // The block is drawn behind the planned/actual lanes and is not
+        // interactive: taps are routed to the weekly window by
+        // `ProviderColumnView.windowSelection`, so every layer opts out of hit
+        // testing and lets the tap fall through to the column.
         ZStack(alignment: .topLeading) {
             shape
                 .fill(C5hColors.tintForProvider(window.providerID).opacity(0.12))
@@ -56,79 +50,82 @@ struct WeeklyWindowBlockView: View {
                         lineWidth: 1
                     )
                 }
-                .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 2) {
-                if let carryIn {
-                    weeklyRemainingLabel(used: carryIn.used)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(pad)
-            .allowsHitTesting(false)
-
-            if let inDayReading,
-               inDayReading.capturedAt >= segmentStart,
-               inDayReading.capturedAt < segmentEnd {
-                weeklyRemainingLabel(used: inDayReading.used)
-                    .padding(.horizontal, pad)
-                    .offset(y: inDayOffset(
-                        capturedAt: inDayReading.capturedAt,
-                        height: height,
-                        pad: pad
-                    ))
-                    .allowsHitTesting(false)
-            }
-
-            HStack {
-                Spacer(minLength: 0)
-                weeklyBadge(remaining: remaining)
-                    .padding(pad)
+            ForEach(rows, id: \.self) { rowTime in
+                usageReadingRow(
+                    at: rowTime,
+                    used: scopedHistory?.sevenDayPercent(at: rowTime)?.value,
+                    contentWidth: contentWidth
+                )
+                .padding(.horizontal, pad)
+                .offset(y: rowOffset(for: rowTime, height: height, pad: pad))
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
         .clipShape(shape)
+        .allowsHitTesting(false)
     }
 
-    private func weeklyBadge(remaining: Double) -> some View {
-        Button(action: onSelect) {
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("7d · \(BlockFormatters.formatPercent(remaining)) remaining")
-                    .font(.system(size: 10, weight: .semibold))
-                    .monospacedDigit()
-                Text("resets \(BlockFormatters.formatTime(window.endAt))")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                ProgressView(value: remaining, total: 100)
-                    .progressViewStyle(.linear)
-                    .tint(C5hColors.tintForProvider(window.providerID))
-                    .frame(width: 120)
+    /// One reading row styled like the 5h block: the clock time on the left and,
+    /// when a reading exists, "7d usage X%" on the right. There is no 5h column,
+    /// since the 7d block is only shown for weekly-only providers.
+    private func usageReadingRow(
+        at time: Date,
+        used: Double?,
+        contentWidth: CGFloat
+    ) -> some View {
+        ZStack(alignment: .leading) {
+            Text(BlockFormatters.formatTime(time))
+                .font(.system(size: 10, weight: .semibold))
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let used {
+                BlockFormatters.usageMetricText(label: "7d usage", value: used, size: 10)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(width: contentWidth, alignment: .leading)
+        .foregroundStyle(C5hColors.fgSecondary)
     }
 
-    /// Shared "7d N% remaining" reading label used for both the carry-in and the
-    /// in-day snapshot, so their formatting and styling cannot drift apart.
-    private func weeklyRemainingLabel(used: Double) -> some View {
-        Text("7d \(BlockFormatters.formatPercent(ActualWindow7d.remainingPercentage(fromUsed: used))) remaining")
-            .font(.system(size: 10, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(C5hColors.fgSecondary)
+    /// Even-clock-hour marks every 2 hours across `[segmentStart, segmentEnd)`,
+    /// plus the reset boundary (`window.endAt`) as the final row on the day the
+    /// window resets, mirroring the 5h block's end corner.
+    private func readingRows(segmentEnd: Date) -> [Date] {
+        let calendar = Calendar.current
+        var mark = calendar.startOfDay(for: segmentStart)
+        while mark < segmentStart {
+            mark = mark.addingTimeInterval(Self.rowIntervalSeconds)
+        }
+        var marks: [Date] = []
+        while mark < segmentEnd {
+            marks.append(mark)
+            mark = mark.addingTimeInterval(Self.rowIntervalSeconds)
+        }
+        if !clipsBottom {
+            // Drop any 2-hour mark within a row's height of the reset so the reset
+            // row doesn't collide with it, then show the reset time itself.
+            let minGapSeconds = Double(Self.rowHeight / max(layout.pixelsPerMinute, 0.001)) * 60
+            while let last = marks.last, window.endAt.timeIntervalSince(last) < minGapSeconds {
+                marks.removeLast()
+            }
+            marks.append(window.endAt)
+        }
+        return marks
     }
 
-    private func inDayOffset(capturedAt: Date, height: CGFloat, pad: CGFloat) -> CGFloat {
+    /// Vertical offset of a reading row from the block's top edge, clamped to keep
+    /// the row inside the block.
+    private func rowOffset(for time: Date, height: CGFloat, pad: CGFloat) -> CGFloat {
         let y = CalendarPositioning.yOffset(
-            for: capturedAt,
+            for: time,
             pixelsPerMinute: layout.pixelsPerMinute
         ) - CalendarPositioning.yOffset(
             for: segmentStart,
             pixelsPerMinute: layout.pixelsPerMinute
         )
-        return min(max(y, pad), max(pad, height - 20))
+        return min(max(y, pad), max(pad, height - Self.rowHeight - pad))
     }
 }

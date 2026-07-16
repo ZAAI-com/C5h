@@ -79,6 +79,10 @@ final class DayCalendarViewModel {
         guard let actual7dRepo = actual7dRepository else { return }
         var windows: [ProviderID: ActualWindow7d] = [:]
         for providerID in ProviderID.allCases {
+            // Only surface the 7d block for weekly-only providers (those that do
+            // not report a 5h limit); accounts with a 5h limit already convey
+            // usage through their 5h blocks.
+            guard await isWeeklyOnly(providerID: providerID) else { continue }
             if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
                window.startAt <= now,
                now < window.endAt,
@@ -91,6 +95,18 @@ final class DayCalendarViewModel {
             }
         }
         if self.weeklyWindows != windows { self.weeklyWindows = windows }
+    }
+
+    /// True when the provider's latest usage snapshot reports a weekly limit but
+    /// no 5h limit. Unknown (no snapshot / unparseable) is treated as not
+    /// weekly-only, so the 7d block stays hidden rather than shown speculatively.
+    private func isWeeklyOnly(providerID: ProviderID) async -> Bool {
+        guard let usageRepo = usageSnapshotRepository,
+              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
+              let limits = ProviderUsageLimits.from(snapshot: snapshot) else {
+            return false
+        }
+        return limits.isWeeklyOnly
     }
 
     private static func isTodayOrTomorrow(_ date: Date) -> Bool {

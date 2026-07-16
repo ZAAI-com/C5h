@@ -584,14 +584,7 @@ struct ActualWindowBlockView: View {
     }
 
     private func usageMetricLabel(_ label: String, value: Double) -> some View {
-        let percent = BlockFormatters.formatPercent(value)
-        var text = AttributedString("\(label) \(percent)")
-        text.font = .system(size: usageFontSize, weight: .regular)
-        if let percentRange = text.range(of: percent) {
-            text[percentRange].font = .system(size: usageFontSize, weight: .semibold)
-        }
-        return Text(text)
-            .monospacedDigit()
+        BlockFormatters.usageMetricText(label: label, value: value, size: usageFontSize)
     }
 
     private static func visibleFiveHour(
