@@ -4,6 +4,7 @@ import C5hCore
 struct WeeklyWindowBlockView: View {
     let window: ActualWindow7d
     let history: UsageHistorySeries?
+    var now: Date = .now
     let columnWidth: CGFloat
     let layout: CalendarLayoutConfig
     let visibleDurationSeconds: Int
@@ -11,11 +12,16 @@ struct WeeklyWindowBlockView: View {
     let clipsBottom: Bool
     let segmentStart: Date
 
-    /// Cadence of the reading rows drawn down the block.
-    private static let rowIntervalSeconds: TimeInterval = 2 * 60 * 60
     /// Estimated rendered height of one reading row, used to clamp rows inside the
-    /// block and to keep the reset row clear of a nearby 2-hour mark.
+    /// block and to keep two closely-timed readings from overlapping.
     private static let rowHeight: CGFloat = 14
+
+    /// A real 7d reading placed at a vertical offset inside the block.
+    private struct PlacedRow: Hashable {
+        let capturedAt: Date
+        let used: Double
+        let offset: CGFloat
+    }
 
     var body: some View {
         let height = CalendarPositioning.blockHeight(
@@ -35,7 +41,12 @@ struct WeeklyWindowBlockView: View {
         let contentWidth = max(0, width - 2 * pad)
         let scopedHistory = history?.scoped(toWeeklyWindowEndingAt: window.endAt)
         let segmentEnd = segmentStart.addingTimeInterval(TimeInterval(visibleDurationSeconds))
-        let rows = readingRows(segmentEnd: segmentEnd)
+        let rows = placedRows(
+            scopedHistory: scopedHistory,
+            segmentEnd: segmentEnd,
+            height: height,
+            pad: pad
+        )
 
         // The block is drawn behind the planned/actual lanes and is not
         // interactive: taps are routed to the weekly window by
@@ -51,14 +62,14 @@ struct WeeklyWindowBlockView: View {
                     )
                 }
 
-            ForEach(rows, id: \.self) { rowTime in
+            ForEach(rows, id: \.self) { row in
                 usageReadingRow(
-                    at: rowTime,
-                    used: scopedHistory?.sevenDayPercent(at: rowTime)?.value,
+                    at: row.capturedAt,
+                    used: row.used,
                     contentWidth: contentWidth
                 )
                 .padding(.horizontal, pad)
-                .offset(y: rowOffset(for: rowTime, height: height, pad: pad))
+                .offset(y: row.offset)
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
@@ -66,12 +77,12 @@ struct WeeklyWindowBlockView: View {
         .allowsHitTesting(false)
     }
 
-    /// One reading row styled like the 5h block: the clock time on the left and,
-    /// when a reading exists, "7d usage X%" on the right. There is no 5h column,
-    /// since the 7d block is only shown for weekly-only providers.
+    /// One reading row styled like the 5h block: the clock time the usage command
+    /// ran on the left and its "7d usage X%" reading on the right. There is no 5h
+    /// column, since the 7d block is only shown for weekly-only providers.
     private func usageReadingRow(
         at time: Date,
-        used: Double?,
+        used: Double,
         contentWidth: CGFloat
     ) -> some View {
         ZStack(alignment: .leading) {
@@ -79,10 +90,8 @@ struct WeeklyWindowBlockView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .monospacedDigit()
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let used {
-                BlockFormatters.usageMetricText(label: "7d usage", value: used, size: 10)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            BlockFormatters.usageMetricText(label: "7d usage", value: used, size: 10)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -90,30 +99,37 @@ struct WeeklyWindowBlockView: View {
         .foregroundStyle(C5hColors.fgSecondary)
     }
 
-    /// Even-clock-hour marks every 2 hours across `[segmentStart, segmentEnd)`,
-    /// plus the reset boundary (`window.endAt`) as the final row on the day the
-    /// window resets, mirroring the 5h block's end corner.
-    private func readingRows(segmentEnd: Date) -> [Date] {
-        let calendar = Calendar.current
-        var mark = calendar.startOfDay(for: segmentStart)
-        while mark < segmentStart {
-            mark = mark.addingTimeInterval(Self.rowIntervalSeconds)
-        }
-        var marks: [Date] = []
-        while mark < segmentEnd {
-            marks.append(mark)
-            mark = mark.addingTimeInterval(Self.rowIntervalSeconds)
-        }
-        if !clipsBottom {
-            // Drop any 2-hour mark within a row's height of the reset so the reset
-            // row doesn't collide with it, then show the reset time itself.
-            let minGapSeconds = Double(Self.rowHeight / max(layout.pixelsPerMinute, 0.001)) * 60
-            while let last = marks.last, window.endAt.timeIntervalSince(last) < minGapSeconds {
-                marks.removeLast()
+    /// The reading rows to draw: one per real usage-command reading captured in the
+    /// past, visible part of the segment. Future time carries no measured usage, so
+    /// the segment is clipped at `now` (a fully-future segment, e.g. the Tomorrow
+    /// column, yields no rows and leaves only the translucent band). When two
+    /// readings land closer than a row height, the later (fresher) one wins so dense
+    /// polling can never stack overlapping rows.
+    private func placedRows(
+        scopedHistory: UsageHistorySeries?,
+        segmentEnd: Date,
+        height: CGFloat,
+        pad: CGFloat
+    ) -> [PlacedRow] {
+        let visibleEnd = min(segmentEnd, now)
+        guard visibleEnd > segmentStart, let scopedHistory else { return [] }
+        let readings = scopedHistory.weeklyReadings(
+            in: DateInterval(start: segmentStart, end: visibleEnd)
+        )
+        var placed: [PlacedRow] = []
+        for reading in readings {
+            let offset = rowOffset(for: reading.capturedAt, height: height, pad: pad)
+            let row = PlacedRow(capturedAt: reading.capturedAt, used: reading.used, offset: offset)
+            // Offsets are non-decreasing in capture time, so replacing the last row
+            // keeps the gap to the row before it and surfaces the freshest reading in
+            // an over-dense cluster.
+            if let last = placed.last, offset - last.offset < Self.rowHeight {
+                placed[placed.count - 1] = row
+            } else {
+                placed.append(row)
             }
-            marks.append(window.endAt)
         }
-        return marks
+        return placed
     }
 
     /// Vertical offset of a reading row from the block's top edge, clamped to keep

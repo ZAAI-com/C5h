@@ -460,6 +460,7 @@ struct ProviderColumnView: View {
             WeeklyWindowBlockView(
                 window: weeklyWindow,
                 history: history,
+                now: now,
                 columnWidth: columnWidth,
                 layout: layout,
                 visibleDurationSeconds: segment.durationSeconds,

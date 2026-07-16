@@ -140,6 +140,27 @@ public struct UsageHistorySeries: Sendable, Hashable {
         return (value, point.capturedAt)
     }
 
+    /// The real 7d readings captured within `interval`, each at the time its usage
+    /// command actually ran. Consecutive samples with the same rounded percentage
+    /// collapse to one entry (kept at the capture where that value first appeared),
+    /// so a value polled every few minutes but unchanged does not produce a stack of
+    /// identical rows. Points exist only at real capture times, so passing an
+    /// interval ending at `now` yields a past-only list: the calendar draws one row
+    /// per returned reading instead of a synthetic time grid, and never shows a value
+    /// at a time it was not measured.
+    public func weeklyReadings(in interval: DateInterval) -> [(capturedAt: Date, used: Double)] {
+        var readings: [(capturedAt: Date, used: Double)] = []
+        var lastRoundedPercent: Int?
+        for point in points where interval.contains(point.capturedAt) {
+            guard let used = point.sevenDay else { continue }
+            let rounded = Int(used.rounded())
+            if rounded == lastRoundedPercent { continue }
+            lastRoundedPercent = rounded
+            readings.append((point.capturedAt, used))
+        }
+        return readings
+    }
+
     /// Latest 5h% with its source capture time. Used by the box center.
     public func latestFiveHourPoint() -> (value: Double, asOf: Date)? {
         for point in points.reversed() {

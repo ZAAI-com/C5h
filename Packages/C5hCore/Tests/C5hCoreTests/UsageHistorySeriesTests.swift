@@ -859,6 +859,80 @@ struct UsageHistorySeriesTests {
         #expect(reading?.capturedAt == dayStart.addingTimeInterval(7_200))
     }
 
+    @Test("weeklyReadings keeps only points inside the interval")
+    func weeklyReadingsFiltersOutsideInterval() {
+        let series = UsageHistorySeries(providerID: .codex, points: [
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 1_000), fiveHour: nil, sevenDay: 10),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 2_000), fiveHour: nil, sevenDay: 20),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 3_000), fiveHour: nil, sevenDay: 30),
+        ])
+
+        let readings = series.weeklyReadings(in: DateInterval(
+            start: Date(timeIntervalSince1970: 1_500),
+            end: Date(timeIntervalSince1970: 2_500)
+        ))
+
+        #expect(readings.count == 1)
+        #expect(readings[0].capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(readings[0].used == 20)
+    }
+
+    @Test("weeklyReadings collapses consecutive equal rounded percentages")
+    func weeklyReadingsCollapsesEqualPercentages() {
+        // 1.0 and 1.4 both display as 1%; 2.0 and 2.2 both display as 2%. A value
+        // polled repeatedly without a visible change should not stack rows.
+        let series = UsageHistorySeries(providerID: .codex, points: [
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 1_000), fiveHour: nil, sevenDay: 1.0),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 2_000), fiveHour: nil, sevenDay: 1.4),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 3_000), fiveHour: nil, sevenDay: 2.0),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 4_000), fiveHour: nil, sevenDay: 2.2),
+        ])
+
+        let readings = series.weeklyReadings(in: DateInterval(
+            start: Date(timeIntervalSince1970: 500),
+            end: Date(timeIntervalSince1970: 5_000)
+        ))
+
+        #expect(readings.count == 2)
+        #expect(readings[0].capturedAt.timeIntervalSince1970 == 1_000)
+        #expect(readings[0].used == 1.0)
+        #expect(readings[1].capturedAt.timeIntervalSince1970 == 3_000)
+        #expect(readings[1].used == 2.0)
+    }
+
+    @Test("weeklyReadings skips points without a 7d value")
+    func weeklyReadingsSkipsMissingSevenDay() {
+        let series = UsageHistorySeries(providerID: .codex, points: [
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 1_000), fiveHour: 50, sevenDay: nil),
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 2_000), fiveHour: nil, sevenDay: 5),
+        ])
+
+        let readings = series.weeklyReadings(in: DateInterval(
+            start: Date(timeIntervalSince1970: 500),
+            end: Date(timeIntervalSince1970: 3_000)
+        ))
+
+        #expect(readings.count == 1)
+        #expect(readings[0].capturedAt.timeIntervalSince1970 == 2_000)
+        #expect(readings[0].used == 5)
+    }
+
+    @Test("weeklyReadings is empty when the interval ends before the first point")
+    func weeklyReadingsEmptyForFutureInterval() {
+        // Mirrors the Tomorrow column, where the whole visible segment is after the
+        // latest capture: no readings, so the block draws no future values.
+        let series = UsageHistorySeries(providerID: .codex, points: [
+            UsagePoint(capturedAt: Date(timeIntervalSince1970: 5_000), fiveHour: nil, sevenDay: 10),
+        ])
+
+        let readings = series.weeklyReadings(in: DateInterval(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: Date(timeIntervalSince1970: 2_000)
+        ))
+
+        #expect(readings.isEmpty)
+    }
+
     @Test("ProviderUsageLimits marks Codex secondary-only snapshots")
     func providerUsageLimitsWeeklyOnly() {
         let snapshot = UsageSnapshot(
