@@ -1,0 +1,61 @@
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 25-27,29,33-34,68,70,78,82-84,93,129-130
+Packages/C5hCore/Sources/C5hCore/Validation/PlannedWindowValidator.swift
+  s_1db4c559eb98d2::t_4b8f36ae802d15 6-7,99,102-106
+  s_1db4c559eb98d2::t_de452b766be8e5 47-48,129,135,137-138
+C5h/Core/Services/UpdaterService.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 64-66,91-94,163,197
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeLocalActivityDetector.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 67-69
+Packages/C5hCore/Sources/C5hCore/Usage/UsageCheckGate.swift
+  s_1db4c559eb98d2::t_4b8f36ae802d15 81-86
+  s_1db4c559eb98d2::t_917a004dd2d826 112-123
+  s_1db4c559eb98d2::t_de452b766be8e5 32,88-91,105,129
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_1db4c559eb98d2::t_dbae1f53f9cb0c 232-236,238,247-261,266-274,306-345,596-603
+  s_1db4c559eb98d2::t_917a004dd2d826 237,239-246,262-265
+  s_1db4c559eb98d2::t_baa53e29b04795 604-606
+  s_1db4c559eb98d2::t_ca1d206e4b59b3 607-611
+.github/workflows/S2-Release-GitHub.yml
+  s_1db4c559eb98d2::t_4b8f36ae802d15 65,70
+  s_1db4c559eb98d2::t_de452b766be8e5 19-23,43-45,59-64,66-68,71,73-76,82-98
+  s_1db4c559eb98d2::t_917a004dd2d826 69
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_1db4c559eb98d2::t_4bf0d7e264ca70 332-369
+Packages/C5hCore/Tests/C5hCoreTests/UsageCheckGateTests.swift
+  s_1db4c559eb98d2::t_4bf0d7e264ca70 80-117,160-169
+  s_1db4c559eb98d2::t_917a004dd2d826 170-171,274-287
+  s_1db4c559eb98d2::t_0c8a6bc58f2824 172
+Packages/C5hStore/Sources/C5hStore/Repositories/CommandRunRepository.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 106-116,121,129-145
+  s_1db4c559eb98d2::t_74d84c2c1c4fcd 146-147
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_1db4c559eb98d2::t_dbae1f53f9cb0c 163-198
+Packages/C5hCore/Tests/C5hCoreTests/PlannedWindowValidatorTests.swift
+  s_1db4c559eb98d2::t_4bf0d7e264ca70 195-229,304-328
+  s_1db4c559eb98d2::t_212a22f262f230 329
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 219-224
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_1db4c559eb98d2::t_4bf0d7e264ca70 838-863
+Toolkit/Release/release.sh
+  s_1db4c559eb98d2::t_de452b766be8e5 113
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_1db4c559eb98d2::t_de452b766be8e5 210-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "7cd168aaf7c973d706bba28617fa6e99bb9c397c",
+  "prompts": {},
+  "sessions": {
+    "s_1db4c559eb98d2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f6a17-6879-7202-9290-942efe80c4ac",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
