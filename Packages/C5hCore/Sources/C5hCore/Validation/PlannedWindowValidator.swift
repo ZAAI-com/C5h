@@ -3,8 +3,8 @@ import Foundation
 /// Advisory raised when a candidate planned window starts inside the previous
 /// same-provider window's chained slot. Providers chain a new 5h window onto
 /// the old one's end whenever the account shows activity in that stretch, so a
-/// start with `0 < gap < windowLength` after the previous end may land in a
-/// window that effectively ends at `previousWindowEnd + windowLength`, shorter
+/// start with `0 < gap < five hours` after the previous end may land in a
+/// window that effectively ends at `previousWindowEnd + five hours`, shorter
 /// than the full window the user planned for. Advisory only: the boundary can
 /// also decay (a fully idle account re-anchors fresh), and a short gap is
 /// sometimes intentional.
@@ -44,6 +44,8 @@ public struct PlannedWindowValidationResult: Sendable, Hashable {
 }
 
 public enum PlannedWindowValidator {
+    private static let providerSlotLength: TimeInterval = 5 * 60 * 60
+
     public static func validate(
         candidate: PlannedWindow,
         against existing: [PlannedWindow]
@@ -94,21 +96,20 @@ public enum PlannedWindowValidator {
     }
 
     /// Detects when `candidate` starts inside the previous same-provider
-    /// window's chained slot: `0 < startAt - previousWindowEnd < windowLength`.
+    /// window's chained slot: `0 < startAt - previousWindowEnd < five hours`.
     /// The previous end is the latest end at or before the candidate's start,
     /// from provider-anchored actual windows and earlier scheduled planned
-    /// windows (their projected ends: a scheduled earlier window will open a
-    /// real block; a manual actual window or a draft plan will not, so both are
-    /// excluded). Gap 0 (back-to-back) and gaps of a full window length or more
-    /// are safe. Stale history is self-limiting: anything ending more than a
-    /// window length before the start produces no advisory.
+    /// windows (their fixed five-hour provider-slot ends: a scheduled earlier
+    /// window will open a real block; a manual actual window or a draft plan
+    /// will not, so both are excluded). Gap 0 (back-to-back) and gaps of five
+    /// hours or more are safe. Stale history is self-limiting: anything ending
+    /// more than one provider slot before the start produces no advisory.
     public static func chainRisk(
         candidate: PlannedWindow,
         against existing: [PlannedWindow],
         actualWindows: [ActualWindow5h]
     ) -> PlannedWindowChainRisk? {
         guard candidate.durationSeconds > 0 else { return nil }
-        let windowLength = TimeInterval(candidate.durationSeconds)
 
         var previousEnds = actualWindows
             .filter {
@@ -125,15 +126,16 @@ public enum PlannedWindowValidator {
                     && other.durationSeconds >= 0
                     && other.startAt < candidate.startAt
             }
-            .map(\.endAt)
+            .map { $0.startAt.addingTimeInterval(Self.providerSlotLength) }
 
         guard let previousEnd = previousEnds.filter({ $0 <= candidate.startAt }).max() else {
             return nil
         }
         let gap = candidate.startAt.timeIntervalSince(previousEnd)
-        guard gap > 0, gap < windowLength else { return nil }
+        guard gap > 0, gap < Self.providerSlotLength else { return nil }
 
-        let projectedEffectiveEnd = previousEnd.addingTimeInterval(windowLength)
+        let projectedEffectiveEnd = previousEnd.addingTimeInterval(Self.providerSlotLength)
+        guard candidate.endAt > projectedEffectiveEnd else { return nil }
         return PlannedWindowChainRisk(
             previousWindowEnd: previousEnd,
             projectedEffectiveEnd: projectedEffectiveEnd,

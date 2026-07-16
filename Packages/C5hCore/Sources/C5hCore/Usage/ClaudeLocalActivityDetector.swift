@@ -64,9 +64,9 @@ public struct ClaudeLocalActivityDetector: Sendable {
     /// excluded project directories) was modified strictly after `reference`.
     /// Returns false when the projects directory does not exist.
     public func hasActivity(since reference: Date) async -> Bool {
-        // Unstructured Task (not detached) so the blocking filesystem walk runs
-        // off the caller's actor; mirrors `ClaudeUsageCollector.collect()`.
-        await Task(priority: .utility) {
+        // Detach so the synchronous filesystem walk never occupies the caller's
+        // actor executor.
+        await Task.detached(priority: .utility) {
             hasActivityBlocking(since: reference)
         }.value
     }

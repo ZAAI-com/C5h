@@ -229,6 +229,49 @@ struct UsageCheckGateFactoryTests {
         #expect(await gate.shouldCheck(providerID: .codex, now: now))
     }
 
+    @Test("A Claude window ending exactly at the probe margin is not active")
+    func claudeWindowAtMarginBoundaryIsNotActive() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        var window = ActualWindow5h(
+            providerID: .claude,
+            startAt: now.addingTimeInterval(
+                UsageCheckGate.consumingProbeEndMargin - 5 * 3600
+            ),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await actualRepo.create(window)
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        window.startAt = window.startAt.addingTimeInterval(1)
+        try await actualRepo.update(window)
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     @Test("Claude is believed active from the latest snapshot's window end")
     func claudeBelievedActiveFromLatestSnapshot() async throws {
         let db = try Database.inMemory()
@@ -259,6 +302,46 @@ struct UsageCheckGateFactoryTests {
             capturedAt: now.addingTimeInterval(-60),
             windowEndsAt: now.addingTimeInterval(30)
         ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        // Equality is still inside the unsafe margin; only a reset strictly
+        // beyond the boundary counts as believed active.
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-59),
+            windowEndsAt: now.addingTimeInterval(UsageCheckGate.consumingProbeEndMargin)
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-58),
+            windowEndsAt: now.addingTimeInterval(
+                UsageCheckGate.consumingProbeEndMargin + 1
+            )
+        ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A local-activity window lookup error fails closed")
+    func localActivityWindowLookupErrorFailsClosed() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        let gate = UsageCheckGate.make(
+            appSettings: StaticAppSettingsRepository(idleCheckEnabled: true),
+            actual5hRepository: ThrowingActualWindow5hRepository(),
+            plannedWindowRepository: RecordingPlannedWindowRepository(windows: []),
+            usageSnapshotRepository: EmptyUsageSnapshotRepository(),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
@@ -502,6 +585,22 @@ private struct EmptyActualWindow5hRepository: ActualWindow5hRepository {
     func fetchAll() async throws -> [ActualWindow5h] { [] }
 
     func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h] { [] }
+
+    func create(_ window: ActualWindow5h) async throws {}
+
+    func update(_ window: ActualWindow5h) async throws {}
+
+    func upsertByEndAt(_ window: ActualWindow5h, tolerance: TimeInterval) async throws {}
+}
+
+private struct ThrowingActualWindow5hRepository: ActualWindow5hRepository {
+    private struct ReadFailure: Error {}
+
+    func fetchAll() async throws -> [ActualWindow5h] { throw ReadFailure() }
+
+    func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h] {
+        throw ReadFailure()
+    }
 
     func create(_ window: ActualWindow5h) async throws {}
 

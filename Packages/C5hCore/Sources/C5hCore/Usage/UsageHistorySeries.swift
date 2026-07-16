@@ -216,8 +216,12 @@ public struct UsageHistorySeries: Sendable, Hashable {
                 return (point.capturedAt, sevenDay)
             }
         }
-        guard let point = lastPoint(atOrBefore: start), let sevenDay = point.sevenDay else { return nil }
-        return (point.capturedAt, sevenDay)
+        for point in points.reversed() where point.capturedAt <= start {
+            if let sevenDay = point.sevenDay {
+                return (point.capturedAt, sevenDay)
+            }
+        }
+        return nil
     }
 
     /// Latest in-day 7d reading whose used value differs from `carryInUsed`.

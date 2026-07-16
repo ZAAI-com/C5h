@@ -103,30 +103,46 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
     public func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun] {
         // Drop un-decodable rows so a single stale row can't blank the list.
         // The Logs view uses fetchRecentEntries to keep them visible instead.
-        try await fetchRecentEntries(limit: limit, filter: filter).compactMap(\.run)
+        try await writer.read { db in
+            let cursor = try Self.filteredRequest(filter: filter).fetchCursor(db)
+            var runs: [CommandRun] = []
+            while runs.count < limit {
+                guard let record = try cursor.next() else { break }
+                if let run = try? record.toCommandRun() {
+                    runs.append(run)
+                }
+            }
+            return runs
+        }
     }
 
     public func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry] {
         let records = try await writer.read { db in
-            var request = CommandRunRecord.all().order(Column("started_at").desc)
-            if let pid = filter.providerID {
-                request = request.filter(Column("provider_id") == pid.rawValue)
-            }
-            if let st = filter.status {
-                request = request.filter(Column("status") == st.rawValue)
-            }
-            if let name = filter.commandName {
-                request = request.filter(Column("run_type") == name.rawValue)
-            }
-            if let since = filter.since {
-                request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))
-            }
-            return try request.limit(limit).fetchAll(db)
+            try Self.filteredRequest(filter: filter).limit(limit).fetchAll(db)
         }
         // A row that no longer decodes (e.g. a run_type/status written by an
         // older build whose enum raw values were later renamed) is surfaced as
         // .unreadable rather than dropped, so the Logs list can show it.
         return records.map { $0.toEntry() }
+    }
+
+    private static func filteredRequest(
+        filter: CommandRunFilter
+    ) -> QueryInterfaceRequest<CommandRunRecord> {
+        var request = CommandRunRecord.all().order(Column("started_at").desc)
+        if let pid = filter.providerID {
+            request = request.filter(Column("provider_id") == pid.rawValue)
+        }
+        if let st = filter.status {
+            request = request.filter(Column("status") == st.rawValue)
+        }
+        if let name = filter.commandName {
+            request = request.filter(Column("run_type") == name.rawValue)
+        }
+        if let since = filter.since {
+            request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))
+        }
+        return request
     }
 
     public func sweepStaleRunning(

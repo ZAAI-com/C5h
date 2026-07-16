@@ -835,6 +835,32 @@ struct UsageHistorySeriesTests {
         #expect(carryIn?.used == 100)
     }
 
+    @Test("weeklyOpeningReading skips newer points without weekly data")
+    func weeklyOpeningReadingSearchesPastMissingWeeklyValues() {
+        let weekly = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 500),
+            fiveHour: nil,
+            sevenDay: 42
+        )
+        let newerWithoutWeekly = UsagePoint(
+            capturedAt: Date(timeIntervalSince1970: 1_000),
+            fiveHour: 10,
+            sevenDay: nil
+        )
+        let series = UsageHistorySeries(
+            providerID: .codex,
+            points: [weekly, newerWithoutWeekly]
+        )
+
+        let carryIn = series.weeklyOpeningReading(
+            at: Date(timeIntervalSince1970: 1_500),
+            within: 60
+        )
+
+        #expect(carryIn?.used == 42)
+        #expect(carryIn?.capturedAt == weekly.capturedAt)
+    }
+
     @Test("latestDistinctWeeklyReading skips carry-in value on the same day")
     func latestDistinctWeeklyReadingFindsChangedValue() {
         let dayStart = Date(timeIntervalSince1970: 86_400)

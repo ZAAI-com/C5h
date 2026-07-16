@@ -77,6 +77,44 @@ struct UsageCheckGateTests {
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
+    @Test("Applies the end margin only to quota-consuming active-window checks")
+    func appliesMarginToActiveWindowCheckDate() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in false },
+            hasActiveWindow: { providerID, checkDate in
+                switch providerID {
+                case .claude:
+                    checkDate == now.addingTimeInterval(UsageCheckGate.consumingProbeEndMargin)
+                case .codex:
+                    checkDate == now
+                }
+            },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false }
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Applies the same end margin to snapshot eligibility")
+    func appliesMarginToSnapshotCheckDate() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in false },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false },
+            isBelievedActiveFromSnapshot: { providerID, checkDate in
+                providerID == .claude
+                    && checkDate == now.addingTimeInterval(
+                        UsageCheckGate.consumingProbeEndMargin
+                    )
+            }
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
     @Test("Passes now into local-activity check")
     func passesNowIntoLocalActivityCheck() async {
         let gate = UsageCheckGate(
@@ -116,6 +154,19 @@ struct UsageCheckGateTests {
             hasPendingPlannedWindow: { _, _ in throw Boom() },
             hasRecentLocalActivity: { _, _ in false }
         )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Fails closed when local-activity evidence lookup throws")
+    func failsClosedOnLocalActivityLookupError() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in throw Boom() }
+        )
+
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
@@ -217,6 +268,20 @@ struct UsageCheckGateTests {
             hasUpcoming: false,
             expiring: true
         )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("A recorded window in the end margin suppresses local activity")
+    func recordedWindowInMarginSuppressesLocalActivity() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, checkDate in checkDate == now },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in true }
+        )
+
+        // The margin-adjusted lookup is false, but the second lookup sees that
+        // the window is active at now and prevents local evidence reopening it.
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 

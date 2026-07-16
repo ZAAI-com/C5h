@@ -329,6 +329,44 @@ struct ActiveWindowResolverTests {
         #expect(await recorder.updated.isEmpty)
     }
 
+    @Test("Demote path requires both bounds to match the derived window")
+    func demotePathRequiresMatchingStartAndEnd() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(1800)
+        let chainedStart = triggerTime.addingTimeInterval(-80 * 60)
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: chainedStart,
+            usedPercentage: 0
+        )
+        // This row covers the trigger and has the same end as the derived 5h
+        // window, but starts an hour later. Matching only endAt would demote it.
+        let unrelated = ActualWindow5h(
+            providerID: .claude,
+            startAt: chainedStart.addingTimeInterval(3600),
+            durationSeconds: 4 * 3600,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { _, _ in unrelated },
+            updateActualWindow: { window in await recorder.addUpdate(window) }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.id != unrelated.id)
+        #expect(window.startAt == chainedStart)
+        #expect(await recorder.updated.isEmpty)
+    }
+
     @Test("Demote path does not overwrite an existing command run link")
     func demotePathKeepsExistingCommandRunLink() async throws {
         let recorder = Recorder()

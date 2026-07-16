@@ -192,6 +192,41 @@ struct PlannedWindowValidatorTests {
         ])
     }
 
+    @Test("Chain risk uses the fixed provider slot instead of candidate duration")
+    func chainRiskUsesFixedProviderSlot() throws {
+        let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: previousEnd.addingTimeInterval(4 * 3600),
+            durationSeconds: 2 * 3600
+        )
+
+        let risk = try #require(PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            actualWindows: [actualEnding(at: previousEnd)]
+        ).chainRisk)
+
+        #expect(risk.projectedEffectiveEnd == previousEnd.addingTimeInterval(Self.fiveHours))
+        #expect(risk.shortfallSeconds == 3600)
+    }
+
+    @Test("Chain risk is absent when the candidate ends at the provider boundary")
+    func chainRiskAbsentWhenCandidateDoesNotExceedBoundary() {
+        let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: previousEnd.addingTimeInterval(4 * 3600),
+            durationSeconds: 3600
+        )
+
+        #expect(PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            actualWindows: [actualEnding(at: previousEnd)]
+        ).chainRisk == nil)
+    }
+
     @Test("No chain risk at a back-to-back start or a full window gap")
     func chainRiskAbsentAtSafeGaps() {
         let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
@@ -264,6 +299,32 @@ struct PlannedWindowValidatorTests {
         )
         let risk = try #require(result.chainRisk)
         #expect(risk.previousWindowEnd == earlier.endAt)
+    }
+
+    @Test("Earlier plans project a fixed five-hour provider boundary")
+    func chainRiskProjectsFixedBoundaryForEarlierPlan() throws {
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let earlier = PlannedWindow(
+            providerID: .claude,
+            startAt: base,
+            durationSeconds: 3600,
+            status: .scheduled
+        )
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: base.addingTimeInterval(6 * 3600),
+            durationSeconds: Int(Self.fiveHours)
+        )
+
+        let risk = try #require(PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [earlier],
+            actualWindows: []
+        ).chainRisk)
+
+        #expect(risk.previousWindowEnd == base.addingTimeInterval(Self.fiveHours))
+        #expect(risk.projectedEffectiveEnd == base.addingTimeInterval(2 * Self.fiveHours))
+        #expect(risk.shortfallSeconds == 3600)
     }
 
     @Test("Chain risk ignores other providers, terminal planned windows, and itself")

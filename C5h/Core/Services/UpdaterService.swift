@@ -61,6 +61,9 @@ final class UpdaterService {
         automaticallyChecksForUpdates = controller.updater.automaticallyChecksForUpdates
         automaticallyDownloadsUpdates = controller.updater.automaticallyDownloadsUpdates
         lastUpdateCheckDate = controller.updater.lastUpdateCheckDate
+        feedFailover.updateCycleDidFinish = { [weak self] in
+            self?.refreshFromUpdater()
+        }
 
         if isEnabled {
             startUpdaterQuietly()
@@ -85,10 +88,10 @@ final class UpdaterService {
         controller.checkForUpdates(nil)
     }
 
-    /// Re-reads the mirrored values from Sparkle. canCheckForUpdates flips at
-    /// the start and end of every update session, so wiring this to that KVO
-    /// stream also catches Sparkle's own alert UI mutating the preferences
-    /// behind the mirrors (the didSet equality guards keep this loop-free).
+    /// Re-reads the mirrored values from Sparkle. Update-cycle completion keeps
+    /// lastUpdateCheckDate current, while the canCheckForUpdates KVO stream also
+    /// catches Sparkle's own alert UI mutating the preferences behind the
+    /// mirrors (the didSet equality guards keep this loop-free).
     func refreshFromUpdater() {
         automaticallyChecksForUpdates = controller.updater.automaticallyChecksForUpdates
         automaticallyDownloadsUpdates = controller.updater.automaticallyDownloadsUpdates
@@ -157,6 +160,7 @@ final class UpdaterService {
 @MainActor
 private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
     private let feeds: [String]
+    var updateCycleDidFinish: (@MainActor () -> Void)?
     private var activeIndex = 0
     private var appcastLoadedThisCycle = false
     // Advances taken within the current triggered check, capped so a round
@@ -190,6 +194,7 @@ private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
         didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
         error: Error?
     ) {
+        updateCycleDidFinish?()
         // Fail over only when the feed itself never loaded and we have not
         // already tried every mirror this round. Otherwise the sequence ends:
         // the current feed stays sticky for the next check.

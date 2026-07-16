@@ -207,7 +207,9 @@ public struct ActiveWindowResolver: Sendable {
             // window with a different reset time can come back instead of the row
             // just upserted. Only demote the row whose bounds match this derived
             // window; leave an unrelated `c5hTriggered` window untouched.
-            guard abs(active.endAt.timeIntervalSince(derived5h.endAt))
+            guard abs(active.startAt.timeIntervalSince(derived5h.startAt))
+                <= UsageFetcher.dedupTolerance,
+                  abs(active.endAt.timeIntervalSince(derived5h.endAt))
                 <= UsageFetcher.dedupTolerance else {
                 return derived5h
             }

@@ -29,7 +29,7 @@ public struct UsageCheckGate: Sendable {
     public typealias IsIdleCheckEnabled = @Sendable (ProviderID) async -> Bool
     public typealias HasActiveWindow = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias HasPendingPlannedWindow = @Sendable (ProviderID, Date) async throws -> Bool
-    public typealias HasRecentLocalActivity = @Sendable (ProviderID, Date) async -> Bool
+    public typealias HasRecentLocalActivity = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias IsBelievedActiveFromSnapshot = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias HasUpcomingPlannedWindow = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias IsSnapshotWindowExpiring = @Sendable (ProviderID, Date) async throws -> Bool
@@ -78,14 +78,17 @@ public struct UsageCheckGate: Sendable {
     }
 
     /// Whether usage should be checked for `providerID` at `now`. Repo errors
-    /// in window checks are treated as "no window" (fail-closed): a transient
-    /// read failure skips the check and the next tick retries. For a
-    /// quota-consuming probe, skipping only costs tracking freshness; probing
-    /// wrongly costs a 5h window. The quiet-period lookup is the one exception:
-    /// an error there must not suppress (fail-open), or a transient DB error
-    /// would silence probing that every other rule allows.
+    /// in window and local-evidence checks are treated as "no window"
+    /// (fail-closed): a transient read failure skips the check and the next tick
+    /// retries. For a quota-consuming probe, skipping only costs tracking
+    /// freshness; probing wrongly costs a 5h window. The quiet-period lookup is
+    /// the one exception: an error there must not suppress (fail-open), or a
+    /// transient DB error would silence probing that every other rule allows.
     public func shouldCheck(providerID: ProviderID, now: Date = .now) async -> Bool {
-        if (try? await hasActiveWindow(providerID, now)) == true {
+        let activeWindowCheckDate = providerID.usageProbeConsumesQuota
+            ? now.addingTimeInterval(Self.consumingProbeEndMargin)
+            : now
+        if (try? await hasActiveWindow(providerID, activeWindowCheckDate)) == true {
             return true
         }
         if (try? await hasPendingPlannedWindow(providerID, now)) == true {
@@ -99,26 +102,31 @@ public struct UsageCheckGate: Sendable {
            (try? await hasUpcomingPlannedWindow(providerID, now)) == true {
             return false
         }
-        if (try? await isBelievedActiveFromSnapshot(providerID, now)) == true {
+        if (try? await isBelievedActiveFromSnapshot(providerID, activeWindowCheckDate)) == true {
             return true
         }
         guard await isIdleCheckEnabled(providerID) else {
             return false
         }
         if providerID.usageProbeConsumesQuota {
-            // A believed window in its final `consumingProbeEndMargin` was
-            // already rejected by isBelievedActiveFromSnapshot above; suppress
-            // here too so recent local activity cannot re-open probing in that
-            // tail, where the probe's startup request could land after the real
-            // expiry and anchor a fresh window. Fail-open on error (treat as not
-            // expiring) so a transient read failure reverts to the local-activity
-            // fallback rather than silencing all probing.
+            // A recorded or believed window in its final
+            // `consumingProbeEndMargin` was already rejected by the
+            // margin-adjusted checks above. Detect the same window at `now` so
+            // recent local activity cannot re-open probing in that tail, where
+            // the probe's startup request could land after the real expiry and
+            // anchor a fresh window.
+            if (try? await hasActiveWindow(providerID, now)) == true {
+                return false
+            }
+            // Fail-open on snapshot lookup error (treat as not expiring) so a
+            // transient snapshot read failure reverts to local activity. The
+            // local-evidence repository read itself remains fail-closed.
             if (try? await isSnapshotWindowExpiring(providerID, now)) == true {
                 return false
             }
             // The probe would open a fresh 5h window on an idle account. Only
             // run it when local evidence says a window is already open.
-            return await hasRecentLocalActivity(providerID, now)
+            return (try? await hasRecentLocalActivity(providerID, now)) == true
         }
         return true
     }

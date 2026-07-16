@@ -110,7 +110,7 @@ echo "==> Embed helper binary"
 HELPER_DST="${ARCHIVE}/Products/Applications/${SCHEME}.app/Contents/Helpers"
 mkdir -p "${HELPER_DST}"
 cp build/C5hHelper-universal "${HELPER_DST}/C5hHelper"
-codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" \
+codesign --force --options runtime --timestamp --sign "${DEVELOPER_ID_APPLICATION}" \
   "${HELPER_DST}/C5hHelper"
 
 echo "==> Embed LaunchAgent plist"

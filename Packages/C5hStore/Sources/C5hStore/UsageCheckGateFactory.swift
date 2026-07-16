@@ -22,20 +22,16 @@ public extension UsageCheckGate {
                 )) ?? nil
                 return stored ?? AppSettingsKeys.defaultCheckUsageWhenIdle
             },
-            hasActiveWindow: { providerID, now in
-                // Quota-consuming probes must not launch in the final stretch of
-                // a window: one launched seconds before expiry lands its startup
-                // request after it and opens a fresh window.
-                let margin = providerID.usageProbeConsumesQuota
-                    ? UsageCheckGate.consumingProbeEndMargin
-                    : 0
+            hasActiveWindow: { providerID, checkDate in
+                // UsageCheckGate supplies a margin-adjusted check date for
+                // quota-consuming providers and `now` for read-only probes.
                 let windows = try await actual5hRepository.fetchWindows(
-                    for: DateInterval(start: now, duration: 1)
+                    for: DateInterval(start: checkDate, duration: 1)
                 )
                 return windows.contains {
                     $0.providerID == providerID
-                        && $0.startAt <= now
-                        && $0.endAt >= now.addingTimeInterval(margin)
+                        && $0.startAt <= checkDate
+                        && checkDate < $0.endAt
                 }
             },
             hasPendingPlannedWindow: { providerID, now in
@@ -69,9 +65,9 @@ public extension UsageCheckGate {
                 // Activity recorded inside an already-tracked window must not
                 // count once that window ends, so the reference starts at the
                 // latest recorded window end within the lookback.
-                let overlapping = (try? await actual5hRepository.fetchWindows(
+                let overlapping = try await actual5hRepository.fetchWindows(
                     for: DateInterval(start: floor, end: now)
-                )) ?? []
+                )
                 let lastRecordedEnd = overlapping
                     .filter { $0.providerID == providerID }
                     .map(\.endAt)
@@ -79,12 +75,13 @@ public extension UsageCheckGate {
                 let reference = max(lastRecordedEnd ?? .distantPast, floor)
                 return await localActivityDetector.hasActivity(since: reference)
             },
-            isBelievedActiveFromSnapshot: { providerID, now in
+            isBelievedActiveFromSnapshot: { providerID, checkDate in
                 // Believed-active fallback for consuming providers: a window
                 // whose usage rounds to 0% never produces a recorded row
                 // (UsageFetcher drops idle-looking reports), but the latest
-                // snapshot's reported window end still marks it as open, and
-                // probing inside an open window is free.
+                // snapshot's reported window end still marks it as open. The
+                // gate supplies the same margin-adjusted boundary used for
+                // recorded windows.
                 guard providerID.usageProbeConsumesQuota,
                       let snapshot = try await usageSnapshotRepository.fetchLatest(
                         providerID: providerID
@@ -93,9 +90,7 @@ public extension UsageCheckGate {
                 else {
                     return false
                 }
-                return windowEndsAt >= now.addingTimeInterval(
-                    UsageCheckGate.consumingProbeEndMargin
-                )
+                return windowEndsAt > checkDate
             },
             hasUpcomingPlannedWindow: { providerID, now in
                 // Pre-window quiet period lookup: any non-terminal planned
@@ -131,8 +126,8 @@ public extension UsageCheckGate {
                 else {
                     return false
                 }
-                return windowEndsAt >= now
-                    && windowEndsAt < now.addingTimeInterval(
+                return windowEndsAt > now
+                    && windowEndsAt <= now.addingTimeInterval(
                         UsageCheckGate.consumingProbeEndMargin
                     )
             }

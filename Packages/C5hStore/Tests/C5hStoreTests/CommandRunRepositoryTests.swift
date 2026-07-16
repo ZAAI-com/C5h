@@ -160,6 +160,42 @@ struct CommandRunRepositoryTests {
         #expect(!recent.contains { $0.id.uuidString == legacyID })
     }
 
+    @Test("fetchRecent applies limit after skipping un-decodable rows")
+    func appliesLimitAfterSkippingUndecodableRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+
+        let valid = CommandRun(
+            providerID: .codex,
+            commandName: .usage,
+            command: "codex",
+            argumentsJSON: "[]",
+            startedAt: Date(timeIntervalSince1970: 1_730_000_000),
+            status: .succeeded
+        )
+        try await repo.create(valid)
+
+        // Newest row is unreadable, so the cursor must continue to the older
+        // readable row before applying limit: 1.
+        try await db.writer.write { gdb in
+            try gdb.execute(
+                sql: """
+                INSERT INTO command_runs
+                (id, provider_id, run_type, command, arguments_json, started_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    UUID().uuidString, "codex", "UsageCommand", "codex", "[]",
+                    "2026-07-13T20:45:31.000Z", "succeeded"
+                ]
+            )
+        }
+
+        let recent = try await repo.fetchRecent(limit: 1, filter: CommandRunFilter())
+        #expect(recent.map(\.id) == [valid.id])
+    }
+
     @Test("fetchRecentEntries surfaces un-decodable rows as unreadable entries")
     func surfacesUnreadableEntries() async throws {
         let db = try Database.inMemory()
