@@ -48,7 +48,7 @@ struct UsageFetcherTests {
         let derived5h = try fetcher.derived5h(from: snapshot, now: capturedAt)
         #expect(derived5h == nil)
 
-        // Weekly (secondary) is always anchored — should still derive.
+        // Weekly (secondary) is always anchored, so it should still derive.
         let weekly = try #require(try fetcher.derived7d(from: snapshot))
         #expect(weekly.usedPercentage == 30)
     }
@@ -189,6 +189,45 @@ struct UsageFetcherTests {
         )
         let window = try #require(derived5h)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
+    }
+
+    @Test("Keeps Claude 5h row at 0% when the window is a fresh anchor (not chained)")
+    func keepsClaudeFreshZeroUsageWindow() throws {
+        // A live window used below Claude's ~1% reporting resolution reports 0%.
+        // Its start does not align with the previous window's end, so it is a
+        // genuine fresh anchor and must render rather than be dropped as a
+        // chained idle boundary.
+        let snapshot = makeClaudeIdleSnapshot()
+        let fetcher = makeFetcher()
+        // fiveHourStartAt = resets_at (1_778_373_600) - 5h = 1_778_355_600. The
+        // previous window ended 10 minutes earlier, so this is a fresh anchor.
+        let previousEnd = Date(timeIntervalSince1970: 1_778_355_600 - 600)
+
+        let derived5h = try fetcher.derived5h(
+            from: snapshot,
+            now: Date(timeIntervalSince1970: 0),
+            previousWindowEnd: previousEnd
+        )
+        let window = try #require(derived5h)
+        #expect(window.startAt.timeIntervalSince1970 == 1_778_355_600)
+        #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
+    }
+
+    @Test("Skips Claude 5h row at 0% when chained onto the previous window's end")
+    func skipsClaudeChainedZeroUsageWindow() throws {
+        // The provider's idle boundary chains the next window onto the previous
+        // window's end (start == previous end, 0% used). That is the mis-gated
+        // probe phantom and must stay dropped even with a previous window known.
+        let snapshot = makeClaudeIdleSnapshot()
+        let fetcher = makeFetcher()
+        let previousEnd = Date(timeIntervalSince1970: 1_778_355_600)
+
+        let derived5h = try fetcher.derived5h(
+            from: snapshot,
+            now: Date(timeIntervalSince1970: 0),
+            previousWindowEnd: previousEnd
+        )
+        #expect(derived5h == nil)
     }
 
     @Test("Secondary-only Codex snapshot persists weekly row without 5h row")

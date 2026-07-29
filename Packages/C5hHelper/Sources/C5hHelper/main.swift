@@ -98,7 +98,8 @@ struct HelperMain {
             },
             upsertActualWindow7d: { window, tolerance in
                 try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
-            }
+            },
+            previousWindowEndLookup: usageRepo.previousWindowEndLookup()
         )
         let driver = HelperSchedulerDriver(
             scheduledRepo: scheduledRepo,
@@ -241,8 +242,9 @@ actor HelperUsageRefresher {
                 onStart: { run in try await repo.create(run) },
                 onComplete: { run in try await repo.update(run) }
             )
+            let previousEnd = try await fetcher.previousWindowEnd(for: snapshot)
             try await fetcher.persistSnapshot(snapshot)
-            if let window = try fetcher.derived5h(from: snapshot, now: now) {
+            if let window = try fetcher.derived5h(from: snapshot, now: now, previousWindowEnd: previousEnd) {
                 try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
             }
             if let window = try fetcher.derived7d(from: snapshot) {
