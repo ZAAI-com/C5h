@@ -1,0 +1,51 @@
+Packages/C5hCore/Tests/C5hCoreTests/UsageFetcherTests.swift
+  s_89ff39cef8c952::t_f29cac44bfd461 51
+  s_89ff39cef8c952::t_72ae0643d1ee6a 194-232
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_89ff39cef8c952::t_073799b46dd8c3 64-65
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_89ff39cef8c952::t_ab956610d0b1e8 101-102
+  s_89ff39cef8c952::t_25134411431880 245,247
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeUsageStatus.swift
+  s_89ff39cef8c952::t_445024b6aa434e 38-42,44-46,48
+  s_89ff39cef8c952::t_9fa341b471bf8c 20-32,43,47,49
+  s_e7c31478ff5bf0::t_02887f73e10baa 50-51
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_89ff39cef8c952::t_1b937443f1d8db 13-19,24,29-30,35-47
+  s_89ff39cef8c952::t_1446bb8e63e1df 59,62
+  s_89ff39cef8c952::t_6da206feeb0a2f 78-84,88-89,94-101
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_89ff39cef8c952::t_ade3a9e1211d0c 204-205
+C5h/UI/Providers/ProvidersViewModel.swift
+  s_89ff39cef8c952::t_208f5b10d24954 44-45
+Packages/C5hStore/Sources/C5hStore/Repositories/UsageSnapshotRepository.swift
+  s_89ff39cef8c952::t_8dd02f74aa6b74 11-18,20-45
+  s_89ff39cef8c952::t_4e120403ac8731 19
+Packages/C5hStore/Tests/C5hStoreTests/UsageSnapshotRepositoryTests.swift
+  s_89ff39cef8c952::t_11a622fbf1701b 1-76
+  s_89ff39cef8c952::t_a19851431ece04 77-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "3889e0ec1a0c1d40fdc897ceda47e49fd5afd28d",
+  "prompts": {},
+  "sessions": {
+    "s_89ff39cef8c952": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "745b8e6e-8656-4128-a48a-308fac9afa98",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_e7c31478ff5bf0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9e363a7-8652-4e99-bde4-3682f92ceaec",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
