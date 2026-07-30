@@ -41,8 +41,7 @@ final class ProvidersViewModel {
             },
             upsertActualWindow7d: { window, tolerance in
                 try await actual7dRepository.upsertByEndAt(window, tolerance: tolerance)
-            },
-            previousWindowEndLookup: usageSnapshotRepository.previousWindowEndLookup()
+            }
         )
     }
 

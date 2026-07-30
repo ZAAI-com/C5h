@@ -6,9 +6,10 @@ import Testing
 struct UsageFetcherTests {
     @Test("Derives Claude 5h and 7d rows separately")
     func derivesClaudeWindowsSeparately() throws {
+        let capturedAt = Date(timeIntervalSince1970: 1_778_373_600 - (4 * 3600))
         let snapshot = UsageSnapshot(
             providerID: .claude,
-            capturedAt: Date(timeIntervalSince1970: 100),
+            capturedAt: capturedAt,
             rawJSON: """
             {"rate_limits":{"five_hour":{"used_percentage":20,"resets_at":1778373600},"seven_day":{"used_percentage":57,"resets_at":1778893200}}}
             """,
@@ -16,7 +17,7 @@ struct UsageFetcherTests {
         )
         let fetcher = makeFetcher()
 
-        let derived5h = try fetcher.derived5h(from: snapshot, now: Date(timeIntervalSince1970: 0))
+        let derived5h = try fetcher.derived5h(from: snapshot, now: capturedAt)
         let derived7d = try fetcher.derived7d(from: snapshot)
         let fiveHour = try #require(derived5h)
         let weekly = try #require(derived7d)
@@ -163,71 +164,86 @@ struct UsageFetcherTests {
         #expect(triggerAnchored.endAt.timeIntervalSince1970 == TimeInterval(syntheticReset))
     }
 
-    @Test("Skips Claude 5h row when the report is idle (0% used)")
-    func skipsClaudeIdleWindow() throws {
-        // Claude's statusLine keeps reporting a rolling five_hour boundary while
-        // idle (used_percentage 0). Deriving a window from it would fabricate a
-        // phantom 5h window on every poll.
-        let snapshot = makeClaudeIdleSnapshot()
+    @Test("Derives Claude 5h row from a 0% timer with 4:58 remaining")
+    func derivesClaudeZeroUsageTimer() throws {
+        let snapshot = makeClaudeSnapshot(remaining: (4 * 3600) + (58 * 60))
         let fetcher = makeFetcher()
 
-        let derived5h = try fetcher.derived5h(from: snapshot, now: Date(timeIntervalSince1970: 0))
-        #expect(derived5h == nil)
-    }
-
-    @Test("Anchors Claude 5h row at 0% when requireActiveWindow is false (trigger path)")
-    func anchorsClaudeIdleWindowForTrigger() throws {
-        // A wake prompt just opened this window on purpose, so the trigger path
-        // anchors it even before usage registers.
-        let snapshot = makeClaudeIdleSnapshot()
-        let fetcher = makeFetcher()
-
-        let derived5h = try fetcher.derived5h(
+        let window = try #require(try fetcher.derived5h(
             from: snapshot,
-            now: Date(timeIntervalSince1970: 0),
-            requireActiveWindow: false
-        )
-        let window = try #require(derived5h)
-        #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
-    }
+            now: snapshot.capturedAt
+        ))
 
-    @Test("Keeps Claude 5h row at 0% when the window is a fresh anchor (not chained)")
-    func keepsClaudeFreshZeroUsageWindow() throws {
-        // A live window used below Claude's ~1% reporting resolution reports 0%.
-        // Its start does not align with the previous window's end, so it is a
-        // genuine fresh anchor and must render rather than be dropped as a
-        // chained idle boundary.
-        let snapshot = makeClaudeIdleSnapshot()
-        let fetcher = makeFetcher()
-        // fiveHourStartAt = resets_at (1_778_373_600) - 5h = 1_778_355_600. The
-        // previous window ended 10 minutes earlier, so this is a fresh anchor.
-        let previousEnd = Date(timeIntervalSince1970: 1_778_355_600 - 600)
-
-        let derived5h = try fetcher.derived5h(
-            from: snapshot,
-            now: Date(timeIntervalSince1970: 0),
-            previousWindowEnd: previousEnd
-        )
-        let window = try #require(derived5h)
         #expect(window.startAt.timeIntervalSince1970 == 1_778_355_600)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
     }
 
-    @Test("Skips Claude 5h row at 0% when chained onto the previous window's end")
-    func skipsClaudeChainedZeroUsageWindow() throws {
-        // The provider's idle boundary chains the next window onto the previous
-        // window's end (start == previous end, 0% used). That is the mis-gated
-        // probe phantom and must stay dropped even with a previous window known.
-        let snapshot = makeClaudeIdleSnapshot()
+    @Test("Keeps a Claude window that was live at capture after delayed processing")
+    func keepsClaudeTimerAfterDelayedProcessing() throws {
+        let snapshot = makeClaudeSnapshot(remaining: 60)
+        let processedAt = snapshot.capturedAt.addingTimeInterval(120)
         let fetcher = makeFetcher()
-        let previousEnd = Date(timeIntervalSince1970: 1_778_355_600)
 
-        let derived5h = try fetcher.derived5h(
+        let window = try #require(try fetcher.derived5h(
             from: snapshot,
-            now: Date(timeIntervalSince1970: 0),
-            previousWindowEnd: previousEnd
+            now: processedAt
+        ))
+
+        #expect(window.endAt < processedAt)
+    }
+
+    @Test("Accepts Claude countdown at five hours plus clock tolerance")
+    func acceptsClaudeTimerAtUpperBound() throws {
+        let remaining = TimeInterval(
+            ClaudeUsageStatus.fiveHourDurationSeconds
+                + ClaudeUsageStatus.fiveHourTimerToleranceSeconds
         )
-        #expect(derived5h == nil)
+        let snapshot = makeClaudeSnapshot(remaining: remaining)
+        let fetcher = makeFetcher()
+
+        let window = try fetcher.derived5h(
+            from: snapshot,
+            now: snapshot.capturedAt
+        )
+
+        #expect(window != nil)
+    }
+
+    @Test("Rejects Claude countdown that expired at capture time")
+    func rejectsExpiredClaudeTimer() throws {
+        let snapshot = makeClaudeSnapshot(remaining: 0)
+        let fetcher = makeFetcher()
+
+        let window = try fetcher.derived5h(
+            from: snapshot,
+            now: snapshot.capturedAt
+        )
+
+        #expect(window == nil)
+    }
+
+    @Test("Rejects Claude countdown beyond five hours plus clock tolerance")
+    func rejectsTooDistantClaudeTimer() throws {
+        let remaining = TimeInterval(
+            ClaudeUsageStatus.fiveHourDurationSeconds
+                + ClaudeUsageStatus.fiveHourTimerToleranceSeconds
+                + 1
+        )
+        let snapshot = makeClaudeSnapshot(remaining: remaining)
+        let fetcher = makeFetcher()
+
+        let regularWindow = try fetcher.derived5h(
+            from: snapshot,
+            now: snapshot.capturedAt
+        )
+        let triggerWindow = try fetcher.derived5h(
+            from: snapshot,
+            now: snapshot.capturedAt,
+            requireActiveWindow: false
+        )
+
+        #expect(regularWindow == nil)
+        #expect(triggerWindow == nil)
     }
 
     @Test("Secondary-only Codex snapshot persists weekly row without 5h row")
@@ -251,12 +267,13 @@ struct UsageFetcherTests {
         #expect(weekly.usageSnapshotID == snapshot.id)
     }
 
-    private func makeClaudeIdleSnapshot() -> UsageSnapshot {
-        UsageSnapshot(
+    private func makeClaudeSnapshot(remaining: TimeInterval) -> UsageSnapshot {
+        let resetAt: TimeInterval = 1_778_373_600
+        return UsageSnapshot(
             providerID: .claude,
-            capturedAt: Date(timeIntervalSince1970: 100),
+            capturedAt: Date(timeIntervalSince1970: resetAt - remaining),
             rawJSON: """
-            {"rate_limits":{"five_hour":{"used_percentage":0,"resets_at":1778373600},"seven_day":{"used_percentage":7,"resets_at":1778893200}}}
+            {"rate_limits":{"five_hour":{"used_percentage":0,"resets_at":\(Int(resetAt))},"seven_day":{"used_percentage":7,"resets_at":1778893200}}}
             """,
             normalizedJSON: "{}"
         )

@@ -8,41 +8,6 @@ public protocol UsageSnapshotRepository: Sendable {
     func fetchInRange(providerID: ProviderID, interval: DateInterval) async throws -> [UsageSnapshot]
 }
 
-public extension UsageSnapshotRepository {
-    /// Builds the lookup `UsageFetcher` uses to tell a fresh 0%-usage window
-    /// from a chained idle boundary: the end of the most recent snapshot whose
-    /// reported window differs from the one starting at `currentWindowStart`.
-    /// Scans a bounded lookback and skips re-readings of the current window, so
-    /// a repeated poll of the same window (already persisted) does not shadow
-    /// the genuinely previous window.
-    func previousWindowEndLookup(
-        lookback: TimeInterval = 24 * 60 * 60
-    ) -> UsageFetcher.PreviousWindowEndLookup {
-        { providerID, currentWindowStart in
-            let interval = DateInterval(
-                start: currentWindowStart.addingTimeInterval(-lookback),
-                end: currentWindowStart.addingTimeInterval(UsageFetcher.dedupTolerance)
-            )
-            let snapshots = try await fetchInRange(providerID: providerID, interval: interval)
-            for snapshot in snapshots.reversed() {
-                guard let normalized = UsageNormalizer.decode(snapshot.normalizedJSON) else {
-                    continue
-                }
-                // Skip re-readings of the current window; we want the window
-                // that preceded it.
-                if let start = normalized.windowStartedAt,
-                   abs(start.timeIntervalSince(currentWindowStart)) <= UsageFetcher.dedupTolerance {
-                    continue
-                }
-                if let end = normalized.windowEndsAt {
-                    return end
-                }
-            }
-            return nil
-        }
-    }
-}
-
 public struct GRDBUsageSnapshotRepository: UsageSnapshotRepository {
     let writer: any DatabaseWriter
 

@@ -201,8 +201,7 @@ final class DayCalendarViewModel {
             },
             upsertActualWindow7d: { window, tolerance in
                 try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
-            },
-            previousWindowEndLookup: usageRepo.previousWindowEndLookup()
+            }
         )
         let now = Date()
         for providerID in ProviderID.allCases {

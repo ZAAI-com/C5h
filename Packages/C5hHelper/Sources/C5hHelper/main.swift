@@ -98,8 +98,7 @@ struct HelperMain {
             },
             upsertActualWindow7d: { window, tolerance in
                 try await actual7dRepo.upsertByEndAt(window, tolerance: tolerance)
-            },
-            previousWindowEndLookup: usageRepo.previousWindowEndLookup()
+            }
         )
         let driver = HelperSchedulerDriver(
             scheduledRepo: scheduledRepo,
@@ -242,9 +241,8 @@ actor HelperUsageRefresher {
                 onStart: { run in try await repo.create(run) },
                 onComplete: { run in try await repo.update(run) }
             )
-            let previousEnd = try await fetcher.previousWindowEnd(for: snapshot)
             try await fetcher.persistSnapshot(snapshot)
-            if let window = try fetcher.derived5h(from: snapshot, now: now, previousWindowEnd: previousEnd) {
+            if let window = try fetcher.derived5h(from: snapshot, now: now) {
                 try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
             }
             if let window = try fetcher.derived7d(from: snapshot) {
@@ -328,12 +326,13 @@ struct HelperSchedulerDriver: SchedulerDriver {
                 )
             },
             activeWindowFetch: { providerID, now in
-                let interval = DateInterval(start: now, duration: 1)
-                let windows = try await actual5hRepo.fetchWindows(for: interval)
-                return windows.first { $0.providerID == providerID }
+                try await actual5hRepo.fetchActiveWindow(providerID: providerID, at: now)
             },
             updateActualWindow: { window in
                 try await actual5hRepo.update(window)
+            },
+            awaitActiveWindow: { providerID, now in
+                try await actual5hRepo.awaitActiveWindow(providerID: providerID, at: now)
             }
         )
         return await resolver.resolveTriggeredWindow(

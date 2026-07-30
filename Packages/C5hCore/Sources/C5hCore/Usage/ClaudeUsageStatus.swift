@@ -3,6 +3,7 @@ import Foundation
 public struct ClaudeUsageStatus: Sendable, Hashable {
     public static let sentinel = "C5H_RATE_LIMITS:"
     public static let fiveHourDurationSeconds = 5 * 60 * 60
+    public static let fiveHourTimerToleranceSeconds = 60
     public static let sevenDayDurationSeconds = 7 * 24 * 60 * 60
 
     public var fiveHour: RateLimitWindow
@@ -17,36 +18,17 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
         fiveHour.resetsAt.addingTimeInterval(-TimeInterval(Self.fiveHourDurationSeconds))
     }
 
-    /// True when the reported 5h window reflects consumption above Claude's
-    /// ~1% reporting resolution. Claude's boundary is a real anchored window,
-    /// not a rolling placeholder: historically C5h's own REPL probes kept the
-    /// account non-idle (each probe's startup makes an API request, and on an
-    /// idle account that opens a fresh window at the previous expiry bucket),
-    /// which made idle reports look like a rolling boundary. Probes are now
-    /// gated so they only run once a window is already open (`UsageCheckGate`),
-    /// and on the routine poll path this guard is combined with
-    /// `isFreshFiveHourAnchor`: a 0%-usage report is kept when its start is a
-    /// fresh anchor (a live window used below the reporting resolution) and
-    /// dropped only when it is the provider's idle boundary chained onto the
-    /// previous window's end, so a mis-gated probe still cannot fabricate one.
-    /// The trigger-anchoring path bypasses the check on purpose via
-    /// `requireActiveWindow: false` (a wake prompt just opened the window).
-    public var hasActiveFiveHourWindow: Bool {
-        fiveHour.usedPercentage > 0
-    }
-
-    /// Whether a 0%-usage 5h report is a *confirmed* genuine fresh anchor rather
-    /// than the provider's idle boundary chained onto the previous window's end.
-    /// Claude chains an idle window so its start lands on the prior window's end;
-    /// a window whose start sits more than `tolerance` away from that boundary
-    /// was opened by real activity (its sub-1% usage is simply below Claude's
-    /// reporting resolution). A nil `previousWindowEnd` (no prior window on
-    /// record within the lookup horizon) returns false: freshness cannot be
-    /// confirmed, so the caller keeps the conservative drop-at-0% default until
-    /// usage registers, and no mis-gated probe can fabricate a window.
-    public func isFreshFiveHourAnchor(previousWindowEnd: Date?, tolerance: TimeInterval) -> Bool {
-        guard let previousWindowEnd else { return false }
-        return abs(fiveHourStartAt.timeIntervalSince(previousWindowEnd)) > tolerance
+    /// Whether Claude reported a plausible live 5h countdown at capture time.
+    /// The timer is authoritative even when usage rounds down to 0%; percentage
+    /// is display data, not an activity signal. A small tolerance accommodates
+    /// clock skew and provider-side rounding around a newly opened window.
+    public func hasLiveFiveHourTimer(
+        capturedAt: Date,
+        tolerance: TimeInterval = TimeInterval(Self.fiveHourTimerToleranceSeconds)
+    ) -> Bool {
+        let remaining = fiveHour.resetsAt.timeIntervalSince(capturedAt)
+        return remaining > 0
+            && remaining <= TimeInterval(Self.fiveHourDurationSeconds) + tolerance
     }
 
     public var sevenDayStartAt: Date? {

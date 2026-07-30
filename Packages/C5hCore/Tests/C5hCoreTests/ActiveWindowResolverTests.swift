@@ -13,12 +13,360 @@ struct ActiveWindowResolverTests {
         func addUpdate(_ window: ActualWindow5h) { updated.append(window) }
     }
 
+    actor HandoffState {
+        var activeResponses: [ActualWindow5h?]
+        var activeRequests: [(ProviderID, Date)] = []
+        var awaitRequests: [(ProviderID, Date)] = []
+        var snapshotRequests: [ProviderID] = []
+
+        init(activeResponses: [ActualWindow5h?] = []) {
+            self.activeResponses = activeResponses
+        }
+
+        func nextActive(providerID: ProviderID, now: Date) -> ActualWindow5h? {
+            activeRequests.append((providerID, now))
+            guard !activeResponses.isEmpty else { return nil }
+            return activeResponses.removeFirst()
+        }
+
+        func recordAwait(providerID: ProviderID, now: Date) {
+            awaitRequests.append((providerID, now))
+        }
+
+        func recordSnapshot(providerID: ProviderID) {
+            snapshotRequests.append(providerID)
+        }
+    }
+
     private func makeFetcher(recorder: Recorder) -> UsageFetcher {
         UsageFetcher(
             persistSnapshot: { _ in },
             upsertActualWindow5h: { window, _ in await recorder.addUpsert(window) },
             upsertActualWindow7d: { _, _ in }
         )
+    }
+
+    private func isoDate(_ value: String) throws -> Date {
+        try #require(ISO8601DateFormatter().date(from: value))
+    }
+
+    // MARK: Concurrent usage refresh handoff
+
+    @Test("Waits for the contending Claude poll and links its authoritative window")
+    func waitsForContendingClaudePoll() async throws {
+        let recorder = Recorder()
+        let state = HandoffState(activeResponses: [nil])
+        // Exact regression from 2026-07-18: the prompt resolver reached the
+        // usage lock while a manual Usage poll was still collecting. That poll
+        // later reported a 07:40Z–12:40Z Claude window at 0%, captured at
+        // 08:09:01Z. The command itself began at 08:08:54Z, so the resolver
+        // must wait for and link the row derived by the in-flight poll.
+        let triggerTime = try isoDate("2026-07-18T08:08:54Z")
+        let windowStart = try isoDate("2026-07-18T07:40:00Z")
+        let windowEnd = try isoDate("2026-07-18T12:40:00Z")
+        let commandRunID = UUID()
+        let concurrentWindow = ActualWindow5h(
+            providerID: .claude,
+            startAt: windowStart,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                await state.recordSnapshot(providerID: providerID)
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return concurrentWindow
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.id == concurrentWindow.id)
+        #expect(window.startAt == windowStart)
+        #expect(window.endAt == windowEnd)
+        // The window predates this prompt, so existing attribution semantics
+        // keep it detected/estimated while linking the command for traceability.
+        #expect(window.source == .detectedFromUsage)
+        #expect(window.confidence == .estimated)
+        #expect(window.commandRunID == commandRunID)
+        // Lock handoff must never launch a second provider probe.
+        #expect(await state.snapshotRequests == [.claude])
+        #expect(await state.activeRequests.count == 1)
+        #expect(await state.awaitRequests.count == 1)
+        #expect(await state.awaitRequests.first?.0 == .claude)
+        #expect(await state.awaitRequests.first?.1 == triggerTime)
+        #expect(await recorder.updated == [window])
+        #expect(await recorder.upserted5h.isEmpty)
+    }
+
+    @Test("Reuses an immediately available Claude row without invoking the waiter")
+    func contentionReusesImmediateClaudeWindow() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let commandRunID = UUID()
+        let existing = ActualWindow5h(
+            providerID: .claude,
+            startAt: try isoDate("2026-07-18T08:00:00Z"),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [existing])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return nil
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.id == existing.id)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.confidence == .estimated)
+        #expect(window.commandRunID == commandRunID)
+        #expect(await state.activeRequests.count == 1)
+        #expect(await state.awaitRequests.isEmpty)
+    }
+
+    @Test("Performs a final lookup when the concurrent-refresh waiter times out")
+    func contentionTimeoutPerformsFinalLookup() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let commandRunID = UUID()
+        let committedAtTimeout = ActualWindow5h(
+            providerID: .claude,
+            startAt: try isoDate("2026-07-18T07:40:00Z"),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [nil, committedAtTimeout])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return nil
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.id == committedAtTimeout.id)
+        #expect(window.commandRunID == commandRunID)
+        #expect(await state.activeRequests.count == 2)
+        #expect(await state.awaitRequests.count == 1)
+    }
+
+    @Test("Performs a final lookup when waiting for the concurrent refresh fails")
+    func contentionWaitErrorPerformsFinalLookup() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let committedAfterError = ActualWindow5h(
+            providerID: .claude,
+            startAt: try isoDate("2026-07-18T07:40:00Z"),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [nil, committedAfterError])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                throw C5hError.processLaunchFailed("polling failed")
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        #expect(result?.id == committedAfterError.id)
+        #expect(await state.activeRequests.count == 2)
+        #expect(await state.awaitRequests.count == 1)
+    }
+
+    @Test("Performs a final lookup when waiting for the concurrent refresh is cancelled")
+    func contentionWaitCancellationPerformsFinalLookup() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let committedAfterCancellation = ActualWindow5h(
+            providerID: .claude,
+            startAt: try isoDate("2026-07-18T07:40:00Z"),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [nil, committedAfterCancellation])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                throw CancellationError()
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        #expect(result?.id == committedAfterCancellation.id)
+        #expect(await state.activeRequests.count == 2)
+        #expect(await state.awaitRequests.count == 1)
+    }
+
+    @Test("Does not wait for Codex lock contention")
+    func codexContentionDoesNotInvokeWaiter() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let state = HandoffState(activeResponses: [nil])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in
+                throw C5hError.usageRefreshAlreadyRunning(.codex)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return nil
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .codex,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        #expect(result == nil)
+        #expect(await state.activeRequests.count == 1)
+        #expect(await state.awaitRequests.isEmpty)
+    }
+
+    @Test("Does not hand off a lock owned by a different provider")
+    func mismatchedProviderContentionDoesNotInvokeWaiter() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let state = HandoffState(activeResponses: [nil])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in
+                throw C5hError.usageRefreshAlreadyRunning(.codex)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return nil
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        #expect(result == nil)
+        #expect(await state.activeRequests.count == 1)
+        #expect(await state.activeRequests.first?.0 == .claude)
+        #expect(await state.awaitRequests.isEmpty)
+    }
+
+    @Test("Rejects a different provider's row returned by the waiter")
+    func contentionWaiterRejectsWrongProvider() async throws {
+        let recorder = Recorder()
+        let triggerTime = try isoDate("2026-07-18T08:09:01Z")
+        let wrongProviderWindow = ActualWindow5h(
+            providerID: .codex,
+            startAt: try isoDate("2026-07-18T08:00:00Z"),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [nil, nil])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in
+                throw C5hError.usageRefreshAlreadyRunning(.claude)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            awaitActiveWindow: { providerID, now in
+                await state.recordAwait(providerID: providerID, now: now)
+                return wrongProviderWindow
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        #expect(result == nil)
+        #expect(await state.activeRequests.count == 2)
+        #expect(await state.awaitRequests.count == 1)
+        #expect(await recorder.updated.isEmpty)
     }
 
     @Test("Writes nothing when the snapshot fails and no active window can be reused")

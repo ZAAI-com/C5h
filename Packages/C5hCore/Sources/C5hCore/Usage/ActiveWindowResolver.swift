@@ -18,6 +18,7 @@ import Foundation
 public struct ActiveWindowResolver: Sendable {
     public typealias FetchSnapshot = @Sendable (ProviderID) async throws -> UsageSnapshot
     public typealias FetchActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
+    public typealias AwaitActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
 
     /// How far before the trigger a provider-reported window start may lie and
     /// still be credited to the trigger. Measured from the top of the UTC hour
@@ -32,6 +33,7 @@ public struct ActiveWindowResolver: Sendable {
     public let snapshotFetch: FetchSnapshot
     public let activeWindowFetch: FetchActiveWindow
     public let updateActualWindow: @Sendable (ActualWindow5h) async throws -> Void
+    public let awaitActiveWindow: AwaitActiveWindow
 
     /// Whether a window starting at `startAt` could have been opened by a
     /// trigger that ran at `now`. A start earlier than the hour floor of `now`
@@ -53,12 +55,14 @@ public struct ActiveWindowResolver: Sendable {
         fetcher: UsageFetcher,
         snapshotFetch: @escaping FetchSnapshot,
         activeWindowFetch: @escaping FetchActiveWindow,
-        updateActualWindow: @escaping @Sendable (ActualWindow5h) async throws -> Void
+        updateActualWindow: @escaping @Sendable (ActualWindow5h) async throws -> Void,
+        awaitActiveWindow: @escaping AwaitActiveWindow = { _, _ in nil }
     ) {
         self.fetcher = fetcher
         self.snapshotFetch = snapshotFetch
         self.activeWindowFetch = activeWindowFetch
         self.updateActualWindow = updateActualWindow
+        self.awaitActiveWindow = awaitActiveWindow
     }
 
     /// Anchors the trigger's 5h window to a real provider window, or records
@@ -95,7 +99,16 @@ public struct ActiveWindowResolver: Sendable {
                 return promoted
             }
         } catch {
-            if (error as? C5hError)?.isUsageRefreshAlreadyRunning == true {
+            if let c5hError = error as? C5hError,
+               case .usageRefreshAlreadyRunning(let refreshingProviderID) = c5hError,
+               refreshingProviderID == providerID {
+                if providerID == .claude {
+                    return await resolveAfterConcurrentClaudeRefresh(
+                        providerID: providerID,
+                        commandRunID: commandRunID,
+                        now: now
+                    )
+                }
                 return await resolveFromExistingWindow(
                     providerID: providerID,
                     commandRunID: commandRunID,
@@ -131,6 +144,64 @@ public struct ActiveWindowResolver: Sendable {
         //    reports it. Fabricating a `[now, +5h]` block here would draw a fake
         //    window with the wrong bounds.
         NSLog("ActiveWindowResolver: no real \(providerID.rawValue) window to anchor command \(commandRunID); leaving the CommandRun as the only record")
+        return nil
+    }
+
+    /// A concurrent Claude usage probe owns the cross-process lock and will
+    /// persist the authoritative provider window when it completes. Reuse an
+    /// already-persisted row immediately when possible; otherwise wait for that
+    /// probe's row rather than launching a second quota-consuming probe or
+    /// fabricating a window. A final repository lookup closes races where the
+    /// row lands just as the waiter times out, is cancelled, or fails.
+    private func resolveAfterConcurrentClaudeRefresh(
+        providerID: ProviderID,
+        commandRunID: UUID,
+        now: Date
+    ) async -> ActualWindow5h? {
+        do {
+            if let reused = try await reuseActiveWindow(
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) (usage refresh already running)")
+                return reused
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: immediate reuse failed for \(providerID.rawValue) command \(commandRunID) while usage refresh was running: \(error)")
+        }
+
+        do {
+            if let awaited = try await awaitActiveWindow(providerID, now),
+               let reused = try await reuseActiveWindow(
+                   awaited,
+                   providerID: providerID,
+                   commandRunID: commandRunID,
+                   now: now
+               ) {
+                NSLog("ActiveWindowResolver: reused awaited \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) after concurrent usage refresh")
+                return reused
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: waiting for concurrent \(providerID.rawValue) usage refresh failed for command \(commandRunID): \(error)")
+        }
+
+        // Always check once more. The concurrent poll can commit between the
+        // waiter's last check and its timeout/cancellation/error being observed.
+        do {
+            if let reused = try await reuseActiveWindow(
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            ) {
+                NSLog("ActiveWindowResolver: reused active \(providerID.rawValue) window [\(reused.startAt) … \(reused.endAt)] for command \(commandRunID) after final concurrent-refresh lookup")
+                return reused
+            }
+        } catch {
+            NSLog("ActiveWindowResolver: final reuse failed for \(providerID.rawValue) command \(commandRunID) after concurrent usage refresh: \(error)")
+        }
+
+        NSLog("ActiveWindowResolver: no real \(providerID.rawValue) window to anchor command \(commandRunID) after concurrent usage refresh; leaving the CommandRun as the only record")
         return nil
     }
 
@@ -277,9 +348,33 @@ public struct ActiveWindowResolver: Sendable {
         commandRunID: UUID,
         now: Date
     ) async throws -> ActualWindow5h? {
-        guard var active = try await activeWindowFetch(providerID, now) else {
+        guard let active = try await activeWindowFetch(providerID, now) else {
             return nil
         }
+        return try await reuseActiveWindow(
+            active,
+            providerID: providerID,
+            commandRunID: commandRunID,
+            now: now
+        )
+    }
+
+    /// Applies the same attribution and command-linking rules to a window
+    /// returned directly by the concurrent-refresh waiter. Validate provider
+    /// and coverage defensively so a polling implementation cannot accidentally
+    /// hand a trigger a different provider's row or a stale boundary.
+    private func reuseActiveWindow(
+        _ candidate: ActualWindow5h,
+        providerID: ProviderID,
+        commandRunID: UUID,
+        now: Date
+    ) async throws -> ActualWindow5h? {
+        guard candidate.providerID == providerID,
+              candidate.startAt <= now,
+              now < candidate.endAt else {
+            return nil
+        }
+        var active = candidate
         if Self.isPlausiblyTriggerAnchored(startAt: active.startAt, now: now) {
             active.source = .c5hTriggered
             active.commandRunID = commandRunID

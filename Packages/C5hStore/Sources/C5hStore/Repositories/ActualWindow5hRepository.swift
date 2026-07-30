@@ -5,6 +5,7 @@ import C5hCore
 public protocol ActualWindow5hRepository: Sendable {
     func fetchAll() async throws -> [ActualWindow5h]
     func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h]
+    func fetchActiveWindow(providerID: ProviderID, at referenceTime: Date) async throws -> ActualWindow5h?
     func create(_ window: ActualWindow5h) async throws
     func update(_ window: ActualWindow5h) async throws
 
@@ -14,6 +15,80 @@ public protocol ActualWindow5hRepository: Sendable {
     /// single row, so "last N windows" lists distinct actual windows instead of
     /// poll-time noise.
     func upsertByEndAt(_ window: ActualWindow5h, tolerance: TimeInterval) async throws
+}
+
+public extension ActualWindow5hRepository {
+    /// Returns the latest same-provider window whose half-open interval covers
+    /// `referenceTime`.
+    ///
+    /// The default implementation keeps test doubles and alternate stores
+    /// source-compatible. GRDB overrides it below with a point lookup that does
+    /// the provider and interval filtering in SQLite.
+    func fetchActiveWindow(
+        providerID: ProviderID,
+        at referenceTime: Date
+    ) async throws -> ActualWindow5h? {
+        let candidates = try await fetchWindows(
+            for: DateInterval(start: referenceTime, duration: 1)
+        )
+        return candidates
+            .filter {
+                $0.providerID == providerID
+                    && $0.startAt <= referenceTime
+                    && referenceTime < $0.endAt
+            }
+            .max { $0.startAt < $1.startAt }
+    }
+
+    /// Waits for another database client to persist the actual window covering
+    /// `referenceTime`.
+    ///
+    /// A usage probe and a scheduled prompt can race for the shared probe lock.
+    /// When the prompt loses that race, the winning probe will shortly persist
+    /// the provider-reported window through another repository (and, in the
+    /// helper/app case, another database connection). This method checks once
+    /// immediately, then polls without launching another quota-consuming probe.
+    ///
+    /// Cancellation is propagated as `CancellationError`. A timeout is an
+    /// expected "no matching row arrived" result and returns `nil`.
+    func awaitActiveWindow(
+        providerID: ProviderID,
+        at referenceTime: Date,
+        timeout: Duration = .seconds(35),
+        pollInterval: Duration = .milliseconds(250)
+    ) async throws -> ActualWindow5h? {
+        try Task.checkCancellation()
+        if let active = try await fetchActiveWindow(
+            providerID: providerID,
+            at: referenceTime
+        ) {
+            return active
+        }
+
+        guard timeout > .zero else { return nil }
+
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        // Avoid a caller-supplied zero/negative interval spinning a database
+        // read loop while still allowing very short intervals in tests.
+        let effectivePollInterval = max(pollInterval, .milliseconds(1))
+
+        while true {
+            try Task.checkCancellation()
+            let remaining = clock.now.duration(to: deadline)
+            guard remaining > .zero else { return nil }
+
+            try await Task.sleep(for: min(effectivePollInterval, remaining))
+            try Task.checkCancellation()
+
+            if let active = try await fetchActiveWindow(
+                providerID: providerID,
+                at: referenceTime
+            ) {
+                return active
+            }
+        }
+    }
 }
 
 public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
@@ -44,6 +119,24 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 .fetchAll(db)
         }
         return try records.map { try $0.toActualWindow() }
+    }
+
+    public func fetchActiveWindow(
+        providerID: ProviderID,
+        at referenceTime: Date
+    ) async throws -> ActualWindow5h? {
+        let reference = DateTimeService.formatUTC(referenceTime)
+        let record = try await writer.read { db in
+            try ActualWindow5hRecord
+                .filter(Column("provider_id") == providerID.rawValue)
+                .filter(sql: """
+                    julianday(start_at) <= julianday(?) AND
+                    julianday(start_at) + (duration_seconds / 86400.0) > julianday(?)
+                    """, arguments: [reference, reference])
+                .order(Column("start_at").desc)
+                .fetchOne(db)
+        }
+        return try record?.toActualWindow()
     }
 
     public func create(_ window: ActualWindow5h) async throws {

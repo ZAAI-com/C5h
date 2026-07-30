@@ -61,8 +61,7 @@ final class DashboardViewModel {
             },
             upsertActualWindow7d: { window, tolerance in
                 try await actual7dRepository.upsertByEndAt(window, tolerance: tolerance)
-            },
-            previousWindowEndLookup: usageSnapshotRepository.previousWindowEndLookup()
+            }
         )
     }
 
