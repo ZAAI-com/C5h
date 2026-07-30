@@ -1,0 +1,69 @@
+C5h/UI/Providers/ProvidersViewModel.swift
+  s_71b793b40e46c0::t_27d8374264d358 44
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_71b793b40e46c0::t_27d8374264d358 204
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeUsageStatusTests.swift
+  s_71b793b40e46c0::t_f5176f11371f31 33-81
+Packages/C5hStore/Tests/C5hStoreTests/ActualWindow5hRepositoryTests.swift
+  s_71b793b40e46c0::t_871d9e865fd9a9 184-221,233-235,237-238,240,245-375
+  s_71b793b40e46c0::t_c4073057a59e8a 236,239,241-244
+  s_71b793b40e46c0::t_f0705e433271a5 222-232
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_71b793b40e46c0::t_b231137b6bda6a 21,36,58-59,65,102-111,150-207,351-374,377
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_71b793b40e46c0::t_27d8374264d358 101,245
+  s_71b793b40e46c0::t_50483732e6c0b5 329,333-335
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeUsageStatus.swift
+  s_71b793b40e46c0::t_d686d306c87e91 6,21-31
+Packages/C5hStore/Sources/C5hStore/Repositories/ActualWindow5hRepository.swift
+  s_71b793b40e46c0::t_b02c5a07c33676 8,20-93,124-132,135-140
+  s_71b793b40e46c0::t_2e22cc27f3e65a 133-134
+  s_1ee34bed3539d5::t_a514426c29cdf2 141
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_71b793b40e46c0::t_27d8374264d358 64
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_71b793b40e46c0::t_da6e87e1bf7010 16-40,49-61,65,67-98,100-104,106-301,334-369
+  s_71b793b40e46c0::t_37edba8fef9709 62-64,105
+  s_71b793b40e46c0::t_c9dfd9e8e79779 302-333,370
+  s_71b793b40e46c0::t_1228b79073008b 66,99
+  s_1ee34bed3539d5::t_0611267ed329a8 371
+C5h/Core/Services/AppSchedulerDriver.swift
+  s_71b793b40e46c0::t_50483732e6c0b5 69,73-75
+Packages/C5hCore/Tests/C5hCoreTests/UsageFetcherTests.swift
+  s_71b793b40e46c0::t_ad4f3f46dded5f 272
+  s_71b793b40e46c0::t_71dcf62682916d 187,189-190,192
+  s_71b793b40e46c0::t_0cda3884788b91 181-184,191,193-194
+  s_71b793b40e46c0::t_f5176f11371f31 9,12,20,167-169,172-178,195-199,201-209,212-214,217,219,221-222,225-232,235,237,239-246,270-271,274,276
+Packages/C5hStore/Tests/C5hStoreTests/UsageSnapshotRepositoryTests.swift
+  s_71b793b40e46c0::t_f95e3823f56633 26,42
+  s_71b793b40e46c0::t_7bba2680acb9cc 8-9,22-25,28-29,32,34-41,45-51,76-78
+  s_71b793b40e46c0::t_06b067b2c39876 6-7,18,21
+  s_71b793b40e46c0::t_8cd2a3db718efe 79
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_71b793b40e46c0::t_0cda3884788b91 66-68
+  s_71b793b40e46c0::t_d686d306c87e91 21,39,51-54,58,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b545409c253af3963432333cb93d94308a1a9b4b",
+  "prompts": {},
+  "sessions": {
+    "s_1ee34bed3539d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54d536ed-ace3-4c52-9462-11a0caf4cb74",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_71b793b40e46c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f7446-20da-7a63-8c46-f743ae33b288",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
