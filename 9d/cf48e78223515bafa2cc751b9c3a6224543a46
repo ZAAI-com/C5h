@@ -1,0 +1,110 @@
+.github/workflows/S2-Release-GitHub.yml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 15,25-28,51-55
+Packages/C5hStore/Sources/C5hStore/Migrations/Migrations.swift
+  s_c93eca03fb4587::t_3d8cb94f2823a4 166-224,240,242-243,245-254,256-258
+  s_c93eca03fb4587::t_7c1a3fdfcda25c 225-239,241,244,255
+.github/workflows/S1-Test-CI.yml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 18-20
+Packages/C5hStore/Sources/C5hStore/Repositories/PlannedWindowRepository.swift
+  s_c93eca03fb4587::t_4414bd6be16a33 129-132
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeLocalActivityDetector.swift
+  s_c93eca03fb4587::t_e38a4fb99d0fd0 158,175
+  s_c93eca03fb4587::t_dc859b4539214f 18,21,24-26,38,68-93,96-100,105,112,116,141,149-150,154-157,159-174,176-207
+Packages/C5hStore/Tests/C5hStoreTests/MigrationsTests.swift
+  s_c93eca03fb4587::t_8dc1c40c3a2784 46-49,52-55,57,61-87,90-93,97-138,141-186,243-250,259-290
+  s_c93eca03fb4587::t_779f84f1fde569 50-51,56,58-60,94-96
+  s_c93eca03fb4587::t_e24f3b3621f6e6 187-220,251-258
+  s_c93eca03fb4587::t_cb2a89a2578a3e 88-89,139-140
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_c93eca03fb4587::t_9a288e3155ed35 34-106
+C5h/Core/Services/AppSchedulerDriver.swift
+  s_c93eca03fb4587::t_b93462938fe829 10,51,78-80
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_c93eca03fb4587::t_8e479c17fc5bc3 76-83
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_c93eca03fb4587::t_4414bd6be16a33 970-1011
+  s_c93eca03fb4587::t_dbe20f5b67bfa1 831-877,888,906-914,932-969,1012-1094
+  s_29b2c63d83ff1d::t_dcc02cb5f2582d 1095
+Packages/C5hStore/Sources/C5hStore/Repositories/CommandRunRepository.swift
+  s_c93eca03fb4587::t_8aff3b9119a059 52,104-122
+  s_133057085c135c::t_e57572db9630a3 123-124
+Toolkit/Release/Tests/fake-gh.sh
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-32,37-72,77-111
+  s_c93eca03fb4587::t_a559005528902e 33-36,73-76
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeLocalActivityDetectorTests.swift
+  s_c93eca03fb4587::t_b27ff78babc9ae 241-297,325-340
+  s_c93eca03fb4587::t_efb3ee5125400e 164-240
+  s_c93eca03fb4587::t_3211e988a51dd2 341
+Packages/C5hStore/Tests/C5hStoreTests/PlannedWindowRepositoryTests.swift
+  s_c93eca03fb4587::t_4414bd6be16a33 142-166
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_c93eca03fb4587::t_7d20e6178f2829 271-276
+  s_c93eca03fb4587::t_27bc94e6324a35 22-23,39,62-63,70,292,302-316,346-384
+  s_c93eca03fb4587::t_4414bd6be16a33 293-301
+  s_29b2c63d83ff1d::t_b69f762a42bf56 385
+Packages/C5hStore/Tests/C5hStoreTests/ActualWindow5hRepositoryTests.swift
+  s_c93eca03fb4587::t_81109121c9e79b 183-273
+Toolkit/Release/Tests/Fixtures/element-build-5.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-9
+C5h/App/AppEnvironment.swift
+  s_c93eca03fb4587::t_b93462938fe829 138
+Toolkit/Release/validate-release-identifiers.sh
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-83,86-183
+  s_c93eca03fb4587::t_f20ea948d5b199 84-85
+Toolkit/Release/Tests/Fixtures/legacy-build-7.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-8
+Packages/C5hStore/Sources/C5hStore/Repositories/ActualWindow5hRepository.swift
+  s_c93eca03fb4587::t_cbf32573c4faab 6-8,40,107-112,123-126,145-148,176-180,191-194,217-220
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_c93eca03fb4587::t_1d19b7f7029e60 103-108,197-200
+  s_c93eca03fb4587::t_c11dd15278c22b 111-148
+  s_c93eca03fb4587::t_7e73299bd3c722 109,250-275
+  s_c93eca03fb4587::t_e94dfda280f3fb 110
+Toolkit/Release/Tests/Fixtures/multi-builds-9-12.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-12
+Toolkit/Release/Tests/Fixtures/malformed-appcast.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-7
+Toolkit/Release/Tests/Fixtures/missing-version.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-8
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_c93eca03fb4587::t_b93462938fe829 338-340
+  s_c93eca03fb4587::t_033790d2c630d7 194-197
+Toolkit/Release/Tests/Fixtures/element-build-10.xml
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-9
+Packages/C5hCore/Sources/C5hCore/Models/CommandRun.swift
+  s_c93eca03fb4587::t_8aff3b9119a059 63-77
+Toolkit/Release/Tests/validate-release-identifiers.sh
+  s_c93eca03fb4587::t_fa8f3e02646b1a 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9dcf48e78223515bafa2cc751b9c3a6224543a46",
+  "prompts": {},
+  "sessions": {
+    "s_133057085c135c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fee35-1087-7a93-b0ef-f3359556c5a0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_29b2c63d83ff1d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fed45-08db-74f1-9154-2d4230516134",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_c93eca03fb4587": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe206-a311-7052-add0-9b70d7941def",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
