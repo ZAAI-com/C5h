@@ -161,6 +161,140 @@ struct ClaudeLocalActivityDetectorTests {
         #expect(await detector.hasActivity(since: reference) == false)
     }
 
+    @Test("Caches a completed walk until the requested rescan interval expires")
+    func cachesCompletedWalkUntilIntervalExpires() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let detector = ClaudeLocalActivityDetector(
+            projectsDirectory: projects,
+            excludedProjectPaths: []
+        )
+        let firstScanAt = reference.addingTimeInterval(120)
+
+        #expect(await detector.hasActivity(
+            since: reference,
+            now: firstScanAt,
+            minimumRescanInterval: 300
+        ) == false)
+
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "new-session.jsonl",
+            modifiedAt: reference.addingTimeInterval(60)
+        )
+        #expect(await detector.hasActivity(
+            since: reference,
+            now: firstScanAt.addingTimeInterval(299),
+            minimumRescanInterval: 300
+        ) == false)
+        #expect(await detector.hasActivity(
+            since: reference,
+            now: firstScanAt.addingTimeInterval(300),
+            minimumRescanInterval: 300
+        ))
+    }
+
+    @Test("Cached latest modification date is evaluated against each reference")
+    func cachedLatestDateUsesEachReference() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let project = "-Users-m-Some-Project"
+        let name = "session.jsonl"
+        let modificationDate = reference.addingTimeInterval(60)
+        try makeTranscript(
+            in: projects,
+            project: project,
+            name: name,
+            modifiedAt: modificationDate
+        )
+        let detector = ClaudeLocalActivityDetector(
+            projectsDirectory: projects,
+            excludedProjectPaths: []
+        )
+        let firstScanAt = reference.addingTimeInterval(120)
+        #expect(await detector.hasActivity(
+            since: reference,
+            now: firstScanAt,
+            minimumRescanInterval: 300
+        ))
+
+        // Removing the source proves both following answers come from the same
+        // cached latest date rather than another filesystem walk.
+        try FileManager.default.removeItem(
+            at: projects
+                .appendingPathComponent(project, isDirectory: true)
+                .appendingPathComponent(name)
+        )
+        #expect(await detector.hasActivity(
+            since: reference.addingTimeInterval(30),
+            now: firstScanAt.addingTimeInterval(1),
+            minimumRescanInterval: 300
+        ))
+        #expect(await detector.hasActivity(
+            since: modificationDate,
+            now: firstScanAt.addingTimeInterval(2),
+            minimumRescanInterval: 300
+        ) == false)
+    }
+
+    @Test("Concurrent cache callers coalesce onto one filesystem scan")
+    func concurrentCallersCoalesce() async {
+        let cache = ClaudeLocalActivityScanCache()
+        let counter = LockedCounter()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        await withTaskGroup(of: ClaudeLocalActivityScanResult.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    await cache.result(now: now, minimumRescanInterval: 300) {
+                        counter.increment()
+                        Thread.sleep(forTimeInterval: 0.05)
+                        return .completed(latestModificationDate: nil)
+                    }
+                }
+            }
+            for await result in group {
+                #expect(result == .completed(latestModificationDate: nil))
+            }
+        }
+
+        #expect(counter.value == 1)
+    }
+
+    @Test("Scan-limit failures are cached until the interval expires")
+    func limitExceededIsCachedUntilExpiry() async {
+        let cache = ClaudeLocalActivityScanCache()
+        let counter = LockedCounter()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let scan: @Sendable () -> ClaudeLocalActivityScanResult = {
+            counter.increment()
+            return .limitExceeded
+        }
+
+        let initial = await cache.result(
+            now: now,
+            minimumRescanInterval: 300,
+            scan: scan
+        )
+        let cached = await cache.result(
+            now: now.addingTimeInterval(299),
+            minimumRescanInterval: 300,
+            scan: scan
+        )
+        #expect(initial == .limitExceeded)
+        #expect(cached == .limitExceeded)
+        #expect(counter.value == 1)
+
+        let expired = await cache.result(
+            now: now.addingTimeInterval(300),
+            minimumRescanInterval: 300,
+            scan: scan
+        )
+        #expect(expired == .limitExceeded)
+        #expect(counter.value == 2)
+    }
+
     private func makeProjectsDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("c5h-tests-projects-\(UUID().uuidString)", isDirectory: true)
@@ -186,5 +320,22 @@ struct ClaudeLocalActivityDetectorTests {
 
     private func removeDirectory(_ url: URL) {
         try? FileManager.default.removeItem(at: url)
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = 0
+
+    func increment() {
+        lock.lock()
+        storage += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
     }
 }

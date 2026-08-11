@@ -100,7 +100,52 @@ struct UsageCheckGateFactoryTests {
             name: "session.jsonl",
             modifiedAt: now.addingTimeInterval(-60)
         )
-        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+        // Recursive transcript walks follow the configured/default 5-minute
+        // usage cadence rather than the helper's 30-second gate cadence.
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(300)
+        ))
+    }
+
+    @Test("Claude transcript rescans use the stored provider refresh interval")
+    func claudeTranscriptRescanUsesStoredRefreshInterval() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        try await settings.set(
+            AppSettingsKeys.usageRefreshIntervalSeconds(for: .claude),
+            value: 60
+        )
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "session.jsonl",
+            modifiedAt: now.addingTimeInterval(-1)
+        )
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(59)
+        ) == false)
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(60)
+        ))
     }
 
     @Test("Claude ignores local activity older than the last recorded window end")
@@ -149,7 +194,10 @@ struct UsageCheckGateFactoryTests {
             name: "after-window.jsonl",
             modifiedAt: windowEnd.addingTimeInterval(60)
         )
-        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(300)
+        ))
     }
 
     @Test("Claude ignores local activity older than the lookback")
@@ -197,6 +245,32 @@ struct UsageCheckGateFactoryTests {
             localActivityDetector: Self.emptyDetector()
         )
         #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("A retained legacy Codex weekly row does not count as an active 5h window")
+    func legacyCodexWeeklyRowDoesNotOpenGate() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .codex), value: false)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+        try await actualRepo.create(ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-24 * 3600),
+            durationSeconds: 7 * 24 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: GRDBUsageSnapshotRepository(database: db),
+            localActivityDetector: Self.emptyDetector()
+        )
+
+        #expect(await gate.shouldCheck(providerID: .codex, now: now) == false)
     }
 
     @Test("A Claude window ending within the probe margin is not active; a Codex one is")

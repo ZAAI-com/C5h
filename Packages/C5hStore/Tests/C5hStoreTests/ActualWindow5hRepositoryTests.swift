@@ -180,6 +180,97 @@ struct ActualWindow5hRepositoryUpsertTests {
         let all = try await repo.fetchAll().filter { $0.providerID == .claude }
         #expect(all.count == 2)
     }
+
+    @Test("A valid upsert does not reuse a legacy weekly-class row with the same end")
+    func validUpsertIgnoresLegacyWeeklyEndMatch() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let legacy = ActualWindow5h(
+            providerID: .codex,
+            startAt: end.addingTimeInterval(-7 * 24 * 3600),
+            durationSeconds: 7 * 24 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.create(legacy)
+
+        let valid = ActualWindow5h(
+            providerID: .codex,
+            startAt: end.addingTimeInterval(-5 * 3600),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.upsertByEndAt(valid, tolerance: 60)
+
+        let visible = try await repo.fetchAll()
+        #expect(visible.map(\.id) == [valid.id])
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 2)
+    }
+
+    @Test("Weekly-class input is ignored by the 5h upsert boundary")
+    func weeklyClassUpsertIsIgnored() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        try await repo.upsertByEndAt(ActualWindow5h(
+            providerID: .codex,
+            startAt: Date(timeIntervalSince1970: 1_800_000_000),
+            durationSeconds: CodexUsageStatus.weeklyClassThresholdSeconds,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ), tolerance: 60)
+
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 0)
+    }
+}
+
+@Suite("ActualWindow5hRepository legacy duration filtering")
+struct ActualWindow5hRepositoryLegacyDurationTests {
+    @Test("Every read path hides retained weekly-class rows")
+    func readPathsHideLegacyWeeklyRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+        let reference = Date(timeIntervalSince1970: 1_800_000_000)
+        let legacy = ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-24 * 3600),
+            durationSeconds: 7 * 24 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let valid = ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-60),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.create(legacy)
+        try await repo.create(valid)
+
+        #expect(try await repo.fetchAll().map(\.id) == [valid.id])
+        #expect(try await repo.fetchWindows(
+            for: DateInterval(start: reference, duration: 1)
+        ).map(\.id) == [valid.id])
+        #expect(try await repo.fetchActiveWindow(
+            providerID: .codex,
+            at: reference
+        )?.id == valid.id)
+
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 2, "unmatched legacy data is retained for recovery")
+    }
 }
 
 @Suite("ActualWindow5hRepository active-window wait")

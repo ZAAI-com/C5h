@@ -191,8 +191,10 @@ actor HelperUsageRefresher {
             if let last = lastRefreshAt[providerID], now.timeIntervalSince(last) < interval {
                 continue
             }
-            // Don't consume the interval when gated off: re-evaluate next tick so
-            // a newly active or planned window resumes polling promptly.
+            // Don't consume the interval when gated off: keep re-evaluating DB
+            // evidence on the helper's 30-second ticks so a newly active or
+            // planned window resumes promptly. Claude's recursive transcript
+            // walk is cached separately at this provider's refresh cadence.
             guard await gate.shouldCheck(providerID: providerID, now: now) else {
                 // Log gated-off consuming probes at the refresh cadence (the
                 // gate re-evaluates every 30s tick) so overnight behavior is
@@ -333,6 +335,9 @@ struct HelperSchedulerDriver: SchedulerDriver {
             },
             awaitActiveWindow: { providerID, now in
                 try await actual5hRepo.awaitActiveWindow(providerID: providerID, at: now)
+            },
+            triggerAttributionFetch: { commandRunID in
+                try await cmdRepo.fetchAttributionEvidence(id: commandRunID)
             }
         )
         return await resolver.resolveTriggeredWindow(

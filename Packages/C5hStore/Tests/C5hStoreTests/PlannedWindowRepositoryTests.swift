@@ -139,6 +139,31 @@ struct PlannedWindowRepositoryTests {
         }
     }
 
+    @Test("A retained weekly-class row does not block a planned window")
+    func retainedWeeklyClassRowDoesNotBlockPlannedWindow() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        let now = Date()
+        try await actualRepo.create(ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: CodexUsageStatus.weeklyClassThresholdSeconds,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+
+        let planned = PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(10 * 60)
+        )
+        try await plannedRepo.create(planned)
+
+        #expect(try await plannedRepo.fetch(id: planned.id) != nil)
+    }
+
     @Test("Same-provider historical actual overlap is allowed")
     func allowsHistoricalActualOverlap() async throws {
         let db = try Database.inMemory()

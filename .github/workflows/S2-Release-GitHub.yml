@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       prerelease:
-        description: "Mark the GitHub release as a prerelease (kept out of latest and the appcast feed)"
+        description: "Mark as prerelease (excluded from releases/latest; build number remains globally reserved)"
         required: false
         type: boolean
         default: false
@@ -21,6 +21,10 @@ on:
         required: false
         type: boolean
         default: false
+
+concurrency:
+  group: c5h-s2-release
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -44,59 +48,11 @@ jobs:
           PRERELEASE: ${{ inputs.prerelease }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Version must be strict semver, no leading zeros (e.g. 0.5.0). Got: $VERSION"
-            exit 1
-          fi
-          if ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            echo "Build number must be a positive integer (e.g. 5). Got: $BUILD_NUMBER"
-            exit 1
-          fi
-          # Guard against a lower or reused build number silently replacing the
-          # latest feed with an update higher-build Sparkle clients would never
-          # install (Sparkle only upgrades to a strictly greater sparkle:version).
-          # Compare against the highest build already in the published feed. A
-          # fetch or parse failure is fatal unless this is the explicitly
-          # validated first stable release that will publish an appcast.
-          appcast_file=$(mktemp)
-          trap 'rm -f "$appcast_file"' EXIT
-          feed_status="fetch failed"
-          published=""
-          if curl -fsSL "https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml" \
-            -o "$appcast_file"; then
-            feed_status="contained no parseable sparkle:version"
-            published=$(perl -ne 'while (/sparkle:version="([0-9]+)"/g) { print "$1\n" }' "$appcast_file" \
-              | sort -n | tail -n1)
-          fi
-          if [ -n "${published:-}" ]; then
-            if [ "$FIRST_SPARKLE_RELEASE" = "true" ]; then
-              echo "The first_sparkle_release override is unnecessary because the published appcast was verified. Disable the override and rerun."
-              exit 1
-            fi
-            if [ "$BUILD_NUMBER" -le "$published" ]; then
-              echo "Build number must be strictly greater than the highest published build ($published); a lower or reused number poisons the Sparkle feed. Got: $BUILD_NUMBER"
-              exit 1
-            fi
-          else
-            if [ "$FIRST_SPARKLE_RELEASE" != "true" ]; then
-              echo "Could not verify the published appcast build number: $feed_status. Refusing to skip the monotonic build-number check."
-              exit 1
-            fi
-            if [ "$PRERELEASE" = "true" ]; then
-              echo "The first Sparkle release must be stable so releases/latest serves its appcast. Disable prerelease and rerun."
-              exit 1
-            fi
-            existing_appcasts=$(gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq '.[] | select(.draft == false) | .assets[]? | select(.name == "appcast.xml") | .browser_download_url')
-            if [ -n "$existing_appcasts" ]; then
-              echo "The first_sparkle_release override is invalid because a published appcast.xml asset already exists:"
-              echo "$existing_appcasts"
-              exit 1
-            fi
-            echo "::notice::Using the audited first_sparkle_release override; GitHub confirms that no published appcast.xml asset exists."
-          fi
+          ./Toolkit/Release/validate-release-identifiers.sh \
+            "$VERSION" \
+            "$BUILD_NUMBER" \
+            "$PRERELEASE" \
+            "$FIRST_SPARKLE_RELEASE"
 
       - name: Require release credentials
         env:

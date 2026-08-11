@@ -19,6 +19,8 @@ public struct ActiveWindowResolver: Sendable {
     public typealias FetchSnapshot = @Sendable (ProviderID) async throws -> UsageSnapshot
     public typealias FetchActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
     public typealias AwaitActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
+    public typealias FetchTriggerAttribution =
+        @Sendable (UUID) async throws -> TriggerAttributionEvidence?
 
     /// How far before the trigger a provider-reported window start may lie and
     /// still be credited to the trigger. Measured from the top of the UTC hour
@@ -34,6 +36,7 @@ public struct ActiveWindowResolver: Sendable {
     public let activeWindowFetch: FetchActiveWindow
     public let updateActualWindow: @Sendable (ActualWindow5h) async throws -> Void
     public let awaitActiveWindow: AwaitActiveWindow
+    public let triggerAttributionFetch: FetchTriggerAttribution
 
     /// Whether a window starting at `startAt` could have been opened by a
     /// trigger that ran at `now`. A start earlier than the hour floor of `now`
@@ -56,13 +59,15 @@ public struct ActiveWindowResolver: Sendable {
         snapshotFetch: @escaping FetchSnapshot,
         activeWindowFetch: @escaping FetchActiveWindow,
         updateActualWindow: @escaping @Sendable (ActualWindow5h) async throws -> Void,
-        awaitActiveWindow: @escaping AwaitActiveWindow = { _, _ in nil }
+        awaitActiveWindow: @escaping AwaitActiveWindow = { _, _ in nil },
+        triggerAttributionFetch: @escaping FetchTriggerAttribution = { _ in nil }
     ) {
         self.fetcher = fetcher
         self.snapshotFetch = snapshotFetch
         self.activeWindowFetch = activeWindowFetch
         self.updateActualWindow = updateActualWindow
         self.awaitActiveWindow = awaitActiveWindow
+        self.triggerAttributionFetch = triggerAttributionFetch
     }
 
     /// Anchors the trigger's 5h window to a real provider window, or records
@@ -263,12 +268,12 @@ public struct ActiveWindowResolver: Sendable {
             // chained onto the previous window's end, not a window this wake
             // prompt opened. Stamping it `c5hTriggered`/`exact` would show a
             // block C5h never started (the "planned 05:00, calendar shows
-            // 03:10" confusion). Force the row back to `detectedFromUsage`/
-            // `estimated`: the upsert above may have merged into a previously
-            // stamped `c5hTriggered` row (upsertByEndAt preserves that source
-            // and upgrades confidence), so trusting the read-back row would
-            // silently keep the stamp. Link the run for traceability and
-            // return non-nil so the caller does NOT fall through to
+            // 03:10" confusion). The upsert above may have merged into a
+            // previously stamped `c5hTriggered` row, so validate that row's
+            // linked command against the corrected bounds. Preserve a genuine
+            // earlier trigger, but force a provably stale fallback stamp back
+            // to `detectedFromUsage`/`estimated`. Link the run for traceability
+            // and return non-nil so the caller does NOT fall through to
             // `reuseActiveWindow`.
             NSLog("ActiveWindowResolver: \(providerID.rawValue) window [\(derived5h.startAt) … \(derived5h.endAt)] predates command \(commandRunID) with zero recorded usage; keeping it detectedFromUsage instead of promoting")
             guard var active = try await activeWindowFetch(providerID, now) else {
@@ -283,6 +288,31 @@ public struct ActiveWindowResolver: Sendable {
                   abs(active.endAt.timeIntervalSince(derived5h.endAt))
                 <= UsageFetcher.dedupTolerance else {
                 return derived5h
+            }
+            if active.source == .c5hTriggered {
+                if active.commandRunID == nil {
+                    // There is no earlier command attribution to validate or
+                    // preserve. Keep the existing trigger classification and
+                    // attach the current prompt as its first command link.
+                    active.commandRunID = commandRunID
+                    active.updatedAt = now
+                    try await updateActualWindow(active)
+                    return active
+                }
+                switch await existingTriggerAttribution(for: active) {
+                case .confirmed:
+                    // A previous prompt plausibly opened this provider window.
+                    // The current prompt merely joined it, so retain the first
+                    // trigger's source, confidence, and command link.
+                    return active
+                case .unknown:
+                    // Missing or unreadable evidence cannot prove that the
+                    // existing attribution is stale. Prefer preserving user
+                    // history over a destructive, speculative demotion.
+                    return active
+                case .stale:
+                    break
+                }
             }
             var needsWrite = false
             if active.source != .detectedFromUsage || active.confidence != .estimated {
@@ -311,6 +341,46 @@ public struct ActiveWindowResolver: Sendable {
         active.updatedAt = now
         try await updateActualWindow(active)
         return active
+    }
+
+    private enum ExistingTriggerAttribution {
+        case confirmed
+        case stale
+        case unknown
+    }
+
+    /// Validates an existing trigger stamp against the command that originally
+    /// supplied its link, using the provider-corrected window bounds. Legacy
+    /// fallback placeholders become stale when a later usage upsert moves the
+    /// window start well before their linked command; a genuine earlier trigger
+    /// remains plausible even when a second prompt arrives later in the window.
+    private func existingTriggerAttribution(
+        for window: ActualWindow5h
+    ) async -> ExistingTriggerAttribution {
+        guard let commandRunID = window.commandRunID else { return .unknown }
+        do {
+            guard let evidence = try await triggerAttributionFetch(commandRunID) else {
+                return .unknown
+            }
+            guard evidence.providerID == window.providerID, evidence.isPrompt else {
+                return .stale
+            }
+            let startIsNotTooFarAfterCommand = window.startAt
+                <= evidence.startedAt.addingTimeInterval(Self.triggerAnchorTolerance)
+            let commandPrecedesWindowEnd = evidence.startedAt < window.endAt
+            guard startIsNotTooFarAfterCommand,
+                  commandPrecedesWindowEnd,
+                  Self.isPlausiblyTriggerAnchored(
+                      startAt: window.startAt,
+                      now: evidence.startedAt
+                  ) else {
+                return .stale
+            }
+            return .confirmed
+        } catch {
+            NSLog("ActiveWindowResolver: could not validate trigger attribution for command \(commandRunID): \(error)")
+            return .unknown
+        }
     }
 
     /// Reported 5h used percentage from the raw snapshot payload, used to tell

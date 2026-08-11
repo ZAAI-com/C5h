@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <item>
+      <sparkle:version>10</sparkle:version>
+      <enclosure url="https://example.test/C5h-1.1.0.dmg" />
+    </item>
+  </channel>
+</rss>

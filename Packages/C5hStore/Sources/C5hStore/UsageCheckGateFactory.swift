@@ -73,7 +73,14 @@ public extension UsageCheckGate {
                     .map(\.endAt)
                     .max()
                 let reference = max(lastRecordedEnd ?? .distantPast, floor)
-                return await localActivityDetector.hasActivity(since: reference)
+                // The gate itself may be evaluated every helper tick so newly
+                // active/planned DB state is noticed promptly. Cache only this
+                // recursive filesystem leaf at the user's refresh cadence.
+                return await localActivityDetector.hasActivity(
+                    since: reference,
+                    now: now,
+                    minimumRescanInterval: refreshInterval
+                )
             },
             isBelievedActiveFromSnapshot: { providerID, checkDate in
                 // Believed-active fallback for consuming providers: a window

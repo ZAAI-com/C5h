@@ -7,6 +7,7 @@ struct AppSchedulerDriver: SchedulerDriver {
     let actual5hRepository: any ActualWindow5hRepository
     let actual7dRepository: any ActualWindow7dRepository
     let usageSnapshotRepository: any UsageSnapshotRepository
+    let commandRunRepository: any CommandRunRepository
     let registry: ProviderRegistry
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
@@ -47,6 +48,7 @@ struct AppSchedulerDriver: SchedulerDriver {
         let actual5hRepo = actual5hRepository
         let actual7dRepo = actual7dRepository
         let usageRepo = usageSnapshotRepository
+        let commandRepo = commandRunRepository
         let registry = registry
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
@@ -73,6 +75,9 @@ struct AppSchedulerDriver: SchedulerDriver {
             },
             awaitActiveWindow: { providerID, now in
                 try await actual5hRepo.awaitActiveWindow(providerID: providerID, at: now)
+            },
+            triggerAttributionFetch: { commandRunID in
+                try await commandRepo.fetchAttributionEvidence(id: commandRunID)
             }
         )
         return await resolver.resolveTriggeredWindow(

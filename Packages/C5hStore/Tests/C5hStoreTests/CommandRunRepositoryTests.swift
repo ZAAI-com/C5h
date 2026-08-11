@@ -31,6 +31,79 @@ struct CommandRunRepositoryTests {
         #expect(fetched?.workingDirectory == "/tmp")
     }
 
+    @Test("Attribution evidence tolerates the legacy PromptCommand raw value")
+    func attributionEvidenceToleratesLegacyPromptName() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+        let legacyID = UUID()
+        let startedAt = try #require(
+            DateTimeService.parseUTC("2026-07-13T20:45:31.000Z")
+        )
+
+        try await db.writer.write { gdb in
+            try gdb.execute(
+                sql: """
+                INSERT INTO command_runs
+                (id, provider_id, run_type, command, arguments_json, started_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    legacyID.uuidString, "claude", "PromptCommand", "claude", "[]",
+                    DateTimeService.formatUTC(startedAt), "succeeded"
+                ]
+            )
+        }
+
+        let evidence = try #require(
+            try await repo.fetchAttributionEvidence(id: legacyID)
+        )
+        #expect(evidence.providerID == .claude)
+        #expect(evidence.startedAt == startedAt)
+        #expect(evidence.isPrompt)
+    }
+
+    @Test("Attribution evidence distinguishes prompt, non-prompt, and missing rows")
+    func attributionEvidenceClassifiesCurrentRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+        let startedAt = Date(timeIntervalSince1970: 1_730_000_000)
+        let prompt = CommandRun(
+            providerID: .claude,
+            commandName: .prompt,
+            command: "claude",
+            argumentsJSON: "[]",
+            startedAt: startedAt,
+            status: .succeeded
+        )
+        let usage = CommandRun(
+            providerID: .codex,
+            commandName: .usage,
+            command: "codex",
+            argumentsJSON: "[]",
+            startedAt: startedAt,
+            status: .succeeded
+        )
+        try await repo.create(prompt)
+        try await repo.create(usage)
+
+        let promptEvidence = try #require(
+            try await repo.fetchAttributionEvidence(id: prompt.id)
+        )
+        let usageEvidence = try #require(
+            try await repo.fetchAttributionEvidence(id: usage.id)
+        )
+        let missingEvidence = try await repo.fetchAttributionEvidence(id: UUID())
+
+        #expect(promptEvidence.isPrompt)
+        #expect(promptEvidence.providerID == .claude)
+        #expect(promptEvidence.startedAt == startedAt)
+        #expect(!usageEvidence.isPrompt)
+        #expect(usageEvidence.providerID == .codex)
+        #expect(missingEvidence == nil)
+    }
+
     @Test("Sweep stale running marks them cancelled")
     func sweepStale() async throws {
         let db = try Database.inMemory()

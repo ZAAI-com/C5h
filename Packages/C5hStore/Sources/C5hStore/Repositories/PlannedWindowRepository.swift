@@ -126,6 +126,10 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
 
         let activeActualConflict = try ActualWindow5hRecord
             .filter(Column("provider_id") == window.providerID.rawValue)
+            .filter(
+                Column("duration_seconds")
+                    < CodexUsageStatus.weeklyClassThresholdSeconds
+            )
             .filter(sql: """
                 datetime(start_at) <= datetime(?) AND
                 datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?) AND

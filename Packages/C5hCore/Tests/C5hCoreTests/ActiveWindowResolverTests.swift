@@ -828,6 +828,53 @@ struct ActiveWindowResolverTests {
         #expect(window.confidence == .exact)
     }
 
+    @Test("A later zero-percent prompt preserves a confirmed earlier trigger")
+    func laterZeroPercentPromptPreservesConfirmedEarlierTrigger() async throws {
+        let recorder = Recorder()
+        let originalTriggerTime = Self.hourStart.addingTimeInterval(30 * 60)
+        let laterTriggerTime = Self.hourStart.addingTimeInterval(90 * 60)
+        let earlierRunID = UUID()
+        let laterRunID = UUID()
+        var stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: Self.hourStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        stamped.commandRunID = earlierRunID
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: laterTriggerTime,
+            windowStartAt: Self.hourStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { commandRunID in
+                guard commandRunID == earlierRunID else { return nil }
+                return TriggerAttributionEvidence(
+                    providerID: .claude,
+                    startedAt: originalTriggerTime,
+                    isPrompt: true
+                )
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: laterRunID,
+            now: laterTriggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.confidence == .exact)
+        #expect(window.commandRunID == earlierRunID)
+        #expect(await recorder.updated.isEmpty)
+    }
+
     @Test("Demote path resets a previously stamped c5hTriggered row")
     func demotePathResetsPreviouslyStampedRow() async throws {
         let recorder = Recorder()
@@ -838,6 +885,7 @@ struct ActiveWindowResolverTests {
         // read-back state.
         let triggerTime = Self.hourStart.addingTimeInterval(1800)
         let chainedStart = triggerTime.addingTimeInterval(-80 * 60)
+        let staleFallbackRunAt = Self.hourStart.addingTimeInterval(10 * 60)
         let earlierRunID = UUID()
         var stamped = ActualWindow5h(
             providerID: .claude,
@@ -855,7 +903,15 @@ struct ActiveWindowResolverTests {
             fetcher: makeFetcher(recorder: recorder),
             snapshotFetch: { _ in snapshot },
             activeWindowFetch: { [stamped] _, _ in stamped },
-            updateActualWindow: { window in await recorder.addUpdate(window) }
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { commandRunID in
+                guard commandRunID == earlierRunID else { return nil }
+                return TriggerAttributionEvidence(
+                    providerID: .claude,
+                    startedAt: staleFallbackRunAt,
+                    isPrompt: true
+                )
+            }
         )
 
         let result = await resolver.resolveTriggeredWindow(
@@ -871,6 +927,170 @@ struct ActiveWindowResolverTests {
         let updates = await recorder.updated
         #expect(updates.count == 1)
         #expect(updates.first?.source == .detectedFromUsage)
+    }
+
+    @Test("Missing attribution evidence does not destructively demote a trigger")
+    func missingAttributionEvidencePreservesTrigger() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(90 * 60)
+        let earlierRunID = UUID()
+        var stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: Self.hourStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        stamped.commandRunID = earlierRunID
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: Self.hourStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { _ in nil }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.confidence == .exact)
+        #expect(window.commandRunID == earlierRunID)
+        #expect(await recorder.updated.isEmpty)
+    }
+
+    @Test("A triggered row without a command link attaches the current prompt")
+    func triggeredRowWithoutCommandLinkAttachesCurrentPrompt() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(90 * 60)
+        let commandRunID = UUID()
+        let stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: Self.hourStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: Self.hourStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { _ in
+                Issue.record("A row without a command link should not require attribution lookup")
+                return nil
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.confidence == .exact)
+        #expect(window.commandRunID == commandRunID)
+        let updates = await recorder.updated
+        #expect(updates.count == 1)
+        #expect(updates.first?.commandRunID == commandRunID)
+    }
+
+    @Test("Attribution lookup failure does not destructively demote a trigger")
+    func attributionLookupFailurePreservesTrigger() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(90 * 60)
+        let earlierRunID = UUID()
+        var stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: Self.hourStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        stamped.commandRunID = earlierRunID
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: Self.hourStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { _ in
+                throw C5hError.databaseError("attribution lookup failed")
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.source == .c5hTriggered)
+        #expect(window.confidence == .exact)
+        #expect(window.commandRunID == earlierRunID)
+        #expect(await recorder.updated.isEmpty)
+    }
+
+    @Test("Contradictory attribution evidence permits stale-trigger demotion")
+    func contradictoryAttributionEvidenceDemotesTrigger() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(90 * 60)
+        let earlierRunID = UUID()
+        var stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: Self.hourStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        stamped.commandRunID = earlierRunID
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: Self.hourStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { _ in
+                TriggerAttributionEvidence(
+                    providerID: .codex,
+                    startedAt: Self.hourStart.addingTimeInterval(30 * 60),
+                    isPrompt: true
+                )
+            }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: UUID(),
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.source == .detectedFromUsage)
+        #expect(window.confidence == .estimated)
+        #expect(window.commandRunID == earlierRunID)
+        #expect(await recorder.updated.count == 1)
     }
 
     @Test("Reuse fallback does not stamp a window that predates the trigger")

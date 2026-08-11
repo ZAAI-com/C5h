@@ -15,13 +15,15 @@ import Foundation
 /// excluded by default; without the exclusion each probe would count as
 /// "activity" and re-arm the next probe forever.
 public struct ClaudeLocalActivityDetector: Sendable {
-    public var projectsDirectory: URL
+    public let projectsDirectory: URL
     /// Encoded `~/.claude/projects` directory names whose transcripts never
     /// count as activity (the probe's own sessions).
-    public var excludedProjectDirectoryNames: Set<String>
+    public let excludedProjectDirectoryNames: Set<String>
     /// Fail-closed scan bound: past this many transcript files the scan reports
     /// no activity. Skipping a probe only costs tracking, never quota.
-    public var maxScannedFiles: Int
+    public let maxScannedFiles: Int
+
+    private let scanCache: ClaudeLocalActivityScanCache
 
     public init(
         projectsDirectory: URL = Self.defaultProjectsDirectory,
@@ -33,6 +35,7 @@ public struct ClaudeLocalActivityDetector: Sendable {
             excludedProjectPaths.map { Self.encodedProjectDirectoryName(forPath: $0.path) }
         )
         self.maxScannedFiles = maxScannedFiles
+        self.scanCache = ClaudeLocalActivityScanCache()
     }
 
     public static let standard = ClaudeLocalActivityDetector()
@@ -62,31 +65,55 @@ public struct ClaudeLocalActivityDetector: Sendable {
 
     /// True when any session `.jsonl` under `projectsDirectory` (outside the
     /// excluded project directories) was modified strictly after `reference`.
-    /// Returns false when the projects directory does not exist.
-    public func hasActivity(since reference: Date) async -> Bool {
-        // Detach so the synchronous filesystem walk never occupies the caller's
-        // actor executor.
-        await Task.detached(priority: .utility) {
-            hasActivityBlocking(since: reference)
-        }.value
+    /// `minimumRescanInterval` lets high-frequency callers reuse the latest
+    /// complete walk; the cached modification date is compared with each
+    /// caller's own reference, so an advancing boundary cannot reuse a stale
+    /// Boolean. Returns false when the projects directory does not exist.
+    public func hasActivity(
+        since reference: Date,
+        now: Date = .now,
+        minimumRescanInterval: TimeInterval = 0
+    ) async -> Bool {
+        let projectsDirectory = projectsDirectory
+        let excludedProjectDirectoryNames = excludedProjectDirectoryNames
+        let maxScannedFiles = maxScannedFiles
+        let result = await scanCache.result(
+            now: now,
+            minimumRescanInterval: minimumRescanInterval
+        ) {
+            Self.latestActivityBlocking(
+                projectsDirectory: projectsDirectory,
+                excludedProjectDirectoryNames: excludedProjectDirectoryNames,
+                maxScannedFiles: maxScannedFiles
+            )
+        }
+        guard let latestModificationDate = result.latestModificationDate else {
+            return false
+        }
+        return latestModificationDate > reference
     }
 
-    private func hasActivityBlocking(since reference: Date) -> Bool {
+    private static func latestActivityBlocking(
+        projectsDirectory: URL,
+        excludedProjectDirectoryNames: Set<String>,
+        maxScannedFiles: Int
+    ) -> ClaudeLocalActivityScanResult {
         let fileManager = FileManager.default
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: projectsDirectory.path, isDirectory: &isDirectory),
               isDirectory.boolValue else {
-            return false
+            return .completed(latestModificationDate: nil)
         }
         guard let projectDirectories = try? fileManager.contentsOfDirectory(
             at: projectsDirectory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return false
+            return .completed(latestModificationDate: nil)
         }
 
         var scannedFileCount = 0
+        var latestModificationDate: Date?
         for projectDirectory in projectDirectories {
             if excludedProjectDirectoryNames.contains(projectDirectory.lastPathComponent) {
                 continue
@@ -111,7 +138,7 @@ public struct ClaudeLocalActivityDetector: Sendable {
                         maxScannedFiles,
                         projectsDirectory.path
                     )
-                    return false
+                    return .limitExceeded
                 }
                 guard let values = try? fileURL.resourceValues(
                     forKeys: [.contentModificationDateKey, .isRegularFileKey]
@@ -119,11 +146,64 @@ public struct ClaudeLocalActivityDetector: Sendable {
                       let modificationDate = values.contentModificationDate else {
                     continue
                 }
-                if modificationDate > reference {
-                    return true
+                if latestModificationDate.map({ modificationDate > $0 }) ?? true {
+                    latestModificationDate = modificationDate
                 }
             }
         }
-        return false
+        return .completed(latestModificationDate: latestModificationDate)
+    }
+}
+
+enum ClaudeLocalActivityScanResult: Sendable, Equatable {
+    case completed(latestModificationDate: Date?)
+    case limitExceeded
+
+    var latestModificationDate: Date? {
+        switch self {
+        case .completed(let latestModificationDate):
+            latestModificationDate
+        case .limitExceeded:
+            nil
+        }
+    }
+}
+
+/// Serializes and coalesces filesystem walks for one detector configuration.
+/// `ClaudeLocalActivityDetector.standard` is a value whose copies retain this
+/// actor, so all gates in one process share a cache without global mutable state.
+actor ClaudeLocalActivityScanCache {
+    private struct CachedScan: Sendable {
+        let scannedAt: Date
+        let result: ClaudeLocalActivityScanResult
+    }
+
+    private var cachedScan: CachedScan?
+    private var inFlight: Task<ClaudeLocalActivityScanResult, Never>?
+
+    func result(
+        now: Date,
+        minimumRescanInterval: TimeInterval,
+        scan: @escaping @Sendable () -> ClaudeLocalActivityScanResult
+    ) async -> ClaudeLocalActivityScanResult {
+        let interval = max(0, minimumRescanInterval)
+        if let cachedScan {
+            let age = now.timeIntervalSince(cachedScan.scannedAt)
+            if age >= 0, age < interval {
+                return cachedScan.result
+            }
+        }
+        if let inFlight {
+            return await inFlight.value
+        }
+
+        // Detach so the synchronous filesystem walk never occupies the caller's
+        // actor executor. Concurrent callers await this same task.
+        let task = Task.detached(priority: .utility, operation: scan)
+        inFlight = task
+        let result = await task.value
+        cachedScan = CachedScan(scannedAt: now, result: result)
+        inFlight = nil
+        return result
     }
 }

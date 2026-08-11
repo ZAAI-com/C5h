@@ -3,6 +3,9 @@ import GRDB
 import C5hCore
 
 public protocol ActualWindow5hRepository: Sendable {
+    /// All read APIs expose only 5h-class rows. Legacy Codex releases could
+    /// persist a weekly limit in this table; those rows remain available to the
+    /// compatibility migration but must never participate in 5h UI or scheduling.
     func fetchAll() async throws -> [ActualWindow5h]
     func fetchWindows(for interval: DateInterval) async throws -> [ActualWindow5h]
     func fetchActiveWindow(providerID: ProviderID, at referenceTime: Date) async throws -> ActualWindow5h?
@@ -34,6 +37,7 @@ public extension ActualWindow5hRepository {
         return candidates
             .filter {
                 $0.providerID == providerID
+                    && $0.durationSeconds < CodexUsageStatus.weeklyClassThresholdSeconds
                     && $0.startAt <= referenceTime
                     && referenceTime < $0.endAt
             }
@@ -100,7 +104,12 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
 
     public func fetchAll() async throws -> [ActualWindow5h] {
         let records = try await writer.read { db in
-            try ActualWindow5hRecord.fetchAll(db)
+            try ActualWindow5hRecord
+                .filter(
+                    Column("duration_seconds")
+                        < CodexUsageStatus.weeklyClassThresholdSeconds
+                )
+                .fetchAll(db)
         }
         return try records.map { try $0.toActualWindow() }
     }
@@ -111,6 +120,10 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
         // Overlap match (see PlannedWindowRepository.fetchWindows for rationale).
         let records = try await writer.read { db in
             try ActualWindow5hRecord
+                .filter(
+                    Column("duration_seconds")
+                        < CodexUsageStatus.weeklyClassThresholdSeconds
+                )
                 .filter(sql: """
                     datetime(start_at) < datetime(?) AND
                     datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
@@ -129,6 +142,10 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
         let record = try await writer.read { db in
             try ActualWindow5hRecord
                 .filter(Column("provider_id") == providerID.rawValue)
+                .filter(
+                    Column("duration_seconds")
+                        < CodexUsageStatus.weeklyClassThresholdSeconds
+                )
                 .filter(sql: """
                     julianday(start_at) <= julianday(?) AND
                     julianday(start_at) + (duration_seconds / 86400.0) > julianday(?)
@@ -156,6 +173,11 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
     }
 
     public func upsertByEndAt(_ window: ActualWindow5h, tolerance: TimeInterval = 60) async throws {
+        // Defensive boundary: duration classification belongs upstream, but a
+        // weekly-class row must never be newly persisted through the 5h upsert.
+        guard window.durationSeconds < CodexUsageStatus.weeklyClassThresholdSeconds else {
+            return
+        }
         let targetEndAt = window.endAt
         let providerValue = window.providerID.rawValue
         let lowerStr = DateTimeService.formatUTC(targetEndAt.addingTimeInterval(-tolerance))
@@ -166,6 +188,10 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
         try await writer.write { db in
             let endAtMatch = try ActualWindow5hRecord
                 .filter(Column("provider_id") == providerValue)
+                .filter(
+                    Column("duration_seconds")
+                        < CodexUsageStatus.weeklyClassThresholdSeconds
+                )
                 .filter(sql: """
                     datetime(start_at, '+' || duration_seconds || ' seconds') BETWEEN datetime(?) AND datetime(?)
                     """, arguments: [lowerStr, upperStr])
@@ -188,6 +214,10 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 existing = try ActualWindow5hRecord
                     .filter(Column("provider_id") == providerValue)
                     .filter(Column("source") == ActualWindowSource.c5hTriggered.rawValue)
+                    .filter(
+                        Column("duration_seconds")
+                            < CodexUsageStatus.weeklyClassThresholdSeconds
+                    )
                     .filter(sql: """
                         datetime(start_at) < datetime(?) AND
                         datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)

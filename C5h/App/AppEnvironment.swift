@@ -135,6 +135,7 @@ final class AppEnvironment {
                     actual5hRepository: actual5hRepo,
                     actual7dRepository: actual7dRepo,
                     usageSnapshotRepository: usageRepo,
+                    commandRunRepository: cmdRepo,
                     registry: registry
                 )
                 self.schedulerDriver = driver

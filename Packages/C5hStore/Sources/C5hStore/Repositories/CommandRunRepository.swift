@@ -49,6 +49,7 @@ public protocol CommandRunRepository: Sendable {
     func create(_ run: CommandRun) async throws
     func update(_ run: CommandRun) async throws
     func fetch(id: UUID) async throws -> CommandRun?
+    func fetchAttributionEvidence(id: UUID) async throws -> TriggerAttributionEvidence?
     func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun]
     func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry]
     func sweepStaleRunning(message: String, isAlive: @Sendable (Int32) -> Bool) async throws -> Int
@@ -98,6 +99,27 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
             try CommandRunRecord.fetchOne(db, key: id.uuidString)
         }
         return try record?.toCommandRun()
+    }
+
+    /// Fetches only the stable fields needed to validate a window's trigger
+    /// attribution. Reading the raw record avoids rejecting legacy rows whose
+    /// pre-rename `run_type` (for example, `PromptCommand`) no longer decodes as
+    /// a current `CommandName`.
+    public func fetchAttributionEvidence(id: UUID) async throws -> TriggerAttributionEvidence? {
+        let record = try await writer.read { db in
+            try CommandRunRecord.fetchOne(db, key: id.uuidString)
+        }
+        guard let record else { return nil }
+        guard let providerID = ProviderID(rawValue: record.providerId),
+              let startedAt = DateTimeService.parseUTC(record.startedAt) else {
+            throw C5hError.databaseError("Invalid command-run attribution evidence: \(record.id)")
+        }
+        let promptRawValues = [CommandName.prompt.rawValue, "PromptCommand"]
+        return TriggerAttributionEvidence(
+            providerID: providerID,
+            startedAt: startedAt,
+            isPrompt: promptRawValues.contains(record.runType)
+        )
     }
 
     public func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun] {

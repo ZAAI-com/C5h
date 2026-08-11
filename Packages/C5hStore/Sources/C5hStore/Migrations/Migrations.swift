@@ -163,5 +163,98 @@ enum Migrations {
                 t.add(column: "owner_pid", .integer)
             }
         }
+
+        migrator.registerMigration("v3_reclassify_codex_weekly_windows") { db in
+            try reclassifyLegacyCodexWeeklyWindows(db)
+        }
+    }
+
+    /// Older Codex parsing treated the primary slot as a 5h limit even when its
+    /// reported duration was weekly. Recover those rows only when a historical
+    /// snapshot supplies unambiguous evidence for the same window. Anything we
+    /// cannot prove remains in place and is hidden by the 5h repository filters.
+    private static func reclassifyLegacyCodexWeeklyWindows(_ db: GRDB.Database) throws {
+        let legacyRecords = try ActualWindow5hRecord
+            .filter(Column("provider_id") == ProviderID.codex.rawValue)
+            .filter(
+                Column("duration_seconds")
+                    >= CodexUsageStatus.weeklyClassThresholdSeconds
+            )
+            .order(Column("start_at"))
+            .fetchAll(db)
+
+        for legacyRecord in legacyRecords {
+            guard let legacyWindow = try? legacyRecord.toActualWindow() else {
+                continue
+            }
+            let start = DateTimeService.formatUTC(legacyWindow.startAt)
+            let end = DateTimeService.formatUTC(legacyWindow.endAt)
+            let snapshots = try UsageSnapshotRecord
+                .filter(Column("provider_id") == ProviderID.codex.rawValue)
+                // Usage windows are half-open. A snapshot at the reset instant
+                // belongs to the next interval and cannot prove this legacy row.
+                .filter(sql: """
+                    julianday(captured_at) >= julianday(?) AND
+                    julianday(captured_at) < julianday(?)
+                    """, arguments: [start, end])
+                .order(Column("captured_at").desc)
+                .fetchAll(db)
+
+            guard let evidence = snapshots.lazy.compactMap({ record -> ActualWindow7d? in
+                guard let snapshot = try? record.toUsageSnapshot(),
+                      let status = try? CodexUsageStatus.parseAny(
+                          snapshot.rawJSON,
+                          capturedAt: snapshot.capturedAt
+                      ),
+                      let weeklyWindow = status.secondaryActualWindow(
+                          providerID: .codex,
+                          usageSnapshotID: snapshot.id,
+                          createdAt: snapshot.capturedAt
+                      ),
+                      abs(weeklyWindow.startAt.timeIntervalSince(legacyWindow.startAt))
+                          <= UsageFetcher.dedupTolerance,
+                      abs(weeklyWindow.endAt.timeIntervalSince(legacyWindow.endAt))
+                          <= UsageFetcher.dedupTolerance else {
+                    return nil
+                }
+                return weeklyWindow
+            }).first else {
+                continue
+            }
+
+            // Usage evidence supplies quota semantics; the legacy row retains
+            // the user's historical timezone and creation provenance.
+            let converted = ActualWindow7d(
+                providerID: .codex,
+                startAt: evidence.startAt,
+                durationSeconds: evidence.durationSeconds,
+                timeZoneIdentifier: legacyWindow.timeZoneIdentifier,
+                usedPercentage: evidence.usedPercentage,
+                source: evidence.source,
+                confidence: evidence.confidence,
+                usageSnapshotID: evidence.usageSnapshotID,
+                createdAt: legacyWindow.createdAt,
+                updatedAt: max(legacyWindow.updatedAt, evidence.updatedAt)
+            )
+
+            let lowerEnd = DateTimeService.formatUTC(
+                converted.endAt.addingTimeInterval(-UsageFetcher.dedupTolerance)
+            )
+            let upperEnd = DateTimeService.formatUTC(
+                converted.endAt.addingTimeInterval(UsageFetcher.dedupTolerance)
+            )
+            let existingWeekly = try ActualWindow7dRecord
+                .filter(Column("provider_id") == ProviderID.codex.rawValue)
+                .filter(sql: """
+                    datetime(start_at, '+' || duration_seconds || ' seconds')
+                        BETWEEN datetime(?) AND datetime(?)
+                    """, arguments: [lowerEnd, upperEnd])
+                .fetchOne(db)
+
+            if existingWeekly == nil {
+                try ActualWindow7dRecord(from: converted).insert(db)
+            }
+            try ActualWindow5hRecord.deleteOne(db, key: legacyRecord.id)
+        }
     }
 }
