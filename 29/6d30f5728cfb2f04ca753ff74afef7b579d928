@@ -1,0 +1,58 @@
+Packages/C5hCore/Sources/C5hCore/Usage/CodexUsageStatus.swift
+  s_3bfe26508e9e74::t_1e7dc5b6acd5ca 12-14,85-99
+  s_3bfe26508e9e74::t_53c4e9a70ef676 100-101
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_3bfe26508e9e74::t_7d482d4aad1c65 24-27,38-43,50,74-75,83
+  s_3bfe26508e9e74::t_30103e146b0430 207-220,426-465
+  s_3bfe26508e9e74::t_71dba10fe96f4d 466-467
+Packages/C5hCore/Sources/C5hCore/Calendar/CalendarPositioning.swift
+  s_3bfe26508e9e74::t_f92953428358af 145-151,154-155,159,165-166
+  s_3bfe26508e9e74::t_acd11cd386b406 167
+C5h/Core/Services/AppSchedulerDriver.swift
+  s_3bfe26508e9e74::t_32a8249048a56f 81-83
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_3bfe26508e9e74::t_c59f889984d6b5 284,296,306-307,316-327
+  s_3bfe26508e9e74::t_c091b55d105dfd 328-329
+Packages/C5hHelper/Sources/C5hHelper/main.swift
+  s_3bfe26508e9e74::t_32a8249048a56f 111-112,274,318,344-346
+Packages/C5hCore/Tests/C5hCoreTests/CalendarPositioningTests.swift
+  s_3bfe26508e9e74::t_17cef8a1f63e43 216-250
+Packages/C5hStore/Tests/C5hStoreTests/MigrationsTests.swift
+  s_3bfe26508e9e74::t_108e68eb4b3d5e 244-496
+Packages/C5hCore/Tests/C5hCoreTests/UsageResetDetectorTests.swift
+  s_3bfe26508e9e74::t_82adf4203997ba 55-93,95-97
+  s_3bfe26508e9e74::t_c520575195e3f5 94
+Packages/C5hCore/Sources/C5hCore/Usage/UsageFetcher.swift
+  s_3bfe26508e9e74::t_a8c5e89088cd6a 53-62,74-77,93-99,104-106,114
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeUsageStatus.swift
+  s_3bfe26508e9e74::t_d233d9c669ca07 34-69
+C5h/UI/Calendar/WeekCalendarView.swift
+  s_3bfe26508e9e74::t_a8915dac1ef92e 466,478,488-489
+  s_3bfe26508e9e74::t_a586617bbb7709 498-509
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_3bfe26508e9e74::t_c7d4d2ae922ef8 325-331
+Packages/C5hStore/Sources/C5hStore/Repositories/ActualWindow5hRepository.swift
+  s_3bfe26508e9e74::t_c7d4d2ae922ef8 244-247
+Packages/C5hStore/Sources/C5hStore/Migrations/Migrations.swift
+  s_3bfe26508e9e74::t_7243101c3e44a9 170-200,205-211,216-340
+  s_3bfe26508e9e74::t_79aefa66f54548 201-204,212-215
+Packages/C5hCore/Tests/C5hCoreTests/UsageFetcherTests.swift
+  s_3bfe26508e9e74::t_7b56ec8b556c0c 233,235-238,250-310,331-334,403-406,412
+  s_3bfe26508e9e74::t_7f773a5d3b0b35 78-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "296d30f5728cfb2f04ca753ff74afef7b579d928",
+  "prompts": {},
+  "sessions": {
+    "s_3bfe26508e9e74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "314b2c0a-c502-478c-b603-8df73747579d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
