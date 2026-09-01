@@ -322,7 +322,13 @@ public struct UsageHistorySeries: Sendable, Hashable {
                 fiveHour: status.fiveHour.usedPercentage,
                 sevenDay: status.sevenDay?.usedPercentage,
                 fiveHourResetsAt: status.fiveHour.resetsAt,
-                hasActiveFiveHourWindow: true,
+                // Claude slides an unopened 5h slot forward every 10 minutes
+                // while idle. Marking those points inactive keeps them out of
+                // reset detection, which would otherwise read each slide as a
+                // quota reset and clip real windows around it.
+                hasActiveFiveHourWindow: !status.isProspectiveFiveHourSlot(
+                    capturedAt: snapshot.capturedAt
+                ),
                 sevenDayResetsAt: status.sevenDay?.resetsAt
             )
         case .codex:

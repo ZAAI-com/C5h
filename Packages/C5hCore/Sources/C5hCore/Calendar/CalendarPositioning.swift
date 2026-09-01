@@ -142,17 +142,28 @@ public enum CalendarPositioning {
     /// The caller supplies blocks in render order, normally sorted by their true
     /// time-derived Y position. Touching blocks keep their true position; only a
     /// block whose top would overlap the previous rendered bottom is shifted down.
+    ///
+    /// `maxY` bounds the displacement to the height of the column. Shifts
+    /// accumulate, so without a bound a dense cluster walks blocks past the
+    /// column's clipped frame, where they are neither visible nor hit-testable.
+    /// Past the bound a block stops being displaced and overlaps in place
+    /// instead, which keeps it reachable. A block is never moved above its own
+    /// true position.
     public static func stackVertically(
         _ blocks: [VerticalStackInput],
-        gap: CGFloat = 4
+        gap: CGFloat = 4,
+        maxY: CGFloat? = nil
     ) -> [VerticalStackPlacement] {
         var previousBottom: CGFloat?
         return blocks.map { block in
-            let y: CGFloat
+            var y: CGFloat
             if let bottom = previousBottom, block.yOffset < bottom {
                 y = bottom + gap
             } else {
                 y = block.yOffset
+            }
+            if let maxY {
+                y = min(y, max(block.yOffset, maxY - block.height))
             }
             previousBottom = y + block.height
             return VerticalStackPlacement(yOffset: y)

@@ -9,6 +9,9 @@ public struct CodexUsageStatus: Sendable, Hashable {
     public static let fiveHourDurationSeconds = 5 * 60 * 60
     public static let defaultSecondaryDurationSeconds = 7 * 24 * 60 * 60
     public static let weeklyClassThresholdSeconds = 24 * 60 * 60
+    /// How close to `eventTimestamp + duration` a reported reset must be to count
+    /// as the synthetic "fresh slot" rather than a real anchored window.
+    public static let syntheticSlotToleranceSeconds: TimeInterval = 60
     public static let maxEventAgeSeconds: TimeInterval = 5 * 60 * 60
 
     public var eventTimestamp: Date
@@ -77,6 +80,23 @@ public struct CodexUsageStatus: Sendable, Hashable {
             durationSeconds: limit.durationSeconds,
             eventTimestamp: eventTimestamp
         )
+    }
+
+    /// True when the reported weekly limit is Codex's synthetic "fresh slot"
+    /// (`resets_at == eventTimestamp + window duration`) with no consumption:
+    /// the weekly window you would get by starting now, not one that opened.
+    /// Codex re-issues it on every poll with a new reset end, so persisting it
+    /// writes one row per poll.
+    ///
+    /// Deliberately a two-sided band rather than the one-sided `isActive` used
+    /// for the 5h class: a real anchored weekly window can report a reset a
+    /// little farther out than one duration, and only the exact synthetic value
+    /// should be rejected.
+    public var isSyntheticFreshWeeklySlot: Bool {
+        guard let limit = weeklyClassLimit, limit.window.usedPercentage <= 0 else { return false }
+        let remaining = limit.window.resetsAt.timeIntervalSince(eventTimestamp)
+        return abs(remaining - TimeInterval(limit.durationSeconds))
+            <= Self.syntheticSlotToleranceSeconds
     }
 
     var fiveHourUsedPercentage: Double? {

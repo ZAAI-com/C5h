@@ -241,8 +241,10 @@ public struct GRDBActualWindow5hRepository: ActualWindow5hRepository {
                 // a Codex synthetic "fresh slot") now gets confirmed by this real
                 // anchored poll, so upgrade its confidence to `exact`. A
                 // `detectedFromUsage` window reaching here is always a real,
-                // anchored window: synthetic slots are dropped upstream by
-                // `hasActivePrimaryWindow` in `UsageFetcher.derived5h`.
+                // anchored window: slots the provider has not opened yet are
+                // dropped upstream by `UsageFetcher.derived5h`
+                // (`CodexUsageStatus.hasActiveFiveHourWindow` for Codex,
+                // `ClaudeUsageStatus.isProspectiveFiveHourSlot` for Claude).
                 if updated.source == .c5hTriggered, window.source == .detectedFromUsage {
                     updated.confidence = .exact
                     // keep updated.source / updated.commandRunID

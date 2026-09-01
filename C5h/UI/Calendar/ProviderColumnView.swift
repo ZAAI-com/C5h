@@ -281,10 +281,7 @@ struct ProviderColumnView: View {
             blocks.append(StackBlock(
                 id: .planned(window.id),
                 yOffset: yOffset(for: segment.start),
-                height: CalendarPositioning.blockHeight(
-                    durationSeconds: segment.durationSeconds,
-                    pixelsPerMinute: layout.pixelsPerMinute
-                ),
+                height: stackingHeight(durationSeconds: segment.durationSeconds),
                 sortPriority: 0
             ))
         }
@@ -296,10 +293,7 @@ struct ProviderColumnView: View {
             blocks.append(StackBlock(
                 id: .actual(actualSegment.id),
                 yOffset: yOffset(for: segment.start),
-                height: CalendarPositioning.blockHeight(
-                    durationSeconds: segment.durationSeconds,
-                    pixelsPerMinute: layout.pixelsPerMinute
-                ),
+                height: stackingHeight(durationSeconds: segment.durationSeconds),
                 sortPriority: 1
             ))
         }
@@ -309,13 +303,28 @@ struct ProviderColumnView: View {
         }
         let placements = CalendarPositioning.stackVertically(
             sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-            gap: layout.blockVerticalGap
+            gap: layout.blockVerticalGap,
+            maxY: layout.dayHeight
         )
         var map: [StackID: CGFloat] = [:]
         for (block, placement) in zip(sorted, placements) {
             map[block.id] = placement.yOffset
         }
         return map
+    }
+
+    /// Space a block occupies for stacking purposes: its true duration on the
+    /// time scale, without the minimum height the rendered frame applies. A short
+    /// block inflated to the 24px minimum would claim far more of the timeline
+    /// than it covers and push every later block down for an overlap that does
+    /// not exist. Rendering and hit-testing keep using the minimum, so a short
+    /// block stays readable and clickable.
+    private func stackingHeight(durationSeconds: Int) -> CGFloat {
+        CalendarPositioning.blockHeight(
+            durationSeconds: durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute,
+            minimum: 0
+        )
     }
 
     @ViewBuilder

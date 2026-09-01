@@ -75,6 +75,72 @@ struct UsageFetcherTests {
         #expect(derived5h.endAt.timeIntervalSince1970 == TimeInterval(anchoredResetsAt))
     }
 
+    @Test("Skips the synthetic Codex weekly slot no usage has anchored")
+    func skipsCodexSyntheticWeeklySlot() throws {
+        // A weekly-only Codex account reports the weekly limit in the primary
+        // slot, and while idle it returns `resetsAt = capturedAt + 7d` at 0%.
+        // Persisting that inserted one weekly row per poll.
+        let capturedAt = Date(timeIntervalSince1970: 1_788_505_603)
+        let syntheticResetsAt = capturedAt
+            .addingTimeInterval(TimeInterval(CodexUsageStatus.defaultSecondaryDurationSeconds))
+            .timeIntervalSince1970
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":\(Int(syntheticResetsAt))},"secondary":null,"planType":"pro"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        #expect(try fetcher.derived7d(from: snapshot) == nil)
+    }
+
+    @Test("Keeps the Codex weekly window once usage anchors it")
+    func keepsAnchoredCodexWeeklyWindow() throws {
+        // The moment real usage lands, the reported reset stops tracking the
+        // clock: `resetsAt - capturedAt` falls below one full week.
+        let capturedAt = Date(timeIntervalSince1970: 1_788_505_603)
+        let anchoredResetsAt = capturedAt
+            .addingTimeInterval(TimeInterval(CodexUsageStatus.defaultSecondaryDurationSeconds) - 14_400)
+            .timeIntervalSince1970
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":1,"windowDurationMins":10080,"resetsAt":\(Int(anchoredResetsAt))},"secondary":null,"planType":"pro"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+        #expect(weekly.usedPercentage == 1)
+    }
+
+    @Test("Keeps a weekly slot with synthetic timing that already reports usage")
+    func keepsSyntheticallyTimedCodexWeeklyWindowWithUsage() throws {
+        // Timing alone is not proof: a real window can report a reset almost
+        // exactly one duration out. Consumption settles it.
+        let capturedAt = Date(timeIntervalSince1970: 1_788_505_603)
+        let resetsAt = capturedAt
+            .addingTimeInterval(TimeInterval(CodexUsageStatus.defaultSecondaryDurationSeconds))
+            .timeIntervalSince1970
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":97,"windowDurationMins":10080,"resetsAt":\(Int(resetsAt))},"secondary":null,"planType":"pro"}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let fetcher = makeFetcher()
+
+        let weekly = try #require(try fetcher.derived7d(from: snapshot))
+        #expect(weekly.usedPercentage == 97)
+    }
+
     @Test("Derives Codex secondary row as weekly data")
     func derivesCodexWeeklyWindow() throws {
         let snapshot = UsageSnapshot(
@@ -164,9 +230,12 @@ struct UsageFetcherTests {
         #expect(triggerAnchored.endAt.timeIntervalSince1970 == TimeInterval(syntheticReset))
     }
 
-    @Test("Derives Claude 5h row from a 0% timer with 4:58 remaining")
+    @Test("Derives Claude 5h row from a 0% timer whose start has stopped sliding")
     func derivesClaudeZeroUsageTimer() throws {
-        let snapshot = makeClaudeSnapshot(remaining: (4 * 3600) + (58 * 60))
+        // 3:58 remaining puts the reported start well over a slide step before
+        // capture: the boundary has settled, so a 0% report is a real window
+        // used below Claude's reporting resolution.
+        let snapshot = makeClaudeSnapshot(remaining: (3 * 3600) + (58 * 60))
         let fetcher = makeFetcher()
 
         let window = try #require(try fetcher.derived5h(
@@ -176,6 +245,67 @@ struct UsageFetcherTests {
 
         #expect(window.startAt.timeIntervalSince1970 == 1_778_355_600)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
+    }
+
+    @Test("Skips the prospective Claude slot the provider slides forward while idle")
+    func skipsProspectiveClaudeSlot() throws {
+        // 4:58 remaining: the reported start is 120s before capture at 0% used,
+        // the shape Claude re-issues on every poll while the account is idle.
+        let snapshot = makeClaudeSnapshot(remaining: (4 * 3600) + (58 * 60))
+        let fetcher = makeFetcher()
+
+        #expect(try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt) == nil)
+    }
+
+    @Test("Two consecutive idle slides derive no window at all")
+    func skipsConsecutiveClaudeSlides() throws {
+        let fetcher = makeFetcher()
+        // The live regression: each poll reported a start on the next 10-minute
+        // grid step, so every poll inserted a row with a different reset end.
+        for remaining in [(4 * 3600) + (58 * 60), (4 * 3600) + (52 * 60)] {
+            let snapshot = makeClaudeSnapshot(remaining: TimeInterval(remaining))
+            #expect(try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt) == nil)
+        }
+    }
+
+    @Test("Anchors the prospective Claude slot for a trigger")
+    func anchorsProspectiveClaudeSlotForTrigger() throws {
+        let snapshot = makeClaudeSnapshot(remaining: (4 * 3600) + (58 * 60))
+        let fetcher = makeFetcher()
+
+        // A wake prompt just opened this window, so the trigger path force-
+        // anchors it even though a routine poll would drop it.
+        let window = try #require(try fetcher.derived5h(
+            from: snapshot,
+            now: snapshot.capturedAt,
+            requireActiveWindow: false
+        ))
+
+        #expect(window.startAt.timeIntervalSince1970 == 1_778_355_600)
+    }
+
+    @Test("Keeps a fresh Claude window that already reports consumption")
+    func keepsFreshClaudeWindowWithUsage() throws {
+        // Same fresh start as the prospective slot, but with usage recorded: the
+        // window is real and must not be dropped.
+        let snapshot = makeClaudeSnapshot(
+            remaining: (4 * 3600) + (58 * 60),
+            usedPercentage: 7
+        )
+        let fetcher = makeFetcher()
+
+        #expect(try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt) != nil)
+    }
+
+    @Test("Keeps the idle boundary Claude chains onto a previous window's end")
+    func keepsChainedClaudeBoundary() throws {
+        // A chained boundary reports 0% with a start that is already well in the
+        // past, so it stays a real window (usage arriving hours later lands in
+        // it). Only the sliding slot is dropped.
+        let snapshot = makeClaudeSnapshot(remaining: (3 * 3600) + (40 * 60))
+        let fetcher = makeFetcher()
+
+        #expect(try fetcher.derived5h(from: snapshot, now: snapshot.capturedAt) != nil)
     }
 
     @Test("Keeps a Claude window that was live at capture after delayed processing")
@@ -198,7 +328,10 @@ struct UsageFetcherTests {
             ClaudeUsageStatus.fiveHourDurationSeconds
                 + ClaudeUsageStatus.fiveHourTimerToleranceSeconds
         )
-        let snapshot = makeClaudeSnapshot(remaining: remaining)
+        // Reports consumption so this stays a test of the clock-skew bound in
+        // `hasLiveFiveHourTimer` rather than of the prospective-slot guard (the
+        // reported start lands 60s after capture, well inside a slide step).
+        let snapshot = makeClaudeSnapshot(remaining: remaining, usedPercentage: 3)
         let fetcher = makeFetcher()
 
         let window = try fetcher.derived5h(
@@ -267,13 +400,16 @@ struct UsageFetcherTests {
         #expect(weekly.usageSnapshotID == snapshot.id)
     }
 
-    private func makeClaudeSnapshot(remaining: TimeInterval) -> UsageSnapshot {
+    private func makeClaudeSnapshot(
+        remaining: TimeInterval,
+        usedPercentage: Double = 0
+    ) -> UsageSnapshot {
         let resetAt: TimeInterval = 1_778_373_600
         return UsageSnapshot(
             providerID: .claude,
             capturedAt: Date(timeIntervalSince1970: resetAt - remaining),
             rawJSON: """
-            {"rate_limits":{"five_hour":{"used_percentage":0,"resets_at":\(Int(resetAt))},"seven_day":{"used_percentage":7,"resets_at":1778893200}}}
+            {"rate_limits":{"five_hour":{"used_percentage":\(usedPercentage),"resets_at":\(Int(resetAt))},"seven_day":{"used_percentage":7,"resets_at":1778893200}}}
             """,
             normalizedJSON: "{}"
         )

@@ -213,6 +213,41 @@ struct CalendarPositioningTests {
         ])
     }
 
+    @Test("vertical stack never displaces a block past the column bound")
+    func verticalStackClampsToMaxY() {
+        // Shifts accumulate, so an unbounded stack walks a dense cluster off the
+        // end of the column, where blocks are neither drawn nor hit-tested. Past
+        // the bound a block stops moving and overlaps in place instead.
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 10, height: 50),
+            .init(yOffset: 40, height: 20),
+            .init(yOffset: 45, height: 20),
+            .init(yOffset: 50, height: 20),
+        ], gap: 4, maxY: 100)
+
+        #expect(placements == [
+            .init(yOffset: 10),
+            .init(yOffset: 64),
+            .init(yOffset: 80),
+            .init(yOffset: 80),
+        ])
+    }
+
+    @Test("vertical stack bound never lifts a block above its true position")
+    func verticalStackBoundKeepsLateBlocksInPlace() {
+        // A block genuinely near the end of the day already extends past the
+        // bound. Clamping must not drag it upward, away from its own time.
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 80, height: 40),
+            .init(yOffset: 90, height: 40),
+        ], gap: 4, maxY: 100)
+
+        #expect(placements == [
+            .init(yOffset: 80),
+            .init(yOffset: 90),
+        ])
+    }
+
     @Test("now line offset matches time delta at natural placement")
     func nowLineOffsetNaturalPlacement() {
         var cal = Calendar(identifier: .gregorian)

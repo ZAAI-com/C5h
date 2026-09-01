@@ -108,7 +108,8 @@ struct HelperMain {
             settingsRepo: settingsRepo,
             usageFetcher: usageFetcher,
             cmdRepo: cmdRepo,
-            logWriter: logWriter
+            logWriter: logWriter,
+            usageSnapshotRepo: usageRepo
         )
         let scheduler = SchedulerService(driver: driver)
 
@@ -270,6 +271,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
     let usageFetcher: UsageFetcher
     let cmdRepo: any CommandRunRepository
     let logWriter: any FileLogWriting
+    let usageSnapshotRepo: any UsageSnapshotRepository
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
         try await scheduledRepo.fetchDuePrompts(now: now)
@@ -313,6 +315,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
         let cliResolver = resolver
         let cmdRepo = cmdRepo
         let logWriter = logWriter
+        let usageSnapshotRepo = usageSnapshotRepo
         let resolver = ActiveWindowResolver(
             fetcher: usageFetcher,
             snapshotFetch: { providerID in
@@ -338,6 +341,9 @@ struct HelperSchedulerDriver: SchedulerDriver {
             },
             triggerAttributionFetch: { commandRunID in
                 try await cmdRepo.fetchAttributionEvidence(id: commandRunID)
+            },
+            latestSnapshotFetch: { providerID in
+                try await usageSnapshotRepo.fetchLatest(providerID: providerID)
             }
         )
         return await resolver.resolveTriggeredWindow(

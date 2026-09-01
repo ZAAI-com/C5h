@@ -463,10 +463,7 @@ private struct WeekDayColumnView: View {
                 blocks.append(StackBlock(
                     id: .planned(window.id),
                     yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
+                    height: stackingHeight(durationSeconds: segment.durationSeconds),
                     sortPriority: 0
                 ))
             }
@@ -478,10 +475,7 @@ private struct WeekDayColumnView: View {
                 blocks.append(StackBlock(
                     id: .actual(actualSegment.id),
                     yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
+                    height: stackingHeight(durationSeconds: segment.durationSeconds),
                     sortPriority: 1
                 ))
             }
@@ -491,13 +485,26 @@ private struct WeekDayColumnView: View {
             }
             let placements = CalendarPositioning.stackVertically(
                 sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-                gap: layout.blockVerticalGap
+                gap: layout.blockVerticalGap,
+                maxY: layout.dayHeight
             )
             for (block, placement) in zip(sorted, placements) {
                 map[block.id] = placement.yOffset
             }
         }
         return map
+    }
+
+    /// Space a block occupies for stacking purposes: its true duration on the
+    /// time scale, without the minimum height the rendered frame applies, so a
+    /// short block cannot claim more of the timeline than it covers and displace
+    /// every later block. See `ProviderColumnView.stackingHeight`.
+    private func stackingHeight(durationSeconds: Int) -> CGFloat {
+        CalendarPositioning.blockHeight(
+            durationSeconds: durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute,
+            minimum: 0
+        )
     }
 
     /// Claude blocks render in the left half, Codex in the right half. This keeps

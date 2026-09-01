@@ -50,8 +50,16 @@ public struct UsageFetcher: Sendable {
     ///
     /// Claude's reported countdown is authoritative regardless of percentage,
     /// provided it is live and no farther away than one 5h window plus clock
-    /// tolerance at capture time. `requireActiveWindow` applies to Codex, whose
-    /// API can report a synthetic full-duration window before one has started.
+    /// tolerance at capture time.
+    ///
+    /// `requireActiveWindow` drops reports that describe a window the provider
+    /// has not actually opened: Codex's synthetic full-duration slot, and the
+    /// prospective slot Claude slides forward every 10 minutes while idle.
+    /// Both re-issue a different reset end on every poll, so persisting them
+    /// inserts a row per poll rather than tracking one window. The
+    /// trigger-anchoring path passes false for Claude on purpose (a wake prompt
+    /// just opened the window, so it should anchor before usage registers); see
+    /// `ActiveWindowResolver.promoteFromSnapshot`.
     public func derived5h(
         from snapshot: UsageSnapshot,
         now: Date = .now,
@@ -61,6 +69,10 @@ public struct UsageFetcher: Sendable {
         case .claude:
             let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
             if !status.hasLiveFiveHourTimer(capturedAt: snapshot.capturedAt) {
+                return nil
+            }
+            if requireActiveWindow,
+               status.isProspectiveFiveHourSlot(capturedAt: snapshot.capturedAt) {
                 return nil
             }
             // The snapshot proves this was a real window at capture time. Keep
@@ -78,10 +90,20 @@ public struct UsageFetcher: Sendable {
 
     /// Derives the weekly quota row from a freshly-captured snapshot. Exposed
     /// for unit tests; callers should normally use `fetchAndPersist`.
+    ///
+    /// Mirrors `derived5h`: a weekly slot the provider has not opened yet (0%
+    /// used, resetting almost exactly one duration from the capture) is issued
+    /// afresh on every poll, so it is dropped rather than persisted. The guard
+    /// lives here and not in `secondaryActualWindow` / `sevenDayActualWindow`
+    /// because the legacy-reclassification migration derives its recovery
+    /// evidence through those methods and needs them to stay permissive.
     public func derived7d(from snapshot: UsageSnapshot) throws -> ActualWindow7d? {
         switch snapshot.providerID {
         case .claude:
             let status = try ClaudeUsageStatus.parsePayload(snapshot.rawJSON)
+            if status.isProspectiveSevenDaySlot(capturedAt: snapshot.capturedAt) {
+                return nil
+            }
             return status.sevenDayActualWindow(
                 providerID: .claude,
                 usageSnapshotID: snapshot.id,
@@ -89,6 +111,7 @@ public struct UsageFetcher: Sendable {
             )
         case .codex:
             let status = try CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt)
+            if status.isSyntheticFreshWeeklySlot { return nil }
             return status.secondaryActualWindow(
                 providerID: .codex,
                 usageSnapshotID: snapshot.id,

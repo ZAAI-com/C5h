@@ -21,6 +21,10 @@ public struct ActiveWindowResolver: Sendable {
     public typealias AwaitActiveWindow = @Sendable (ProviderID, Date) async throws -> ActualWindow5h?
     public typealias FetchTriggerAttribution =
         @Sendable (UUID) async throws -> TriggerAttributionEvidence?
+    /// Returns the provider's most recently persisted usage snapshot, or nil when
+    /// none is on record. Used to anchor a trigger from the snapshot a concurrent
+    /// probe just captured, when that probe itself persisted no window row.
+    public typealias FetchLatestSnapshot = @Sendable (ProviderID) async throws -> UsageSnapshot?
 
     /// How far before the trigger a provider-reported window start may lie and
     /// still be credited to the trigger. Measured from the top of the UTC hour
@@ -31,12 +35,19 @@ public struct ActiveWindowResolver: Sendable {
     /// provider's reported reset time.
     public static let triggerAnchorTolerance: TimeInterval = 10 * 60
 
+    /// How recent a persisted snapshot must be to anchor a trigger from it. The
+    /// concurrent probe that beat us to the lock runs for seconds and the waiter
+    /// gives it a further half-minute, so anything older than this is a different
+    /// poll whose reported boundary may already have moved on.
+    public static let latestSnapshotAnchorHorizon: TimeInterval = 2 * 60
+
     public let fetcher: UsageFetcher
     public let snapshotFetch: FetchSnapshot
     public let activeWindowFetch: FetchActiveWindow
     public let updateActualWindow: @Sendable (ActualWindow5h) async throws -> Void
     public let awaitActiveWindow: AwaitActiveWindow
     public let triggerAttributionFetch: FetchTriggerAttribution
+    public let latestSnapshotFetch: FetchLatestSnapshot
 
     /// Whether a window starting at `startAt` could have been opened by a
     /// trigger that ran at `now`. A start earlier than the hour floor of `now`
@@ -60,7 +71,8 @@ public struct ActiveWindowResolver: Sendable {
         activeWindowFetch: @escaping FetchActiveWindow,
         updateActualWindow: @escaping @Sendable (ActualWindow5h) async throws -> Void,
         awaitActiveWindow: @escaping AwaitActiveWindow = { _, _ in nil },
-        triggerAttributionFetch: @escaping FetchTriggerAttribution = { _ in nil }
+        triggerAttributionFetch: @escaping FetchTriggerAttribution = { _ in nil },
+        latestSnapshotFetch: @escaping FetchLatestSnapshot = { _ in nil }
     ) {
         self.fetcher = fetcher
         self.snapshotFetch = snapshotFetch
@@ -68,6 +80,7 @@ public struct ActiveWindowResolver: Sendable {
         self.updateActualWindow = updateActualWindow
         self.awaitActiveWindow = awaitActiveWindow
         self.triggerAttributionFetch = triggerAttributionFetch
+        self.latestSnapshotFetch = latestSnapshotFetch
     }
 
     /// Anchors the trigger's 5h window to a real provider window, or records
@@ -189,6 +202,20 @@ public struct ActiveWindowResolver: Sendable {
             }
         } catch {
             NSLog("ActiveWindowResolver: waiting for concurrent \(providerID.rawValue) usage refresh failed for command \(commandRunID): \(error)")
+        }
+
+        // The concurrent poll may have captured a snapshot without persisting a
+        // window row: on an idle account the provider reports a slot it has not
+        // opened, which the routine poll path deliberately drops. The prompt we
+        // just ran does open that window, so anchor it from the snapshot rather
+        // than losing the record.
+        if let anchored = await anchorFromLatestSnapshot(
+            providerID: providerID,
+            commandRunID: commandRunID,
+            now: now
+        ) {
+            NSLog("ActiveWindowResolver: anchored \(providerID.rawValue) window [\(anchored.startAt) … \(anchored.endAt)] for command \(commandRunID) from the concurrent refresh's snapshot")
+            return anchored
         }
 
         // Always check once more. The concurrent poll can commit between the
@@ -393,6 +420,48 @@ public struct ActiveWindowResolver: Sendable {
         case .codex:
             (try? CodexUsageStatus.parseAny(snapshot.rawJSON, capturedAt: snapshot.capturedAt))?
                 .fiveHourUsedPercentage
+        }
+    }
+
+    /// Anchors the trigger from the provider's most recently persisted snapshot,
+    /// for the case where a concurrent probe owned the lock, captured that
+    /// snapshot, and persisted no window row because the provider was reporting a
+    /// slot it had not opened yet. The trigger itself opens that window, so it is
+    /// derived with `requireActiveWindow: false` (the same force-anchor the
+    /// non-contended path uses), upserted, and then promoted through the normal
+    /// reuse rules so attribution stays consistent.
+    ///
+    /// Returns nil when there is no snapshot, when it is too old to still
+    /// describe the current boundary, when it yields no window, or when the
+    /// upserted row does not cover `now`.
+    private func anchorFromLatestSnapshot(
+        providerID: ProviderID,
+        commandRunID: UUID,
+        now: Date
+    ) async -> ActualWindow5h? {
+        do {
+            guard let snapshot = try await latestSnapshotFetch(providerID),
+                  snapshot.providerID == providerID,
+                  snapshot.capturedAt <= now,
+                  now.timeIntervalSince(snapshot.capturedAt) <= Self.latestSnapshotAnchorHorizon else {
+                return nil
+            }
+            guard let derived = try fetcher.derived5h(
+                from: snapshot,
+                now: now,
+                requireActiveWindow: false
+            ) else {
+                return nil
+            }
+            try await fetcher.upsertActualWindow5h(derived, UsageFetcher.dedupTolerance)
+            return try await reuseActiveWindow(
+                providerID: providerID,
+                commandRunID: commandRunID,
+                now: now
+            )
+        } catch {
+            NSLog("ActiveWindowResolver: anchoring \(providerID.rawValue) command \(commandRunID) from the latest snapshot failed: \(error)")
+            return nil
         }
     }
 

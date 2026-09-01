@@ -78,6 +78,9 @@ struct AppSchedulerDriver: SchedulerDriver {
             },
             triggerAttributionFetch: { commandRunID in
                 try await commandRepo.fetchAttributionEvidence(id: commandRunID)
+            },
+            latestSnapshotFetch: { providerID in
+                try await usageRepo.fetchLatest(providerID: providerID)
             }
         )
         return await resolver.resolveTriggeredWindow(

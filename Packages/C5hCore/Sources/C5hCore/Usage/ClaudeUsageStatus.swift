@@ -31,6 +31,42 @@ public struct ClaudeUsageStatus: Sendable, Hashable {
             && remaining <= TimeInterval(Self.fiveHourDurationSeconds) + tolerance
     }
 
+    /// Grid the provider advances an unopened 5h slot on. While the account is
+    /// idle Claude reports `resets_at = (capture time floored to this grid) + 5h`
+    /// at 0% used, and that boundary slides forward one step at a time, so every
+    /// poll sees a different reset end for a window that never opened.
+    public static let prospectiveSlotSlideSeconds = 10 * 60
+    /// Clock skew allowed on top of the slide grid. `capturedAt` is stamped when
+    /// the probe process finishes, several seconds after the payload was read, so
+    /// a slot read just before a grid boundary is stamped just after it.
+    public static let prospectiveSlotSkewSeconds = 60
+
+    /// Whether the reported 5h limit is the provider's *prospective* slot (the
+    /// window you would get by starting now) rather than a window that actually
+    /// opened. Such a slot reports no consumption and starts within one slide
+    /// step of the capture; persisting it writes a new row on every poll instead
+    /// of tracking one real window.
+    ///
+    /// A report carrying any consumption, or one whose start has stopped moving
+    /// (older than a slide step, which includes the boundary Claude chains onto
+    /// a previous window's end), describes a real window and is not prospective.
+    public func isProspectiveFiveHourSlot(capturedAt: Date) -> Bool {
+        guard fiveHour.usedPercentage <= 0 else { return false }
+        return capturedAt.timeIntervalSince(fiveHourStartAt)
+            < TimeInterval(Self.prospectiveSlotSlideSeconds + Self.prospectiveSlotSkewSeconds)
+    }
+
+    /// Weekly counterpart: a synthetic slot reports `resets_at` almost exactly
+    /// one full week out from the capture with no consumption. Claude's weekly
+    /// boundary is stable, so this normally never fires; it keeps the two
+    /// providers symmetric (see `CodexUsageStatus.isSyntheticFreshWeeklySlot`).
+    public func isProspectiveSevenDaySlot(capturedAt: Date) -> Bool {
+        guard let sevenDay, sevenDay.usedPercentage <= 0 else { return false }
+        let remaining = sevenDay.resetsAt.timeIntervalSince(capturedAt)
+        return abs(remaining - TimeInterval(Self.sevenDayDurationSeconds))
+            <= TimeInterval(Self.prospectiveSlotSkewSeconds)
+    }
+
     public var sevenDayStartAt: Date? {
         sevenDay?.resetsAt.addingTimeInterval(-TimeInterval(Self.sevenDayDurationSeconds))
     }
