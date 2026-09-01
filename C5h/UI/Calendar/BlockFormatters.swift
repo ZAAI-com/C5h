@@ -14,6 +14,20 @@ enum BlockFormatters {
     static func formatPercent(_ value: Double) -> String {
         "\(Int(value.rounded()))%"
     }
+
+    /// A usage metric label ("label value") where only the percentage is bold,
+    /// e.g. "7d usage 34%". Shared by the 5h and 7d calendar blocks so their
+    /// readings render identically.
+    static func usageMetricText(label: String, value: Double, size: CGFloat) -> Text {
+        let percent = formatPercent(value)
+        var text = AttributedString("\(label) \(percent)")
+        text.font = .system(size: size, weight: .regular)
+        if let percentRange = text.range(of: percent) {
+            text[percentRange].font = .system(size: size, weight: .semibold)
+        }
+        return Text(text)
+            .monospacedDigit()
+    }
 }
 
 /// Vertical tiers for how much information fits inside a window block.

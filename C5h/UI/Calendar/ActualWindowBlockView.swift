@@ -39,6 +39,8 @@ struct ActualWindowBlockView: View {
     /// When true, the window was derived from a detected quota reset (e.g. a Claude
     /// tier change reset the 5h window early). Marked with a subtle neutral glyph.
     var isReset: Bool = false
+    /// Top of the block's frame in column coordinates, after vertical stacking.
+    var renderedTopOffset: CGFloat? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -191,8 +193,9 @@ struct ActualWindowBlockView: View {
         // column-level guard in ProviderColumnView.
         if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
             let ppm = layout.pixelsPerMinute
-            let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
-            let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+            let blockTop = renderedTopOffset
+                ?? CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+            let y = CalendarPositioning.nowLineOffset(inBlockTop: blockTop, now: now, pixelsPerMinute: ppm)
             if y >= 0, y <= height {
                 Rectangle()
                     .fill(Color.red)
@@ -581,14 +584,7 @@ struct ActualWindowBlockView: View {
     }
 
     private func usageMetricLabel(_ label: String, value: Double) -> some View {
-        let percent = BlockFormatters.formatPercent(value)
-        var text = AttributedString("\(label) \(percent)")
-        text.font = .system(size: usageFontSize, weight: .regular)
-        if let percentRange = text.range(of: percent) {
-            text[percentRange].font = .system(size: usageFontSize, weight: .semibold)
-        }
-        return Text(text)
-            .monospacedDigit()
+        BlockFormatters.usageMetricText(label: label, value: value, size: usageFontSize)
     }
 
     private static func visibleFiveHour(

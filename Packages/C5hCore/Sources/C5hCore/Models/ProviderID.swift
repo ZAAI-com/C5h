@@ -26,4 +26,17 @@ public enum ProviderID: String, Codable, Sendable, CaseIterable, Identifiable, H
         case .codex: 5
         }
     }
+
+    /// Whether this provider's usage probe itself consumes quota. Claude's probe
+    /// PTY-drives the interactive `claude` REPL, whose startup makes a real API
+    /// request; on an idle account that request opens a fresh 5h rate-limit
+    /// window (anchored at the previous window's expiry bucket), so an idle poll
+    /// is never free. Codex's probe is a read-only `codex app-server`
+    /// `account/rateLimits/read` RPC and never opens a window.
+    public var usageProbeConsumesQuota: Bool {
+        switch self {
+        case .claude: true
+        case .codex: false
+        }
+    }
 }

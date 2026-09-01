@@ -362,6 +362,7 @@ private struct WeekDayColumnView: View {
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
+                    let renderedTop = stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
                     Button {
                         onSelectPlanned(window)
                     } label: {
@@ -374,13 +375,14 @@ private struct WeekDayColumnView: View {
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
                             segmentStart: segment.start,
-                            widthOverride: providerContentWidth
+                            widthOverride: providerContentWidth,
+                            renderedTopOffset: renderedTop
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(1)
                 }
@@ -391,6 +393,7 @@ private struct WeekDayColumnView: View {
                     start: actualSegment.startAt,
                     durationSeconds: actualSegment.durationSeconds
                 ) {
+                    let renderedTop = stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
                     Button {
                         onSelectActual(window)
                     } label: {
@@ -409,13 +412,14 @@ private struct WeekDayColumnView: View {
                             marksResetEnd: actualSegment.marksResetEnd,
                             condensed: true,
                             widthOverride: providerContentWidth,
-                            isReset: resetWindowIDs.contains(actualSegment.id)
+                            isReset: resetWindowIDs.contains(actualSegment.id),
+                            renderedTopOffset: renderedTop
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
                         x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(2)
                 }
@@ -459,10 +463,7 @@ private struct WeekDayColumnView: View {
                 blocks.append(StackBlock(
                     id: .planned(window.id),
                     yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
+                    height: stackingHeight(durationSeconds: segment.durationSeconds),
                     sortPriority: 0
                 ))
             }
@@ -474,10 +475,7 @@ private struct WeekDayColumnView: View {
                 blocks.append(StackBlock(
                     id: .actual(actualSegment.id),
                     yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
+                    height: stackingHeight(durationSeconds: segment.durationSeconds),
                     sortPriority: 1
                 ))
             }
@@ -487,13 +485,26 @@ private struct WeekDayColumnView: View {
             }
             let placements = CalendarPositioning.stackVertically(
                 sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-                gap: layout.blockVerticalGap
+                gap: layout.blockVerticalGap,
+                maxY: layout.dayHeight
             )
             for (block, placement) in zip(sorted, placements) {
                 map[block.id] = placement.yOffset
             }
         }
         return map
+    }
+
+    /// Space a block occupies for stacking purposes: its true duration on the
+    /// time scale, without the minimum height the rendered frame applies, so a
+    /// short block cannot claim more of the timeline than it covers and displace
+    /// every later block. See `ProviderColumnView.stackingHeight`.
+    private func stackingHeight(durationSeconds: Int) -> CGFloat {
+        CalendarPositioning.blockHeight(
+            durationSeconds: durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute,
+            minimum: 0
+        )
     }
 
     /// Claude blocks render in the left half, Codex in the right half. This keeps

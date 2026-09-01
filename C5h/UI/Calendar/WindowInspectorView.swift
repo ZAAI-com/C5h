@@ -4,11 +4,13 @@ import C5hCore
 enum CalendarSelection: Hashable, Identifiable {
     case planned(PlannedWindow)
     case actual(ActualWindow5h)
+    case weekly(ActualWindow7d)
 
     var id: String {
         switch self {
         case .planned(let w): "planned-\(w.id.uuidString)"
         case .actual(let w): "actual-\(w.id.uuidString)"
+        case .weekly(let w): "weekly-\(w.id.uuidString)"
         }
     }
 }
@@ -37,6 +39,8 @@ struct WindowInspectorView: View {
                     actions(for: window)
                 case .actual(let window):
                     actualContent(window)
+                case .weekly(let window):
+                    weeklyContent(window)
                 }
             }
             .padding(C5hSpacing.lg)
@@ -67,6 +71,17 @@ struct WindowInspectorView: View {
         if let project = window.projectPath {
             labelled("Project", project)
         }
+    }
+
+    @ViewBuilder
+    private func weeklyContent(_ window: ActualWindow7d) -> some View {
+        Text("Weekly window").font(C5hTypography.titleFont)
+        labelled("Provider", window.providerID.displayName)
+        labelled("Start", format(window.startAt))
+        labelled("Reset", format(window.endAt))
+        labelled("Remaining", BlockFormatters.formatPercent(window.remainingPercentage))
+        labelled("Source", window.source.rawValue)
+        labelled("Confidence", window.confidence.rawValue)
     }
 
     @ViewBuilder

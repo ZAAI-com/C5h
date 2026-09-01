@@ -95,6 +95,12 @@ struct DayCalendarScreen: View {
                     viewModel.selection = (viewModel.selection == next) ? nil : next
                 }
             },
+            onSelectWeekly: { window in
+                withAnimation(C5hAnimation.morph) {
+                    let next = CalendarSelection.weekly(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
+                }
+            },
             onMovePlanned: { window, start in
                 Task { await viewModel.move(window: window, to: start) }
             }
@@ -143,6 +149,9 @@ struct DayCalendarScreen: View {
                     } else if viewModel.selection == nil,
                               let firstPlanned = viewModel.planned.first {
                         viewModel.selection = .planned(firstPlanned)
+                    } else if viewModel.selection == nil,
+                              let firstWeekly = viewModel.weeklyWindows.values.first {
+                        viewModel.selection = .weekly(firstWeekly)
                     } else {
                         viewModel.selection = nil
                     }

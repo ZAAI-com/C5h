@@ -11,7 +11,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
     let resolver: any CLIPathResolving
     let appSettings: any AppSettingsRepository
 
-    func runVersionCommand() async -> ProviderStatus {
+    func runVersion() async -> ProviderStatus {
         let configured = try? await appSettings.get(settingsKey, as: String.self)
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
             return ProviderStatus(
@@ -21,7 +21,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
             )
         }
         do {
-            let run = try await runner.run(VersionCommand(providerID: id, executableURL: cliURL).spec())
+            let run = try await runner.run(Version(providerID: id, executableURL: cliURL).spec())
             let version = try await firstLineOfStdout(run: run)
             return ProviderStatus(
                 providerID: id,
@@ -42,7 +42,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         }
     }
 
-    func runAuthStatusCommand() async -> ProviderStatus {
+    func runAuthStatus() async -> ProviderStatus {
         let configured = try? await appSettings.get(settingsKey, as: String.self)
         guard let cliURL = await resolver.resolveCLI(named: executableName, configuredPath: configured) else {
             return ProviderStatus(
@@ -52,10 +52,10 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
             )
         }
         do {
-            let run = try await runner.run(AuthStatusCommand(providerID: id, executableURL: cliURL).spec())
+            let run = try await runner.run(AuthStatus(providerID: id, executableURL: cliURL).spec())
             let stdout = try await stdout(run: run)
             let stderr = await stderr(run: run) ?? ""
-            let authenticated = AuthStatusCommand.isAuthenticated(
+            let authenticated = AuthStatus.isAuthenticated(
                 providerID: id,
                 stdout: stdout,
                 stderr: stderr,
@@ -80,7 +80,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         }
     }
 
-    func runUsageCommand() async throws -> UsageSnapshot {
+    func runUsage() async throws -> UsageSnapshot {
         // Real implementation arrives in M12. For now, a placeholder snapshot
         // keeps higher layers compilable.
         UsageSnapshot(
@@ -91,7 +91,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
         )
     }
 
-    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
+    func runPrompt(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
         // Concrete adapters override this. Default falls back to a CLI run with
         // generic args so the path is still observable from Logs in early
         // milestones.
@@ -100,7 +100,7 @@ struct CLIBackedProviderAdapter: ProviderAdapter {
             throw C5hError.cliNotFound(executableName)
         }
         return try await runner.run(
-            PromptCommand(providerID: id, executableURL: cliURL, input: input).spec(),
+            Prompt(providerID: id, executableURL: cliURL, input: input).spec(),
             runID: runID
         )
     }

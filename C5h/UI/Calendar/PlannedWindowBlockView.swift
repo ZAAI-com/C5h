@@ -22,6 +22,8 @@ struct PlannedWindowBlockView: View {
     /// Explicit block width for layouts that render planned and actual windows
     /// in one common column.
     var widthOverride: CGFloat? = nil
+    /// Top of the block's frame in column coordinates, after vertical stacking.
+    var renderedTopOffset: CGFloat? = nil
 
     var body: some View {
         let duration = visibleDurationSeconds ?? window.durationSeconds
@@ -80,8 +82,9 @@ struct PlannedWindowBlockView: View {
         // column-level guard in ProviderColumnView.
         if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
             let ppm = layout.pixelsPerMinute
-            let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
-            let y = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
+            let blockTop = renderedTopOffset
+                ?? CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+            let y = CalendarPositioning.nowLineOffset(inBlockTop: blockTop, now: now, pixelsPerMinute: ppm)
             if y >= 0, y <= height {
                 Rectangle()
                     .fill(Color.red)

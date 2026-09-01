@@ -1,22 +1,54 @@
 import SwiftUI
 import C5hCore
+import C5hStore
 
 struct CommandRunDetailView: View {
-    let run: CommandRun?
+    let entry: CommandRunEntry?
 
     var body: some View {
-        if let run {
+        switch entry {
+        case .readable(let run):
             content(for: run)
-        } else {
-            VStack {
-                Image(systemName: "terminal").font(.system(size: 36, weight: .light))
-                    .foregroundStyle(C5hColors.fgTertiary)
-                Text("Select a run to inspect")
-                    .font(C5hTypography.bodyFont)
-                    .foregroundStyle(C5hColors.fgSecondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .unreadable(let id, _):
+            unreadableState(id: id)
+        case nil:
+            placeholder(
+                icon: "terminal",
+                title: "Select a run to inspect",
+                tint: C5hColors.fgTertiary
+            )
         }
+    }
+
+    private func unreadableState(id: String) -> some View {
+        VStack(spacing: C5hSpacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(.orange)
+            Text("Log not readable")
+                .font(C5hTypography.bodyFont)
+            Text("This entry was written by an older version and can no longer be decoded.")
+                .font(C5hTypography.captionFont)
+                .foregroundStyle(C5hColors.fgSecondary)
+                .multilineTextAlignment(.center)
+            Text(id)
+                .font(C5hTypography.monoFont)
+                .foregroundStyle(C5hColors.fgTertiary)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(C5hSpacing.lg)
+    }
+
+    private func placeholder(icon: String, title: String, tint: Color) -> some View {
+        VStack {
+            Image(systemName: icon).font(.system(size: 36, weight: .light))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(C5hTypography.bodyFont)
+                .foregroundStyle(C5hColors.fgSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func content(for run: CommandRun) -> some View {

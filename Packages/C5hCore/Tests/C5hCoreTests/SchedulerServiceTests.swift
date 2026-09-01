@@ -74,7 +74,7 @@ actor RecordingSchedulerDriver: SchedulerDriver {
         case .succeed:
             return CommandRun(
                 providerID: prompt.providerID,
-                commandName: .promptCommand,
+                commandName: .prompt,
                 command: "claude",
                 argumentsJSON: "[]",
                 status: .succeeded

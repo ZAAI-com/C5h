@@ -6,21 +6,63 @@ import Testing
 struct UsageCheckGateTests {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
-    @Test("Always checks when idle-checking is enabled")
-    func checksWhenIdleEnabled() async {
-        let gate = makeGate(idleEnabled: true, hasActive: false, hasPending: false)
+    @Test("Codex checks when idle-checking is enabled, without consulting local activity")
+    func codexChecksWhenIdleEnabled() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in
+                Issue.record("Local activity must not be consulted for a read-only probe")
+                return false
+            }
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Claude skips when idle-checking is enabled but no window or local activity exists")
+    func claudeIdleOnWithoutWindowOrActivitySkips() async {
+        // Regression test: the idle setting alone must never spawn Claude's
+        // quota-consuming probe, or C5h chains 5h windows around the clock.
+        let gate = makeGate(idleEnabled: true, hasActive: false, hasPending: false, hasActivity: false)
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Claude checks when idle-checking is enabled and local activity exists")
+    func claudeIdleOnWithLocalActivityChecks() async {
+        let gate = makeGate(idleEnabled: true, hasActive: false, hasPending: false, hasActivity: true)
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Claude with idle-checking off ignores local activity")
+    func claudeIdleOffIgnoresLocalActivity() async {
+        let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: false, hasActivity: true)
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
     @Test("Checks when idle-checking is off but an active window exists")
     func checksWithActiveWindow() async {
-        let gate = makeGate(idleEnabled: false, hasActive: true, hasPending: false)
+        let gate = makeGate(idleEnabled: false, hasActive: true, hasPending: false, hasActivity: false)
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Active window short-circuits without consulting local activity")
+    func activeWindowShortCircuitsLocalActivity() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in true },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in
+                Issue.record("Local activity must not be consulted when a window is active")
+                return false
+            }
+        )
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
     @Test("Checks when idle-checking is off but a pending planned window exists")
     func checksWithPendingPlannedWindow() async {
-        let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: true)
+        let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: true, hasActivity: false)
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
@@ -29,14 +71,64 @@ struct UsageCheckGateTests {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
             hasActiveWindow: { _, _ in false },
-            hasPendingPlannedWindow: { _, checkDate in checkDate == now }
+            hasPendingPlannedWindow: { _, checkDate in checkDate == now },
+            hasRecentLocalActivity: { _, _ in false }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Applies the end margin only to quota-consuming active-window checks")
+    func appliesMarginToActiveWindowCheckDate() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in false },
+            hasActiveWindow: { providerID, checkDate in
+                switch providerID {
+                case .claude:
+                    checkDate == now.addingTimeInterval(UsageCheckGate.consumingProbeEndMargin)
+                case .codex:
+                    checkDate == now
+                }
+            },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false }
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Applies the same end margin to snapshot eligibility")
+    func appliesMarginToSnapshotCheckDate() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in false },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false },
+            isBelievedActiveFromSnapshot: { providerID, checkDate in
+                providerID == .claude
+                    && checkDate == now.addingTimeInterval(
+                        UsageCheckGate.consumingProbeEndMargin
+                    )
+            }
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Passes now into local-activity check")
+    func passesNowIntoLocalActivityCheck() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, checkDate in checkDate == now }
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
     }
 
     @Test("Skips when idle-checking is off and there is no active or planned window")
     func skipsWhenIdleAndEmpty() async {
-        let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: false)
+        let gate = makeGate(idleEnabled: false, hasActive: false, hasPending: false, hasActivity: false)
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
@@ -46,7 +138,8 @@ struct UsageCheckGateTests {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
             hasActiveWindow: { providerID, _ in providerID == .claude },
-            hasPendingPlannedWindow: { _, _ in false }
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false }
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
         #expect(await gate.shouldCheck(providerID: .codex, now: now) == false)
@@ -58,16 +151,186 @@ struct UsageCheckGateTests {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
             hasActiveWindow: { _, _ in throw Boom() },
-            hasPendingPlannedWindow: { _, _ in throw Boom() }
+            hasPendingPlannedWindow: { _, _ in throw Boom() },
+            hasRecentLocalActivity: { _, _ in false }
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
-    private func makeGate(idleEnabled: Bool, hasActive: Bool, hasPending: Bool) -> UsageCheckGate {
+    @Test("Fails closed when local-activity evidence lookup throws")
+    func failsClosedOnLocalActivityLookupError() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in throw Boom() }
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Quiet period suppresses Claude even with local activity and a believed-active snapshot")
+    func quietPeriodSuppressesConsumingProbeBeforePlannedWindow() async {
+        // The strongest possible pro-probe evidence must lose to the quiet
+        // period: only a recorded active window or a planned window covering
+        // now may probe during the run-up to a planned start.
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: true,
+            believedActive: true,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Quiet period does not apply to read-only probes")
+    func quietPeriodDoesNotApplyToReadOnlyProbes() async {
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("A recorded active window overrides the quiet period")
+    func recordedActiveWindowOverridesQuietPeriod() async {
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: true,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A planned window covering now overrides the quiet period")
+    func plannedWindowCoveringNowOverridesQuietPeriod() async {
+        // Probing resumes at the planned start even while the upcoming lookup
+        // still sees later planned windows within the horizon.
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: false,
+            hasPending: true,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("Quiet-period lookup errors fail open")
+    func quietPeriodLookupErrorFailsOpen() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in false },
+            isBelievedActiveFromSnapshot: { _, _ in true },
+            hasUpcomingPlannedWindow: { _, _ in throw Boom() }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A believed-active snapshot allows probing regardless of the idle setting")
+    func believedActiveSnapshotAllowsProbing() async {
+        let gate = makeGate(
+            idleEnabled: false,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: true,
+            hasUpcoming: false
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("An expiring snapshot window suppresses the consuming probe despite local activity")
+    func expiringWindowSuppressesConsumingProbeDespiteLocalActivity() async {
+        // The believed-active check already rejects a window inside its final
+        // safety margin; local activity must not re-open probing in that tail,
+        // where the probe could anchor a fresh window past the real expiry.
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: true,
+            believedActive: false,
+            hasUpcoming: false,
+            expiring: true
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("A recorded window in the end margin suppresses local activity")
+    func recordedWindowInMarginSuppressesLocalActivity() async {
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, checkDate in checkDate == now },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in true }
+        )
+
+        // The margin-adjusted lookup is false, but the second lookup sees that
+        // the window is active at now and prevents local evidence reopening it.
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
+    @Test("Expiring-window suppression does not apply to read-only Codex")
+    func expiringWindowDoesNotSuppressReadOnlyProbe() async {
+        let gate = makeGate(
+            idleEnabled: true,
+            hasActive: false,
+            hasPending: false,
+            hasActivity: false,
+            believedActive: false,
+            hasUpcoming: false,
+            expiring: true
+        )
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
+    @Test("Expiring-window lookup error falls open to the local-activity fallback")
+    func expiringWindowLookupErrorFailsOpen() async {
+        struct Boom: Error {}
+        let gate = UsageCheckGate(
+            isIdleCheckEnabled: { _ in true },
+            hasActiveWindow: { _, _ in false },
+            hasPendingPlannedWindow: { _, _ in false },
+            hasRecentLocalActivity: { _, _ in true },
+            isBelievedActiveFromSnapshot: { _, _ in false },
+            hasUpcomingPlannedWindow: { _, _ in false },
+            isSnapshotWindowExpiring: { _, _ in throw Boom() }
+        )
+        #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    private func makeGate(
+        idleEnabled: Bool,
+        hasActive: Bool,
+        hasPending: Bool,
+        hasActivity: Bool,
+        believedActive: Bool = false,
+        hasUpcoming: Bool = false,
+        expiring: Bool = false
+    ) -> UsageCheckGate {
         UsageCheckGate(
             isIdleCheckEnabled: { _ in idleEnabled },
             hasActiveWindow: { _, _ in hasActive },
-            hasPendingPlannedWindow: { _, _ in hasPending }
+            hasPendingPlannedWindow: { _, _ in hasPending },
+            hasRecentLocalActivity: { _, _ in hasActivity },
+            isBelievedActiveFromSnapshot: { _, _ in believedActive },
+            hasUpcomingPlannedWindow: { _, _ in hasUpcoming },
+            isSnapshotWindowExpiring: { _, _ in expiring }
         )
     }
 }

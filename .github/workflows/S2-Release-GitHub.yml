@@ -7,6 +7,24 @@ on:
         description: "Release version (strict semver, no v prefix, e.g. 0.5.0)"
         required: true
         type: string
+      build_number:
+        description: "Globally increasing build number (positive integer, e.g. 5)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as prerelease (excluded from releases/latest; build number remains globally reserved)"
+        required: false
+        type: boolean
+        default: false
+      first_sparkle_release:
+        description: "Allow a missing feed only for the first stable release that publishes appcast.xml"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: c5h-s2-release
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -22,26 +40,31 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Validate version
+      - name: Validate release identifiers
         env:
           VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          FIRST_SPARKLE_RELEASE: ${{ inputs.first_sparkle_release }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "Version must be strict semver, no leading zeros (e.g. 0.5.0). Got: $VERSION"
-            exit 1
-          fi
+          ./Toolkit/Release/validate-release-identifiers.sh \
+            "$VERSION" \
+            "$BUILD_NUMBER" \
+            "$PRERELEASE" \
+            "$FIRST_SPARKLE_RELEASE"
 
-      - name: Require notarization credentials
+      - name: Require release credentials
         env:
           APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           missing=
-          for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+          for v in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD SPARKLE_ED_PRIVATE_KEY; do
             [ -z "${!v}" ] && missing="$missing $v"
           done
           if [ -n "$missing" ]; then
@@ -93,7 +116,12 @@ jobs:
           APPLE_ID: ${{ vars.APPLE_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: ./Toolkit/Conductor/release.sh "${{ inputs.version }}"
+        run: ./Toolkit/Release/release.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
+
+      - name: Generate and sign Sparkle appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
 
       - name: Clean up keychain
         if: always()
@@ -103,8 +131,10 @@ jobs:
         uses: softprops/action-gh-release@2bb465e97f322d3cb2a965294d483e0d26a67aa9 # v3.0.1
         with:
           tag_name: ${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             build/C5h-${{ inputs.version }}.dmg
             build/C5h-${{ inputs.version }}.dmg.sha256
+            build/appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -180,4 +180,287 @@ struct ActualWindow5hRepositoryUpsertTests {
         let all = try await repo.fetchAll().filter { $0.providerID == .claude }
         #expect(all.count == 2)
     }
+
+    @Test("A valid upsert does not reuse a legacy weekly-class row with the same end")
+    func validUpsertIgnoresLegacyWeeklyEndMatch() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let legacy = ActualWindow5h(
+            providerID: .codex,
+            startAt: end.addingTimeInterval(-7 * 24 * 3600),
+            durationSeconds: 7 * 24 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.create(legacy)
+
+        let valid = ActualWindow5h(
+            providerID: .codex,
+            startAt: end.addingTimeInterval(-5 * 3600),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.upsertByEndAt(valid, tolerance: 60)
+
+        let visible = try await repo.fetchAll()
+        #expect(visible.map(\.id) == [valid.id])
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 2)
+    }
+
+    @Test("Weekly-class input is ignored by the 5h upsert boundary")
+    func weeklyClassUpsertIsIgnored() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        try await repo.upsertByEndAt(ActualWindow5h(
+            providerID: .codex,
+            startAt: Date(timeIntervalSince1970: 1_800_000_000),
+            durationSeconds: CodexUsageStatus.weeklyClassThresholdSeconds,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ), tolerance: 60)
+
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 0)
+    }
+}
+
+@Suite("ActualWindow5hRepository legacy duration filtering")
+struct ActualWindow5hRepositoryLegacyDurationTests {
+    @Test("Every read path hides retained weekly-class rows")
+    func readPathsHideLegacyWeeklyRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+        let reference = Date(timeIntervalSince1970: 1_800_000_000)
+        let legacy = ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-24 * 3600),
+            durationSeconds: 7 * 24 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let valid = ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-60),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.create(legacy)
+        try await repo.create(valid)
+
+        #expect(try await repo.fetchAll().map(\.id) == [valid.id])
+        #expect(try await repo.fetchWindows(
+            for: DateInterval(start: reference, duration: 1)
+        ).map(\.id) == [valid.id])
+        #expect(try await repo.fetchActiveWindow(
+            providerID: .codex,
+            at: reference
+        )?.id == valid.id)
+
+        let physicalCount = try await db.writer.read { db in
+            try ActualWindow5hRecord.fetchCount(db)
+        }
+        #expect(physicalCount == 2, "unmatched legacy data is retained for recovery")
+    }
+}
+
+@Suite("ActualWindow5hRepository active-window wait")
+struct ActualWindow5hRepositoryActiveWindowWaitTests {
+    @Test("Point lookup returns only the latest same-provider window covering the reference time")
+    func pointLookupFiltersProviderAndCoverage() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        let reference = Date(timeIntervalSince1970: 1_730_100_000)
+        let expired = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-300),
+            durationSeconds: 300,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let otherProvider = ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-10),
+            durationSeconds: 600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let olderMatch = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-200),
+            durationSeconds: 600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let latestMatch = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-100),
+            durationSeconds: 600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        // This sorts after every real match and starts in the same wall-clock
+        // second as `reference`. The SQL lookup must preserve fractional-second
+        // precision rather than truncating both values to an equal second.
+        let sameSecondFuture = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(0.5),
+            durationSeconds: 600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        for window in [expired, otherProvider, olderMatch, latestMatch, sameSecondFuture] {
+            try await repo.create(window)
+        }
+
+        let active = try #require(try await repo.fetchActiveWindow(
+            providerID: .claude,
+            at: reference
+        ))
+
+        #expect(active.id == latestMatch.id)
+        #expect(active.providerID == .claude)
+        #expect(active.startAt <= reference)
+        #expect(reference < active.endAt)
+    }
+
+    @Test("Waiter immediately returns an already-persisted active window")
+    func waiterReturnsImmediateMatch() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        let reference = Date(timeIntervalSince1970: 1_730_200_000)
+        let window = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-60),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        try await repo.create(window)
+
+        let active = try await repo.awaitActiveWindow(
+            providerID: .claude,
+            at: reference,
+            timeout: .zero,
+            pollInterval: .milliseconds(1)
+        )
+
+        #expect(active?.id == window.id)
+    }
+
+    @Test("Waiter sees a delayed insert made through another database handle")
+    func waiterSeesCrossConnectionInsert() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("c5h-active-window-wait-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let databaseURL = directory.appendingPathComponent("test.sqlite")
+        let readerDatabase = try Database.open(
+            at: databaseURL,
+            notificationName: "com.zaai.c5h.active-window-wait.reader.\(UUID().uuidString)"
+        )
+        let writerDatabase = try Database.open(
+            at: databaseURL,
+            notificationName: "com.zaai.c5h.active-window-wait.writer.\(UUID().uuidString)"
+        )
+        try await Seed.runIfNeeded(database: readerDatabase)
+
+        let reader = GRDBActualWindow5hRepository(database: readerDatabase)
+        let writer = GRDBActualWindow5hRepository(database: writerDatabase)
+        let reference = Date(timeIntervalSince1970: 1_730_300_000)
+        let window = ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-60),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+
+        let delayedInsert = Task {
+            try await Task.sleep(for: .milliseconds(50))
+            try await writer.create(window)
+        }
+        defer { delayedInsert.cancel() }
+
+        let active = try await reader.awaitActiveWindow(
+            providerID: .claude,
+            at: reference,
+            timeout: .seconds(1),
+            pollInterval: .milliseconds(10)
+        )
+        try await delayedInsert.value
+
+        #expect(active?.id == window.id)
+    }
+
+    @Test("Waiter times out when rows have the wrong provider or do not cover the reference time")
+    func waiterTimesOutForNonMatchingRows() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+
+        let reference = Date(timeIntervalSince1970: 1_730_400_000)
+        try await repo.create(ActualWindow5h(
+            providerID: .codex,
+            startAt: reference.addingTimeInterval(-60),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+        try await repo.create(ActualWindow5h(
+            providerID: .claude,
+            startAt: reference.addingTimeInterval(-5 * 3600),
+            durationSeconds: 5 * 3600,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+
+        let active = try await repo.awaitActiveWindow(
+            providerID: .claude,
+            at: reference,
+            timeout: .milliseconds(25),
+            pollInterval: .milliseconds(5)
+        )
+
+        #expect(active == nil)
+    }
+
+    @Test("Waiter propagates task cancellation")
+    func waiterPropagatesCancellation() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow5hRepository(database: db)
+        let reference = Date(timeIntervalSince1970: 1_730_500_000)
+
+        let waitTask = Task {
+            try await repo.awaitActiveWindow(
+                providerID: .claude,
+                at: reference,
+                timeout: .seconds(35),
+                pollInterval: .seconds(5)
+            )
+        }
+        waitTask.cancel()
+
+        do {
+            _ = try await waitTask.value
+            Issue.record("A cancelled wait should throw CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+    }
 }

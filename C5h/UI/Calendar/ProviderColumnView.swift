@@ -5,6 +5,7 @@ struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
     let actualSegments: [ActualWindow5hDisplaySegment]
+    var weeklyWindow: ActualWindow7d? = nil
     let history: UsageHistorySeries?
     /// IDs of actual windows that followed a detected quota reset, marked with a
     /// subtle neutral glyph on their block.
@@ -15,6 +16,7 @@ struct ProviderColumnView: View {
     let columnWidth: CGFloat
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    var onSelectWeekly: ((ActualWindow7d) -> Void)? = nil
     let onMovePlanned: (PlannedWindow, Date) -> Void
     var onQuickPlan: ((Date) -> Void)? = nil
 
@@ -39,6 +41,7 @@ struct ProviderColumnView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
+            weeklyBlock
             ghostPlanBlock
             // Continuous current-time line for the empty timeline; it sits above
             // the column background but below the window blocks (zIndex 1/2), so
@@ -55,6 +58,7 @@ struct ProviderColumnView: View {
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
                 if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
+                    let renderedTop = stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
                     PlannedWindowBlockView(
                         window: window,
                         now: now,
@@ -66,7 +70,8 @@ struct ProviderColumnView: View {
                         segmentStart: segment.start,
                         displayStart: draggingPlannedID == window.id ? displayStart : nil,
                         emphasizeEndTime: true,
-                        widthOverride: blockContentWidth
+                        widthOverride: blockContentWidth,
+                        renderedTopOffset: renderedTop
                     )
                     .overlay(alignment: .topTrailing) {
                         if isActive {
@@ -79,7 +84,7 @@ struct ProviderColumnView: View {
                     }
                     .offset(
                         x: blockContentX,
-                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
                     .zIndex(draggingPlannedID == window.id ? 3 : 1)
@@ -117,6 +122,7 @@ struct ProviderColumnView: View {
             ForEach(actualSegments) { actualSegment in
                 let window = actualSegment.window
                 if let segment = visibleSegment(start: actualSegment.startAt, durationSeconds: actualSegment.durationSeconds) {
+                    let renderedTop = stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
                     ActualWindowBlockView(
                         window: window,
                         history: history,
@@ -131,11 +137,12 @@ struct ProviderColumnView: View {
                         displayEnd: actualSegment.endAt,
                         marksResetEnd: actualSegment.marksResetEnd,
                         widthOverride: blockContentWidth,
-                        isReset: resetWindowIDs.contains(actualSegment.id)
+                        isReset: resetWindowIDs.contains(actualSegment.id),
+                        renderedTopOffset: renderedTop
                     )
                     .offset(
                         x: blockContentX,
-                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                        y: renderedTop
                     )
                     .zIndex(2)
                 }
@@ -163,6 +170,7 @@ struct ProviderColumnView: View {
                 switch hit {
                 case .planned(let window): onSelectPlanned(window)
                 case .actual(let window): onSelectActual(window)
+                case .weekly(let window): onSelectWeekly?(window)
                 }
                 hoverY = nil
                 return
@@ -176,6 +184,7 @@ struct ProviderColumnView: View {
     private enum WindowHit {
         case planned(PlannedWindow)
         case actual(ActualWindow5h)
+        case weekly(ActualWindow7d)
     }
 
     /// Resolves a tap location to the window block whose rendered frame (its
@@ -216,6 +225,25 @@ struct ProviderColumnView: View {
                 }
             }
         }
+        // The weekly block is drawn beneath the planned/actual lanes (zIndex 0),
+        // so it is matched last: a 5h block on top wins any overlap. Without this
+        // the weekly block reads as empty calendar space (a plan ghost is drawn
+        // over it and a tap quick-plans instead of selecting it).
+        if let weeklyWindow,
+           blockContentX <= location.x, location.x <= blockContentX + blockContentWidth,
+           let segment = visibleSegment(
+               start: weeklyWindow.startAt,
+               durationSeconds: weeklyWindow.durationSeconds
+           ) {
+            let top = yOffset(for: segment.start)
+            let height = CalendarPositioning.blockHeight(
+                durationSeconds: segment.durationSeconds,
+                pixelsPerMinute: layout.pixelsPerMinute
+            )
+            if (top...(top + height)).contains(location.y) {
+                return .weekly(weeklyWindow)
+            }
+        }
         return nil
     }
 
@@ -253,10 +281,7 @@ struct ProviderColumnView: View {
             blocks.append(StackBlock(
                 id: .planned(window.id),
                 yOffset: yOffset(for: segment.start),
-                height: CalendarPositioning.blockHeight(
-                    durationSeconds: segment.durationSeconds,
-                    pixelsPerMinute: layout.pixelsPerMinute
-                ),
+                height: stackingHeight(durationSeconds: segment.durationSeconds),
                 sortPriority: 0
             ))
         }
@@ -268,10 +293,7 @@ struct ProviderColumnView: View {
             blocks.append(StackBlock(
                 id: .actual(actualSegment.id),
                 yOffset: yOffset(for: segment.start),
-                height: CalendarPositioning.blockHeight(
-                    durationSeconds: segment.durationSeconds,
-                    pixelsPerMinute: layout.pixelsPerMinute
-                ),
+                height: stackingHeight(durationSeconds: segment.durationSeconds),
                 sortPriority: 1
             ))
         }
@@ -281,13 +303,28 @@ struct ProviderColumnView: View {
         }
         let placements = CalendarPositioning.stackVertically(
             sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-            gap: layout.blockVerticalGap
+            gap: layout.blockVerticalGap,
+            maxY: layout.dayHeight
         )
         var map: [StackID: CGFloat] = [:]
         for (block, placement) in zip(sorted, placements) {
             map[block.id] = placement.yOffset
         }
         return map
+    }
+
+    /// Space a block occupies for stacking purposes: its true duration on the
+    /// time scale, without the minimum height the rendered frame applies. A short
+    /// block inflated to the 24px minimum would claim far more of the timeline
+    /// than it covers and push every later block down for an overlap that does
+    /// not exist. Rendering and hit-testing keep using the minimum, so a short
+    /// block stays readable and clickable.
+    private func stackingHeight(durationSeconds: Int) -> CGFloat {
+        CalendarPositioning.blockHeight(
+            durationSeconds: durationSeconds,
+            pixelsPerMinute: layout.pixelsPerMinute,
+            minimum: 0
+        )
     }
 
     @ViewBuilder
@@ -420,6 +457,32 @@ struct ProviderColumnView: View {
                 actualWindows: actualSegments.map(\.window)
             )
             .hasConflict
+    }
+
+    @ViewBuilder
+    private var weeklyBlock: some View {
+        if let weeklyWindow,
+           let segment = visibleSegment(
+               start: weeklyWindow.startAt,
+               durationSeconds: weeklyWindow.durationSeconds
+           ) {
+            WeeklyWindowBlockView(
+                window: weeklyWindow,
+                history: history,
+                now: now,
+                columnWidth: columnWidth,
+                layout: layout,
+                visibleDurationSeconds: segment.durationSeconds,
+                clipsTop: segment.clippedStart,
+                clipsBottom: segment.clippedEnd,
+                segmentStart: segment.start
+            )
+            .offset(
+                x: blockContentX,
+                y: yOffset(for: segment.start)
+            )
+            .zIndex(0)
+        }
     }
 
     private var background: some View {

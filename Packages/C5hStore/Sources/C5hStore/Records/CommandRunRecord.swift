@@ -60,6 +60,17 @@ struct CommandRunRecord: Codable, FetchableRecord, PersistableRecord {
         self.ownerPid = run.ownerPID.map { Int($0) }
     }
 
+    /// Decode this row for the Logs list, keeping rows that no longer map to
+    /// the current domain types visible as `.unreadable` instead of throwing.
+    func toEntry() -> CommandRunEntry {
+        if let run = try? toCommandRun() {
+            return .readable(run)
+        }
+        // Best-effort timestamp so the placeholder still sorts by time and can
+        // show when the run happened.
+        return .unreadable(id: id, startedAt: DateTimeService.parseUTC(startedAt))
+    }
+
     func toCommandRun() throws -> CommandRun {
         guard
             let uuid = UUID(uuidString: id),

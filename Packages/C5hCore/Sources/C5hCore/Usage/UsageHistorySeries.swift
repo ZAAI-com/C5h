@@ -45,6 +45,39 @@ public struct UsagePoint: Sendable, Hashable {
     }
 }
 
+/// Which quota limits a provider explicitly reported in a usage snapshot.
+public struct ProviderUsageLimits: Sendable, Hashable {
+    public let hasFiveHourLimit: Bool
+    public let hasWeeklyLimit: Bool
+
+    public var isWeeklyOnly: Bool { hasWeeklyLimit && !hasFiveHourLimit }
+
+    public init(hasFiveHourLimit: Bool, hasWeeklyLimit: Bool) {
+        self.hasFiveHourLimit = hasFiveHourLimit
+        self.hasWeeklyLimit = hasWeeklyLimit
+    }
+
+    public static func from(snapshot: UsageSnapshot) -> ProviderUsageLimits? {
+        switch snapshot.providerID {
+        case .claude:
+            guard let status = try? ClaudeUsageStatus.parsePayload(snapshot.rawJSON) else { return nil }
+            return ProviderUsageLimits(
+                hasFiveHourLimit: true,
+                hasWeeklyLimit: status.sevenDay != nil
+            )
+        case .codex:
+            guard let status = try? CodexUsageStatus.parseAny(
+                snapshot.rawJSON,
+                capturedAt: snapshot.capturedAt
+            ) else { return nil }
+            return ProviderUsageLimits(
+                hasFiveHourLimit: status.hasFiveHourClassLimit,
+                hasWeeklyLimit: status.hasWeeklyClassLimit
+            )
+        }
+    }
+}
+
 /// Sorted, in-memory time series of (5h%, 7d%) values for one provider, built
 /// by parsing `UsageSnapshot.rawJSON`. UI uses this to render usage readings
 /// at the time they were captured.
@@ -86,6 +119,18 @@ public struct UsageHistorySeries: Sendable, Hashable {
         )
     }
 
+    public func scoped(
+        toWeeklyWindowEndingAt end: Date,
+        tolerance: TimeInterval = ActualWindow5hDisplayResolver.resetEndTolerance
+    ) -> UsageHistorySeries {
+        UsageHistorySeries(
+            providerID: providerID,
+            points: points.filter {
+                $0.sevenDayResetsAt.map { abs($0.timeIntervalSince(end)) <= tolerance } ?? false
+            }
+        )
+    }
+
     /// 7d% from the latest point with `capturedAt <= time`. Returns nil when no
     /// such point exists (e.g., `time` is before any recorded snapshot). The
     /// series has no notion of "now"; callers that want to hide values for
@@ -93,6 +138,27 @@ public struct UsageHistorySeries: Sendable, Hashable {
     public func sevenDayPercent(at time: Date) -> (value: Double, asOf: Date)? {
         guard let point = lastPoint(atOrBefore: time), let value = point.sevenDay else { return nil }
         return (value, point.capturedAt)
+    }
+
+    /// The real 7d readings captured within `interval`, each at the time its usage
+    /// command actually ran. Consecutive samples with the same rounded percentage
+    /// collapse to one entry (kept at the capture where that value first appeared),
+    /// so a value polled every few minutes but unchanged does not produce a stack of
+    /// identical rows. Points exist only at real capture times, so passing an
+    /// interval ending at `now` yields a past-only list: the calendar draws one row
+    /// per returned reading instead of a synthetic time grid, and never shows a value
+    /// at a time it was not measured.
+    public func weeklyReadings(in interval: DateInterval) -> [(capturedAt: Date, used: Double)] {
+        var readings: [(capturedAt: Date, used: Double)] = []
+        var lastRoundedPercent: Int?
+        for point in points where interval.contains(point.capturedAt) {
+            guard let used = point.sevenDay else { continue }
+            let rounded = Int(used.rounded())
+            if rounded == lastRoundedPercent { continue }
+            lastRoundedPercent = rounded
+            readings.append((point.capturedAt, used))
+        }
+        return readings
     }
 
     /// Latest 5h% with its source capture time. Used by the box center.
@@ -134,6 +200,46 @@ public struct UsageHistorySeries: Sendable, Hashable {
             }
         }
         return nil
+    }
+
+    /// Earliest sample captured in `[start, start + seconds]` with a 7d reading,
+    /// falling back to the latest point at or before `start` when none fall in
+    /// the opening window. Used for the carry-in reading at the top of a weekly
+    /// calendar block.
+    public func weeklyOpeningReading(
+        at start: Date,
+        within seconds: TimeInterval
+    ) -> (capturedAt: Date, used: Double)? {
+        let upper = start.addingTimeInterval(seconds)
+        for point in points where point.capturedAt >= start && point.capturedAt <= upper {
+            if let sevenDay = point.sevenDay {
+                return (point.capturedAt, sevenDay)
+            }
+        }
+        for point in points.reversed() where point.capturedAt <= start {
+            if let sevenDay = point.sevenDay {
+                return (point.capturedAt, sevenDay)
+            }
+        }
+        return nil
+    }
+
+    /// Latest in-day 7d reading whose used value differs from `carryInUsed`.
+    /// Returns nil when every sample on `day` matches the carry-in or lacks 7d.
+    public func latestDistinctWeeklyReading(
+        on day: Date,
+        carryInUsed: Double?,
+        calendar: Calendar = .current
+    ) -> (capturedAt: Date, used: Double)? {
+        let dayBounds = CalendarPositioning.dayInterval(for: day, calendar: calendar)
+        var latest: (capturedAt: Date, used: Double)?
+        for point in points
+            where point.capturedAt >= dayBounds.start && point.capturedAt < dayBounds.end {
+            guard let sevenDay = point.sevenDay else { continue }
+            if let carryInUsed, sevenDay == carryInUsed { continue }
+            latest = (point.capturedAt, sevenDay)
+        }
+        return latest
     }
 
     /// Earliest sample captured in `[start, start + seconds]`, used for the
@@ -216,7 +322,13 @@ public struct UsageHistorySeries: Sendable, Hashable {
                 fiveHour: status.fiveHour.usedPercentage,
                 sevenDay: status.sevenDay?.usedPercentage,
                 fiveHourResetsAt: status.fiveHour.resetsAt,
-                hasActiveFiveHourWindow: true,
+                // Claude slides an unopened 5h slot forward every 10 minutes
+                // while idle. Marking those points inactive keeps them out of
+                // reset detection, which would otherwise read each slide as a
+                // quota reset and clip real windows around it.
+                hasActiveFiveHourWindow: !status.isProspectiveFiveHourSlot(
+                    capturedAt: snapshot.capturedAt
+                ),
                 sevenDayResetsAt: status.sevenDay?.resetsAt
             )
         case .codex:
@@ -226,11 +338,11 @@ public struct UsageHistorySeries: Sendable, Hashable {
             ) else { return nil }
             return UsagePoint(
                 capturedAt: snapshot.capturedAt,
-                fiveHour: status.primary.usedPercentage,
-                sevenDay: status.secondary?.usedPercentage,
-                fiveHourResetsAt: status.primary.resetsAt,
-                hasActiveFiveHourWindow: status.hasActivePrimaryWindow,
-                sevenDayResetsAt: status.secondary?.resetsAt
+                fiveHour: status.fiveHourUsedPercentage,
+                sevenDay: status.weeklyUsedPercentage,
+                fiveHourResetsAt: status.fiveHourResetsAt,
+                hasActiveFiveHourWindow: status.hasActiveFiveHourWindow,
+                sevenDayResetsAt: status.weeklyResetsAt
             )
         }
     }

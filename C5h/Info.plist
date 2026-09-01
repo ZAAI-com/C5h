@@ -30,5 +30,19 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>pFX9RhGOWNCnJx+pFvFMVmC7V2yIXAjLXMGpGbYZj6U=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<!-- Mirror feeds tried in order after SUFeedURL when the primary feed
+	     cannot be reached. Each must serve the same EdDSA-signed appcast. -->
+	<key>C5hFallbackFeedURLs</key>
+	<array>
+		<string>https://zaai.com/c5h/appcast.xml</string>
+	</array>
 </dict>
 </plist>

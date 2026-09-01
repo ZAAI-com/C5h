@@ -7,6 +7,7 @@ struct AppSchedulerDriver: SchedulerDriver {
     let actual5hRepository: any ActualWindow5hRepository
     let actual7dRepository: any ActualWindow7dRepository
     let usageSnapshotRepository: any UsageSnapshotRepository
+    let commandRunRepository: any CommandRunRepository
     let registry: ProviderRegistry
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
@@ -31,7 +32,7 @@ struct AppSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let adapter = try await MainActor.run { try registry.adapter(for: prompt.providerID) }
-        return try await adapter.runPromptCommand(
+        return try await adapter.runPrompt(
             TriggerPromptInput(
                 prompt: prompt.prompt,
                 projectPath: prompt.projectPath,
@@ -47,6 +48,7 @@ struct AppSchedulerDriver: SchedulerDriver {
         let actual5hRepo = actual5hRepository
         let actual7dRepo = actual7dRepository
         let usageRepo = usageSnapshotRepository
+        let commandRepo = commandRunRepository
         let registry = registry
         let fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
@@ -63,26 +65,22 @@ struct AppSchedulerDriver: SchedulerDriver {
             fetcher: fetcher,
             snapshotFetch: { providerID in
                 let adapter = try await MainActor.run { try registry.adapter(for: providerID) }
-                return try await adapter.runUsageCommand()
+                return try await adapter.runUsage()
             },
             activeWindowFetch: { providerID, now in
-                // Search around `now` rather than a 1-second slice so we don't
-                // miss the active window when boundaries land outside the slot.
-                let lookback: TimeInterval = 24 * 60 * 60
-                let interval = DateInterval(
-                    start: now.addingTimeInterval(-lookback),
-                    end: now.addingTimeInterval(lookback)
-                )
-                let windows = try await actual5hRepo.fetchWindows(for: interval)
-                return windows
-                    .filter { $0.providerID == providerID }
-                    .first { window in
-                        let end = window.startAt.addingTimeInterval(TimeInterval(window.durationSeconds))
-                        return window.startAt <= now && now < end
-                    }
+                try await actual5hRepo.fetchActiveWindow(providerID: providerID, at: now)
             },
             updateActualWindow: { window in
                 try await actual5hRepo.update(window)
+            },
+            awaitActiveWindow: { providerID, now in
+                try await actual5hRepo.awaitActiveWindow(providerID: providerID, at: now)
+            },
+            triggerAttributionFetch: { commandRunID in
+                try await commandRepo.fetchAttributionEvidence(id: commandRunID)
+            },
+            latestSnapshotFetch: { providerID in
+                try await usageRepo.fetchLatest(providerID: providerID)
             }
         )
         return await resolver.resolveTriggeredWindow(

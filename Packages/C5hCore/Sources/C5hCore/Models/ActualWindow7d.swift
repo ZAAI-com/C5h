@@ -42,4 +42,14 @@ public struct ActualWindow7d: Identifiable, Codable, Sendable, Hashable {
     public var endAt: Date {
         startAt.addingTimeInterval(TimeInterval(durationSeconds))
     }
+
+    /// Quota remaining at capture time. Codex reports `usedPercentage` as
+    /// consumed usage; remaining is the complement clamped to 0–100.
+    public var remainingPercentage: Double {
+        Self.remainingPercentage(fromUsed: usedPercentage)
+    }
+
+    public static func remainingPercentage(fromUsed used: Double) -> Double {
+        max(0, min(100, 100 - used))
+    }
 }

@@ -22,11 +22,36 @@ public struct CommandRunFilter: Sendable {
     }
 }
 
+/// A single row fetched for the Logs list. Most rows decode into a
+/// `CommandRun`; a row whose stored columns no longer map to the current
+/// domain types (e.g. a `run_type`/`status` written by an older build whose
+/// enum raw values were later renamed) is surfaced as `.unreadable` so it
+/// stays visible in the list instead of silently disappearing.
+public enum CommandRunEntry: Sendable, Identifiable {
+    case readable(CommandRun)
+    case unreadable(id: String, startedAt: Date?)
+
+    public var id: String {
+        switch self {
+        case .readable(let run): run.id.uuidString
+        case .unreadable(let id, _): id
+        }
+    }
+
+    /// The decoded run, or `nil` for an unreadable row.
+    public var run: CommandRun? {
+        if case .readable(let run) = self { return run }
+        return nil
+    }
+}
+
 public protocol CommandRunRepository: Sendable {
     func create(_ run: CommandRun) async throws
     func update(_ run: CommandRun) async throws
     func fetch(id: UUID) async throws -> CommandRun?
+    func fetchAttributionEvidence(id: UUID) async throws -> TriggerAttributionEvidence?
     func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun]
+    func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry]
     func sweepStaleRunning(message: String, isAlive: @Sendable (Int32) -> Bool) async throws -> Int
 }
 
@@ -76,24 +101,70 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
         return try record?.toCommandRun()
     }
 
-    public func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun] {
-        let records = try await writer.read { db in
-            var request = CommandRunRecord.all().order(Column("started_at").desc)
-            if let pid = filter.providerID {
-                request = request.filter(Column("provider_id") == pid.rawValue)
-            }
-            if let st = filter.status {
-                request = request.filter(Column("status") == st.rawValue)
-            }
-            if let name = filter.commandName {
-                request = request.filter(Column("run_type") == name.rawValue)
-            }
-            if let since = filter.since {
-                request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))
-            }
-            return try request.limit(limit).fetchAll(db)
+    /// Fetches only the stable fields needed to validate a window's trigger
+    /// attribution. Reading the raw record avoids rejecting legacy rows whose
+    /// pre-rename `run_type` (for example, `PromptCommand`) no longer decodes as
+    /// a current `CommandName`.
+    public func fetchAttributionEvidence(id: UUID) async throws -> TriggerAttributionEvidence? {
+        let record = try await writer.read { db in
+            try CommandRunRecord.fetchOne(db, key: id.uuidString)
         }
-        return try records.map { try $0.toCommandRun() }
+        guard let record else { return nil }
+        guard let providerID = ProviderID(rawValue: record.providerId),
+              let startedAt = DateTimeService.parseUTC(record.startedAt) else {
+            throw C5hError.databaseError("Invalid command-run attribution evidence: \(record.id)")
+        }
+        let promptRawValues = [CommandName.prompt.rawValue, "PromptCommand"]
+        return TriggerAttributionEvidence(
+            providerID: providerID,
+            startedAt: startedAt,
+            isPrompt: promptRawValues.contains(record.runType)
+        )
+    }
+
+    public func fetchRecent(limit: Int, filter: CommandRunFilter) async throws -> [CommandRun] {
+        // Drop un-decodable rows so a single stale row can't blank the list.
+        // The Logs view uses fetchRecentEntries to keep them visible instead.
+        try await writer.read { db in
+            let cursor = try Self.filteredRequest(filter: filter).fetchCursor(db)
+            var runs: [CommandRun] = []
+            while runs.count < limit {
+                guard let record = try cursor.next() else { break }
+                if let run = try? record.toCommandRun() {
+                    runs.append(run)
+                }
+            }
+            return runs
+        }
+    }
+
+    public func fetchRecentEntries(limit: Int, filter: CommandRunFilter) async throws -> [CommandRunEntry] {
+        let records = try await writer.read { db in
+            try Self.filteredRequest(filter: filter).limit(limit).fetchAll(db)
+        }
+        // A row that no longer decodes (e.g. a run_type/status written by an
+        // older build whose enum raw values were later renamed) is surfaced as
+        // .unreadable rather than dropped, so the Logs list can show it.
+        return records.map { $0.toEntry() }
+    }
+
+    private static func filteredRequest(
+        filter: CommandRunFilter
+    ) -> QueryInterfaceRequest<CommandRunRecord> {
+        var request = CommandRunRecord.all().order(Column("started_at").desc)
+        if let pid = filter.providerID {
+            request = request.filter(Column("provider_id") == pid.rawValue)
+        }
+        if let st = filter.status {
+            request = request.filter(Column("status") == st.rawValue)
+        }
+        if let name = filter.commandName {
+            request = request.filter(Column("run_type") == name.rawValue)
+        }
+        if let since = filter.since {
+            request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))
+        }
+        return request
     }
 
     public func sweepStaleRunning(

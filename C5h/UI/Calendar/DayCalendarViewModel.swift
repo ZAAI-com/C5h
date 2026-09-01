@@ -11,6 +11,7 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
+    var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
 
@@ -64,6 +65,52 @@ final class DayCalendarViewModel {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
+        // The Today and Tomorrow screens both render the active weekly window
+        // when it overlaps their displayed day. Skip unrelated days and clear
+        // state when this view model navigates away from either screen.
+        if Self.isTodayOrTomorrow(date) {
+            await loadWeeklyContext(now: .now)
+        } else {
+            if !weeklyWindows.isEmpty { weeklyWindows = [:] }
+        }
+    }
+
+    private func loadWeeklyContext(now: Date) async {
+        guard let actual7dRepo = actual7dRepository else { return }
+        var windows: [ProviderID: ActualWindow7d] = [:]
+        for providerID in ProviderID.allCases {
+            // Only surface the 7d block for weekly-only providers (those that do
+            // not report a 5h limit); accounts with a 5h limit already convey
+            // usage through their 5h blocks.
+            guard await isWeeklyOnly(providerID: providerID) else { continue }
+            if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
+               window.startAt <= now,
+               now < window.endAt,
+               CalendarPositioning.windowOverlaps(
+                   start: window.startAt,
+                   durationSeconds: window.durationSeconds,
+                   day: date
+               ) {
+                windows[providerID] = window
+            }
+        }
+        if self.weeklyWindows != windows { self.weeklyWindows = windows }
+    }
+
+    /// True when the provider's latest usage snapshot reports a weekly limit but
+    /// no 5h limit. Unknown (no snapshot / unparseable) is treated as not
+    /// weekly-only, so the 7d block stays hidden rather than shown speculatively.
+    private func isWeeklyOnly(providerID: ProviderID) async -> Bool {
+        guard let usageRepo = usageSnapshotRepository,
+              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
+              let limits = ProviderUsageLimits.from(snapshot: snapshot) else {
+            return false
+        }
+        return limits.isWeeklyOnly
+    }
+
+    private static func isTodayOrTomorrow(_ date: Date) -> Bool {
+        Calendar.current.isDateInToday(date) || Calendar.current.isDateInTomorrow(date)
     }
 
     private func loadUsageHistories() async {
@@ -135,12 +182,16 @@ final class DayCalendarViewModel {
               let actual7dRepo = actual7dRepository else { return }
         let actual5hRepo = actual5hRepository
         // When settings are available, honor the per-provider "check when idle"
-        // gate; without them, fall back to refreshing (default behavior).
+        // gate; without them, only providers with read-only probes may fall
+        // back to refreshing (an ungated Claude probe on an idle account would
+        // open a fresh 5h window).
         let gate = appSettings.map {
             UsageCheckGate.make(
                 appSettings: $0,
                 actual5hRepository: actual5hRepo,
-                plannedWindowRepository: plannedRepository
+                plannedWindowRepository: plannedRepository,
+                usageSnapshotRepository: usageRepo,
+                localActivityDetector: .standard
             )
         }
         let fetcher = UsageFetcher(
@@ -162,7 +213,11 @@ final class DayCalendarViewModel {
                age < interval {
                 continue
             }
-            if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
+            if let gate {
+                if await gate.shouldCheck(providerID: providerID, now: now) == false {
+                    continue
+                }
+            } else if providerID.usageProbeConsumesQuota {
                 continue
             }
             do {
@@ -198,6 +253,16 @@ final class DayCalendarViewModel {
             as: Int.self
         )) ?? nil
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
+    }
+
+    /// Active weekly block for the Today and Tomorrow screens when the latest
+    /// persisted weekly window overlaps the displayed day.
+    func weeklyWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
+        guard Self.isTodayOrTomorrow(date) else { return nil }
+        guard let window = weeklyWindows[providerID], window.startAt <= now, now < window.endAt else {
+            return nil
+        }
+        return window
     }
 
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {

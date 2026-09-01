@@ -4,15 +4,15 @@ public protocol ProviderAdapter: Sendable {
     var id: ProviderID { get }
     var displayName: String { get }
 
-    func runVersionCommand() async -> ProviderStatus
-    func runAuthStatusCommand() async -> ProviderStatus
-    func runUsageCommand() async throws -> UsageSnapshot
-    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun
+    func runVersion() async -> ProviderStatus
+    func runAuthStatus() async -> ProviderStatus
+    func runUsage() async throws -> UsageSnapshot
+    func runPrompt(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun
 }
 
 public extension ProviderAdapter {
-    func runPromptCommand(_ input: TriggerPromptInput) async throws -> CommandRun {
-        try await runPromptCommand(input, runID: UUID())
+    func runPrompt(_ input: TriggerPromptInput) async throws -> CommandRun {
+        try await runPrompt(input, runID: UUID())
     }
 }
 

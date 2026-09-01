@@ -134,7 +134,7 @@ struct ProviderCardView: View {
             }
             GridRow {
                 Color.clear.frame(width: 0, height: 0)
-                Text("When off, C5h only checks usage while this provider has an active or planned window.")
+                Text(checkWhenIdleCaption)
                     .font(C5hTypography.captionFont)
                     .foregroundStyle(C5hColors.fgTertiary)
             }
@@ -147,6 +147,25 @@ struct ProviderCardView: View {
 
     private var checkWhenIdleBinding: Binding<Bool> {
         Binding(get: { checkWhenIdle }, set: { onSetCheckWhenIdle($0) })
+    }
+
+    /// Describes what the current "check when idle" setting does for this
+    /// provider. Claude's usage probe drives the real CLI and would open a fresh
+    /// 5-hour window on an idle account, so its idle checking is a read-only
+    /// watch of local session files instead of a probe; Codex's probe is
+    /// read-only, so its idle checking simply polls. The copy follows the toggle
+    /// so it always describes the state the user is currently in.
+    private var checkWhenIdleCaption: String {
+        switch (id, checkWhenIdle) {
+        case (.claude, true):
+            "C5h watches local Claude session files (a read-only check) and probes usage only once a 5-hour window is already open. Idle checking never starts a new window."
+        case (.claude, false):
+            "C5h checks Claude usage only while a 5-hour window is active or a prompt is planned."
+        case (.codex, true):
+            "C5h polls Codex usage even while idle. Codex's usage check is read-only, so it never starts a window."
+        case (.codex, false):
+            "C5h checks Codex usage only while this provider has an active or planned window."
+        }
     }
 
     private var header: some View {
@@ -212,7 +231,7 @@ struct ProviderCardView: View {
         VStack(alignment: .leading, spacing: C5hSpacing.sm) {
             commandRow(
                 title: "Version",
-                preview: VersionCommand.displayCommand(providerID: id),
+                preview: Version.displayCommand(providerID: id),
                 systemImage: "number",
                 isRunning: isStatusLoading,
                 isDisabled: isStatusLoading,
@@ -220,7 +239,7 @@ struct ProviderCardView: View {
             )
             commandRow(
                 title: "Auth status",
-                preview: AuthStatusCommand.displayCommand(providerID: id),
+                preview: AuthStatus.displayCommand(providerID: id),
                 systemImage: "person.badge.key",
                 isRunning: isStatusLoading,
                 isDisabled: isStatusLoading,
@@ -228,16 +247,19 @@ struct ProviderCardView: View {
             )
             commandRow(
                 title: "Usage",
-                preview: UsageCommand.displayCommand(providerID: id),
+                preview: Usage.displayCommand(providerID: id),
                 systemImage: "chart.line.uptrend.xyaxis",
                 detail: usageDetail,
                 isRunning: isUsageLoading,
                 isDisabled: isUsageLoading,
+                runHelp: id.usageProbeConsumesQuota
+                    ? "Run Usage now. If Claude is idle, this starts a new 5-hour window."
+                    : nil,
                 action: onUsage
             )
             commandRow(
                 title: "Prompt template",
-                preview: PromptCommand.displayCommand(providerID: id, prompt: promptPreview),
+                preview: Prompt.displayCommand(providerID: id, prompt: promptPreview),
                 systemImage: "text.bubble",
                 detail: promptFireDetail,
                 isRunning: isPromptFiring,
@@ -254,6 +276,7 @@ struct ProviderCardView: View {
         detail: String? = nil,
         isRunning: Bool = false,
         isDisabled: Bool = false,
+        runHelp: String? = nil,
         action: (() -> Void)? = nil
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: C5hSpacing.sm) {
@@ -282,7 +305,7 @@ struct ProviderCardView: View {
                     Label("Run", systemImage: "play.fill")
                 }
                 .labelStyle(.iconOnly)
-                .help("Run \(title)")
+                .help(runHelp ?? "Run \(title)")
                 .buttonStyle(.glass)
                 .disabled(isDisabled)
             }

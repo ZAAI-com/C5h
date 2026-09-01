@@ -7,63 +7,63 @@ struct ProviderCommandsTests {
     private let claudeURL = URL(fileURLWithPath: "/opt/homebrew/bin/claude")
     private let codexURL = URL(fileURLWithPath: "/usr/local/bin/codex")
 
-    @Test("VersionCommand builds provider version specs")
+    @Test("Version builds provider version specs")
     func versionCommand() {
-        let claude = VersionCommand(providerID: .claude, executableURL: claudeURL).spec()
+        let claude = Version(providerID: .claude, executableURL: claudeURL).spec()
         #expect(claude.providerID == .claude)
-        #expect(claude.commandName == .versionCommand)
+        #expect(claude.commandName == .version)
         #expect(claude.executableURL == claudeURL)
         #expect(claude.arguments == ["--version"])
         #expect(claude.timeoutSeconds == 10)
-        #expect(VersionCommand.displayCommand(providerID: .claude) == "claude --version")
+        #expect(Version.displayCommand(providerID: .claude) == "claude --version")
 
-        let codex = VersionCommand(providerID: .codex, executableURL: codexURL).spec()
+        let codex = Version(providerID: .codex, executableURL: codexURL).spec()
         #expect(codex.providerID == .codex)
-        #expect(codex.commandName == .versionCommand)
+        #expect(codex.commandName == .version)
         #expect(codex.arguments == ["--version"])
-        #expect(VersionCommand.displayCommand(providerID: .codex) == "codex --version")
+        #expect(Version.displayCommand(providerID: .codex) == "codex --version")
     }
 
-    @Test("AuthStatusCommand builds provider auth specs and parses auth state")
+    @Test("AuthStatus builds provider auth specs and parses auth state")
     func authStatusCommand() {
-        let claude = AuthStatusCommand(providerID: .claude, executableURL: claudeURL).spec()
-        #expect(claude.commandName == .authStatusCommand)
+        let claude = AuthStatus(providerID: .claude, executableURL: claudeURL).spec()
+        #expect(claude.commandName == .authStatus)
         #expect(claude.arguments == ["auth", "status", "--json"])
         #expect(claude.timeoutSeconds == 10)
-        #expect(AuthStatusCommand.displayCommand(providerID: .claude) == "claude auth status --json")
-        #expect(AuthStatusCommand.isAuthenticated(
+        #expect(AuthStatus.displayCommand(providerID: .claude) == "claude auth status --json")
+        #expect(AuthStatus.isAuthenticated(
             providerID: .claude,
             stdout: #"{"loggedIn":true}"#,
             exitCode: 0
         ))
-        #expect(!AuthStatusCommand.isAuthenticated(
+        #expect(!AuthStatus.isAuthenticated(
             providerID: .claude,
             stdout: #"{"loggedIn":false}"#,
             exitCode: 0
         ))
 
-        let codex = AuthStatusCommand(providerID: .codex, executableURL: codexURL).spec()
-        #expect(codex.commandName == .authStatusCommand)
+        let codex = AuthStatus(providerID: .codex, executableURL: codexURL).spec()
+        #expect(codex.commandName == .authStatus)
         #expect(codex.arguments == ["login", "status"])
-        #expect(AuthStatusCommand.displayCommand(providerID: .codex) == "codex login status")
-        #expect(AuthStatusCommand.isAuthenticated(
+        #expect(AuthStatus.displayCommand(providerID: .codex) == "codex login status")
+        #expect(AuthStatus.isAuthenticated(
             providerID: .codex,
             stdout: "Logged in using ChatGPT",
             exitCode: 0
         ))
-        #expect(!AuthStatusCommand.isAuthenticated(
+        #expect(!AuthStatus.isAuthenticated(
             providerID: .codex,
             stdout: "Not logged in",
             exitCode: 0
         ))
         // codex 0.132 prints the status to stderr with empty stdout.
-        #expect(AuthStatusCommand.isAuthenticated(
+        #expect(AuthStatus.isAuthenticated(
             providerID: .codex,
             stdout: "",
             stderr: "Logged in using ChatGPT",
             exitCode: 0
         ))
-        #expect(!AuthStatusCommand.isAuthenticated(
+        #expect(!AuthStatus.isAuthenticated(
             providerID: .codex,
             stdout: "",
             stderr: "Not logged in",
@@ -71,21 +71,21 @@ struct ProviderCommandsTests {
         ))
     }
 
-    @Test("UsageCommand builds Claude usage launch arguments")
+    @Test("Usage builds Claude usage launch arguments")
     func usageCommand() throws {
-        let usage = UsageCommand(providerID: .claude, executableURL: claudeURL)
+        let usage = Usage(providerID: .claude, executableURL: claudeURL)
         #expect(usage.timeoutSeconds == 30)
         #expect(try usage.claudeArguments(settingsJSON: "{}") == [
             "--setting-sources", "local",
             "--settings", "{}"
         ])
         #expect(
-            UsageCommand.displayCommand(providerID: .claude)
+            Usage.displayCommand(providerID: .claude)
                 == "claude --setting-sources local --settings '<C5h statusLine usage hook>'"
         )
 
-        let codexUsage = UsageCommand(providerID: .codex, executableURL: codexURL)
-        #expect(UsageCommand.displayCommand(providerID: .codex) == "codex app-server -> account/rateLimits/read")
+        let codexUsage = Usage(providerID: .codex, executableURL: codexURL)
+        #expect(Usage.displayCommand(providerID: .codex) == "codex app-server -> account/rateLimits/read")
         do {
             _ = try codexUsage.claudeArguments(settingsJSON: "{}")
             Issue.record("Codex usage command should be unavailable")
@@ -94,7 +94,7 @@ struct ProviderCommandsTests {
         }
     }
 
-    @Test("UsageCommand lock contention skips before creating a command run")
+    @Test("Usage lock contention skips before creating a command run")
     func usageCommandLockContentionSkipsBeforeCommandRun() async throws {
         let dir = try TempDirectory.make()
         defer { try? TempDirectory.cleanup(dir) }
@@ -102,7 +102,7 @@ struct ProviderCommandsTests {
         let acquiredLock = try UsageProbeLock.acquire(providerID: .claude, configuration: lockConfig)
         let lock = try #require(acquiredLock)
         let recorder = RunRecorder()
-        let usage = UsageCommand(
+        let usage = Usage(
             providerID: .claude,
             executableURL: URL(fileURLWithPath: "/bin/echo"),
             timeoutSeconds: 0.1,
@@ -135,10 +135,14 @@ struct ProviderCommandsTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
 
         let store = CommandRunStore()
-        let usage = UsageCommand(
+        let usage = Usage(
             providerID: .claude,
             executableURL: script,
-            timeoutSeconds: 0.5,
+            // 2s (not 0.5s): the collector drains the PTY every 0.1s until the
+            // deadline, so a very short timeout captures too few reads and the
+            // transcript can come back empty under concurrent test load. The
+            // fake script sleeps 5s, so the probe still times out well before it.
+            timeoutSeconds: 2,
             lockConfiguration: UsageProbeLockConfiguration(directory: dir.appendingPathComponent("locks"))
         )
 
@@ -184,7 +188,7 @@ struct ProviderCommandsTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
 
         let store = CommandRunStore()
-        let usage = UsageCommand(
+        let usage = Usage(
             providerID: .claude,
             executableURL: script,
             timeoutSeconds: 2,
@@ -202,23 +206,23 @@ struct ProviderCommandsTests {
         #expect(snapshot.normalizedJSON.contains(#""usedPercentage":42"#))
     }
 
-    @Test("PromptCommand builds provider prompt specs")
+    @Test("Prompt builds provider prompt specs")
     func promptCommand() {
         let input = TriggerPromptInput(prompt: "do work", projectPath: "/tmp/project")
 
-        let claude = PromptCommand(providerID: .claude, executableURL: claudeURL, input: input).spec()
-        #expect(claude.commandName == .promptCommand)
+        let claude = Prompt(providerID: .claude, executableURL: claudeURL, input: input).spec()
+        #expect(claude.commandName == .prompt)
         #expect(claude.arguments == ["-p", "do work"])
         #expect(claude.workingDirectory?.path == "/tmp/project")
         #expect(claude.timeoutSeconds == 60 * 60 * 6)
-        #expect(PromptCommand.displayCommand(providerID: .claude, prompt: "do work") == "claude -p 'do work'")
+        #expect(Prompt.displayCommand(providerID: .claude, prompt: "do work") == "claude -p 'do work'")
 
-        let codex = PromptCommand(providerID: .codex, executableURL: codexURL, input: input).spec()
-        #expect(codex.commandName == .promptCommand)
+        let codex = Prompt(providerID: .codex, executableURL: codexURL, input: input).spec()
+        #expect(codex.commandName == .prompt)
         #expect(codex.arguments == ["exec", "--skip-git-repo-check", "do work"])
         #expect(codex.workingDirectory?.path == "/tmp/project")
         #expect(codex.timeoutSeconds == 60 * 60 * 6)
-        #expect(PromptCommand.displayCommand(providerID: .codex, prompt: "do work") == "codex exec --skip-git-repo-check 'do work'")
+        #expect(Prompt.displayCommand(providerID: .codex, prompt: "do work") == "codex exec --skip-git-repo-check 'do work'")
     }
 
     @Test("ProviderHealthState requires successful auth before ready")

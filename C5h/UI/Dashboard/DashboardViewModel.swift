@@ -48,7 +48,9 @@ final class DashboardViewModel {
         self.usageGate = UsageCheckGate.make(
             appSettings: appSettingsRepository,
             actual5hRepository: actual5hRepository,
-            plannedWindowRepository: plannedWindowRepository
+            plannedWindowRepository: plannedWindowRepository,
+            usageSnapshotRepository: usageSnapshotRepository,
+            localActivityDetector: .standard
         )
         self.fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
@@ -73,7 +75,7 @@ final class DashboardViewModel {
             let now = Date()
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
-            self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.activeWindows = Self.activeFiveHourWindows(from: actuals, now: now)
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
@@ -129,7 +131,7 @@ final class DashboardViewModel {
         do {
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
-            self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.activeWindows = Self.activeFiveHourWindows(from: actuals, now: now)
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
@@ -147,6 +149,17 @@ final class DashboardViewModel {
             return nil
         }
         return now.timeIntervalSince(snapshot.capturedAt)
+    }
+
+    private static func activeFiveHourWindows(
+        from windows: [ActualWindow5h],
+        now: Date
+    ) -> [ActualWindow5h] {
+        windows.filter {
+            $0.startAt <= now
+                && $0.endAt >= now
+                && $0.durationSeconds < CodexUsageStatus.weeklyClassThresholdSeconds
+        }
     }
 
     private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {

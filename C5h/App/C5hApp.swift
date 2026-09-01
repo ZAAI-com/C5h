@@ -12,7 +12,10 @@ struct C5hApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
-        .commands { AppCommands() }
+        // Passed explicitly: Commands are not part of the window's view
+        // hierarchy, so the .environment(environment) on MainWindowView does
+        // not reach them.
+        .commands { AppCommands(updaterService: environment.updaterService) }
 
         Settings {
             SettingsView()

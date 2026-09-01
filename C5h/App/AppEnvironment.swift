@@ -40,6 +40,11 @@ final class AppEnvironment {
     private(set) var providerPromptLastError: [ProviderID: String] = [:]
     private(set) var providerPromptLastFiredAt: [ProviderID: Date] = [:]
 
+    // Created synchronously rather than in bootstrap(): the updater has no
+    // database dependency, and the update menu/Settings must work even when
+    // the database load fails.
+    let updaterService = UpdaterService()
+
     init() {
         Task { await self.bootstrap() }
     }
@@ -130,6 +135,7 @@ final class AppEnvironment {
                     actual5hRepository: actual5hRepo,
                     actual7dRepository: actual7dRepo,
                     usageSnapshotRepository: usageRepo,
+                    commandRunRepository: cmdRepo,
                     registry: registry
                 )
                 self.schedulerDriver = driver
@@ -214,7 +220,7 @@ final class AppEnvironment {
 
         do {
             let adapter = try providerAdapter(for: id)
-            var status = await adapter.runVersionCommand()
+            var status = await adapter.runVersion()
             if status.isInstalled {
                 status.isAuthenticated = providerStatuses[id]?.isAuthenticated
             }
@@ -238,7 +244,7 @@ final class AppEnvironment {
 
         do {
             let adapter = try providerAdapter(for: id)
-            let authStatus = await adapter.runAuthStatusCommand()
+            let authStatus = await adapter.runAuthStatus()
             let existing = providerStatuses[id]
             let status = ProviderStatus(
                 providerID: id,
@@ -274,7 +280,7 @@ final class AppEnvironment {
             let prompt = await currentWakePrompt(for: id)
             let adapter = try providerAdapter(for: id)
             let input = TriggerPromptInput(prompt: prompt, projectPath: nil, mode: .newSession)
-            let run = try await adapter.runPromptCommand(input)
+            let run = try await adapter.runPrompt(input)
             providerPromptLastFiredAt[id] = .now
             providerPromptLastError[id] = nil
             // Anchor a 5h window for this manual trigger the same way the
