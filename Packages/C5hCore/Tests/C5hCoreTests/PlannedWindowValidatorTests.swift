@@ -25,6 +25,26 @@ struct PlannedWindowValidatorTests {
         #expect(result.conflictingWindowIDs == [existing.id])
     }
 
+    @Test("A window moved onto itself does not conflict with itself")
+    func movedWindowExcludesItself() {
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        let existing = PlannedWindow(
+            providerID: .claude,
+            startAt: base,
+            durationSeconds: 5 * 3600
+        )
+        // Dragging a window keeps its id, so its own stored row must not count
+        // as a conflict at the new position.
+        var moved = existing
+        moved.startAt = base.addingTimeInterval(3600)
+        let result = PlannedWindowValidator.validate(
+            candidate: moved,
+            against: [existing],
+            actualWindows: []
+        )
+        #expect(!result.hasConflict)
+    }
+
     @Test("Same-provider active actual overlap detected")
     func sameProviderActiveActualOverlap() {
         let now = Date(timeIntervalSince1970: 1_730_000_000)

@@ -24,6 +24,10 @@ struct ProviderColumnView: View {
     @State private var hoveredPlannedID: UUID?
     @State private var draggingPlannedID: UUID?
     @State private var dragPreviewStart: Date?
+    /// Last position the dragged window was allowed to occupy. The block sticks
+    /// here while the pointer is over a disallowed stretch, and this is what a
+    /// drop commits, so an invalid move is never sent to the repository.
+    @State private var lastValidDragStart: Date?
 
     private static let fiveHourSeconds = ClaudeUsageStatus.fiveHourDurationSeconds
     private enum BlockID: Hashable {
@@ -85,7 +89,9 @@ struct ProviderColumnView: View {
                         y: frame.minY
                     )
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
-                    .zIndex(draggingPlannedID == window.id ? 3 : 1)
+                    // A dragged block lifts above its planned peers but stays below
+                    // the actual layer (zIndex 2): actual windows always win.
+                    .zIndex(draggingPlannedID == window.id ? 1.5 : 1)
                     .onHover { hovering in
                         if hovering {
                             hoveredPlannedID = window.id
@@ -96,20 +102,36 @@ struct ProviderColumnView: View {
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 4, coordinateSpace: .named("provider-calendar-column"))
                             .onChanged { value in
-                                draggingPlannedID = window.id
+                                if draggingPlannedID != window.id {
+                                    draggingPlannedID = window.id
+                                    // Seed with the window's own start so a block
+                                    // that already sits in a disallowed spot keeps
+                                    // its place as the fallback and can still be
+                                    // dragged out to a legal slot.
+                                    lastValidDragStart = window.startAt
+                                }
                                 hoverY = nil
-                                dragPreviewStart = draggedStart(
+                                let candidate = draggedStart(
                                     for: window,
                                     translationY: value.translation.height
                                 )
+                                if canPlace(window, at: candidate) {
+                                    lastValidDragStart = candidate
+                                }
+                                dragPreviewStart = lastValidDragStart
                             }
                             .onEnded { value in
-                                let start = draggedStart(
+                                let candidate = draggedStart(
                                     for: window,
                                     translationY: value.translation.height
                                 )
+                                if canPlace(window, at: candidate) {
+                                    lastValidDragStart = candidate
+                                }
+                                let start = lastValidDragStart ?? window.startAt
                                 draggingPlannedID = nil
                                 dragPreviewStart = nil
+                                lastValidDragStart = nil
                                 if start != window.startAt {
                                     onMovePlanned(window, start)
                                 }
@@ -238,36 +260,48 @@ struct ProviderColumnView: View {
         max(0, columnWidth - 4)
     }
 
+    /// Frames for the column's blocks, lane-packed in two independent passes:
+    /// actual windows among themselves, planned windows among themselves. A
+    /// planned window therefore never narrows an actual one: a lone actual
+    /// block always spans the full column and (drawn on top) simply covers any
+    /// planned block behind it. Genuinely concurrent blocks of the same kind
+    /// still split into lanes so both stay visible and hit-testable.
     private var blockFrames: [BlockID: CGRect] {
         var map: [BlockID: CGRect] = [:]
-        var blocks: [LaneBlock] = []
+
+        var plannedBlocks: [LaneBlock] = []
         for window in activePlannedWindows {
             guard let segment = visibleSegment(
                 start: displayedStart(for: window),
                 durationSeconds: window.durationSeconds
             ) else { continue }
-            blocks.append(LaneBlock(
+            plannedBlocks.append(LaneBlock(
                 id: .planned(window.id),
                 interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
             ))
         }
+
+        var actualBlocks: [LaneBlock] = []
         for actualSegment in actualSegments {
             guard let segment = visibleSegment(
                 start: actualSegment.startAt,
                 durationSeconds: actualSegment.durationSeconds
             ) else { continue }
-            blocks.append(LaneBlock(
+            actualBlocks.append(LaneBlock(
                 id: .actual(actualSegment.id),
                 interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
             ))
         }
-        let frames = CalendarPositioning.laneFrames(
-            for: blocks.map(\.interval),
-            pixelsPerMinute: layout.pixelsPerMinute,
-            columnWidth: blockContentWidth
-        )
-        for (block, frame) in zip(blocks, frames) {
-            map[block.id] = frame
+
+        for blocks in [plannedBlocks, actualBlocks] {
+            let frames = CalendarPositioning.laneFrames(
+                for: blocks.map(\.interval),
+                pixelsPerMinute: layout.pixelsPerMinute,
+                columnWidth: blockContentWidth
+            )
+            for (block, frame) in zip(blocks, frames) {
+                map[block.id] = frame
+            }
         }
         return map
     }
@@ -395,6 +429,23 @@ struct ProviderColumnView: View {
             startAt: start,
             durationSeconds: Self.fiveHourSeconds
         )
+        return !PlannedWindowValidator
+            .validate(
+                candidate: candidate,
+                against: plannedWindows,
+                actualWindows: actualSegments.map(\.window)
+            )
+            .hasConflict
+    }
+
+    /// Whether the dragged `window` may occupy `start`: not in the past (the
+    /// same rule click-to-plan uses) and not overlapping another planned window
+    /// or an actual window. The candidate keeps the window's own id so the
+    /// validator does not count the window as conflicting with itself.
+    private func canPlace(_ window: PlannedWindow, at start: Date) -> Bool {
+        guard start > now else { return false }
+        var candidate = window
+        candidate.startAt = start
         return !PlannedWindowValidator
             .validate(
                 candidate: candidate,

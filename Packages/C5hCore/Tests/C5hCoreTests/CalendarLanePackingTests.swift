@@ -170,6 +170,22 @@ struct CalendarLanePackingTests {
         #expect(moved.allSatisfy { $0.width == 200 })
     }
 
+    @Test("A lone interval keeps the full column width")
+    func loneIntervalFullWidth() {
+        // The day column packs planned and actual blocks in separate passes, so
+        // an actual window overlapped by a plan is alone in its pass and must
+        // still span the whole column.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let frames = CalendarPositioning.laneFrames(
+            for: [interval(10, 15)],
+            pixelsPerMinute: 1, columnWidth: 200, calendar: calendar
+        )
+        #expect(frames.count == 1)
+        #expect(frames[0].minX == 0)
+        #expect(frames[0].width == 200)
+    }
+
     @Test("Clipped midnight segments and narrow lanes stay within their column")
     func clippedNarrowFrames() throws {
         var calendar = Calendar(identifier: .gregorian)
