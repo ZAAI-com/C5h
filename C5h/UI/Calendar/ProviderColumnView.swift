@@ -115,8 +115,8 @@ struct ProviderColumnView: View {
                                     for: window,
                                     translationY: value.translation.height
                                 )
-                                if canPlace(window, at: candidate) {
-                                    lastValidDragStart = candidate
+                                if let resolved = nearestAllowedStart(for: window, near: candidate) {
+                                    lastValidDragStart = resolved
                                 }
                                 dragPreviewStart = lastValidDragStart
                             }
@@ -125,8 +125,8 @@ struct ProviderColumnView: View {
                                     for: window,
                                     translationY: value.translation.height
                                 )
-                                if canPlace(window, at: candidate) {
-                                    lastValidDragStart = candidate
+                                if let resolved = nearestAllowedStart(for: window, near: candidate) {
+                                    lastValidDragStart = resolved
                                 }
                                 let start = lastValidDragStart ?? window.startAt
                                 draggingPlannedID = nil
@@ -436,6 +436,30 @@ struct ProviderColumnView: View {
                 actualWindows: actualSegments.map(\.window)
             )
             .hasConflict
+    }
+
+    /// The allowed start closest to `candidate` on the provider's snap grid.
+    /// Resolving against the whole day rather than only the positions the
+    /// pointer has already passed means a drag over a blocking stretch (an
+    /// actual window, a neighbouring plan, the past) jumps to the far side of
+    /// it instead of freezing at its near edge. Returns nil when the day holds
+    /// no allowed start at all, in which case the caller keeps the window put.
+    private func nearestAllowedStart(for window: PlannedWindow, near candidate: Date) -> Date? {
+        if canPlace(window, at: candidate) { return candidate }
+        let step = TimeInterval(providerID.plannedWindowSnapMinutes * 60)
+        let interval = CalendarPositioning.dayInterval(for: date)
+        let latestStart = interval.end.addingTimeInterval(-step)
+        // Alternate later/earlier so the first hit is the nearest one; the day's
+        // own length bounds the walk.
+        let maxSteps = Int(interval.duration / step) + 1
+        for offset in 1...max(1, maxSteps) {
+            let delta = Double(offset) * step
+            for signed in [candidate.addingTimeInterval(delta), candidate.addingTimeInterval(-delta)] {
+                guard signed >= interval.start, signed <= latestStart else { continue }
+                if canPlace(window, at: signed) { return signed }
+            }
+        }
+        return nil
     }
 
     /// Whether the dragged `window` may occupy `start`: not in the past (the
