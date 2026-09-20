@@ -1,0 +1,62 @@
+.claude/CLAUDE.md
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 163-164,195-196,232-238
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_ec4b762cf97340::t_7904a2f6e43847 460-461,466-514,518-541,767-778
+  s_ec4b762cf97340::t_1fb3fcca7a0afb 779-780
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_ec4b762cf97340::t_69e457163fff56 269,271-276,278-283
+Toolkit/Release/appcast.sh
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 123-124,126-140
+Toolkit/Release/Tests/validate-appcast-signature.sh
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 1-62
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_0bb7094dda8ab3::t_33a9d42bab147b 74,97-120
+C5h/UI/Calendar/ActualWindowBlockView.swift
+  s_0bb7094dda8ab3::t_33a9d42bab147b 51-54,166,181,188-209,211-217,528-542,546-548,560-567,570-574,579,584,592-606
+C5h/Info.plist
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 37-44
+C5h/Core/Services/UpdaterService.swift
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 41,67-80,94,163,167,189-193,195-201,210-214,237-246
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeLocalActivityDetectorTests.swift
+  s_ec4b762cf97340::t_c95c4bfda7fe3e 9-47,73-125
+  s_ec4b762cf97340::t_01afad423451a9 126
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_ec4b762cf97340::t_9b4b530d702cb9 75-89
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeLocalActivityDetector.swift
+  s_ec4b762cf97340::t_350cb151441f77 123-126
+  s_ec4b762cf97340::t_2b5469cf4075ea 4-5,44-74,116-117,132-133,180-181
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_ec4b762cf97340::t_a66f0ddbf45ee7 73-109
+Packages/C5hStore/Sources/C5hStore/Repositories/CommandRunRepository.swift
+  s_ec4b762cf97340::t_e35e95a7e10336 120,161,169
+  s_ec4b762cf97340::t_b6186f7725a53a 170-178
+  s_ec4b762cf97340::t_bf95b200f2a685 179-180
+Packages/C5hStore/Tests/C5hStoreTests/CommandRunRepositoryTests.swift
+  s_ec4b762cf97340::t_f69efe5bb9fc9c 107-159
+Toolkit/Release/release.sh
+  s_ec4b762cf97340::t_6dba5b4f19e0f0 165-170,183-197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "823e02996a7d9492c4c755b135cfd83f42db6fe4",
+  "prompts": {},
+  "sessions": {
+    "s_0bb7094dda8ab3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82e18743-b4b6-4e1c-a046-e3e6ad47531c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    },
+    "s_ec4b762cf97340": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff6e2-38cf-7d93-81ab-ddc8ac494091",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
