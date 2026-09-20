@@ -22,7 +22,7 @@ struct PlannedWindowBlockView: View {
     /// Explicit block width for layouts that render planned and actual windows
     /// in one common column.
     var widthOverride: CGFloat? = nil
-    /// Top of the block's frame in column coordinates, after vertical stacking.
+    /// Top of the block's frame in column coordinates, anchored to its visible start time.
     var renderedTopOffset: CGFloat? = nil
 
     var body: some View {

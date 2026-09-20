@@ -18,15 +18,30 @@ enum BlockFormatters {
     /// A usage metric label ("label value") where only the percentage is bold,
     /// e.g. "7d usage 34%". Shared by the 5h and 7d calendar blocks so their
     /// readings render identically.
-    static func usageMetricText(label: String, value: Double, size: CGFloat) -> Text {
+    static func usageMetricString(label: String, value: Double) -> String {
+        "\(label) \(formatPercent(value))" + (value > 100 ? " ↑" : "")
+    }
+
+    @ViewBuilder
+    static func usageMetricText(label: String, value: Double, size: CGFloat) -> some View {
+        let text = styledUsageMetricText(label: label, value: value, size: size)
+        if value > 100 {
+            text
+                .help("Reported usage exceeds 100% of the window allowance. This value is shown as received.")
+                .accessibilityLabel("\(label) \(formatPercent(value)), above 100% of the window allowance, as reported")
+        } else {
+            text
+        }
+    }
+
+    private static func styledUsageMetricText(label: String, value: Double, size: CGFloat) -> Text {
         let percent = formatPercent(value)
-        var text = AttributedString("\(label) \(percent)")
+        var text = AttributedString(usageMetricString(label: label, value: value))
         text.font = .system(size: size, weight: .regular)
         if let percentRange = text.range(of: percent) {
             text[percentRange].font = .system(size: size, weight: .semibold)
         }
-        return Text(text)
-            .monospacedDigit()
+        return Text(text).monospacedDigit()
     }
 }
 

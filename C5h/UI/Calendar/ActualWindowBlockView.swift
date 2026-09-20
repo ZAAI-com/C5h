@@ -39,7 +39,7 @@ struct ActualWindowBlockView: View {
     /// When true, the window was derived from a detected quota reset (e.g. a Claude
     /// tier change reset the 5h window early). Marked with a subtle neutral glyph.
     var isReset: Bool = false
-    /// Top of the block's frame in column coordinates, after vertical stacking.
+    /// Top of the block's frame in column coordinates, anchored to its visible start time.
     var renderedTopOffset: CGFloat? = nil
 
     var body: some View {
@@ -276,10 +276,10 @@ struct ActualWindowBlockView: View {
             )
             Spacer(minLength: 0)
             if let p = fiveHour {
-                cornerText("5h \(BlockFormatters.formatPercent(p.value))")
+                usageMetricLabel("5h", value: p.value)
             }
             if let v = endSevenD {
-                cornerText("7d \(BlockFormatters.formatPercent(v))")
+                usageMetricLabel("7d", value: v)
             }
             timeLabel(
                 BlockFormatters.formatTime(shownEnd),
@@ -491,8 +491,8 @@ struct ActualWindowBlockView: View {
         guard fiveHour != nil || sevenDay != nil else { return true }
         let gap: CGFloat = compact ? 10 : 16
         let timeWidth = estimatedTextWidth(timeText) + (compact ? 10 : 12)
-        let fiveWidth = fiveHour.map { estimatedTextWidth("5h usage \(BlockFormatters.formatPercent($0))") } ?? 0
-        let sevenWidth = sevenDay.map { estimatedTextWidth("7d usage \(BlockFormatters.formatPercent($0))") } ?? 0
+        let fiveWidth = fiveHour.map { estimatedTextWidth(BlockFormatters.usageMetricString(label: "5h usage", value: $0)) } ?? 0
+        let sevenWidth = sevenDay.map { estimatedTextWidth(BlockFormatters.usageMetricString(label: "7d usage", value: $0)) } ?? 0
 
         if fiveHour != nil, sevenDay != nil {
             return contentWidth >= max(

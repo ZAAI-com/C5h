@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import Testing
 @testable import C5hCore
 
@@ -132,4 +133,61 @@ struct CalendarLanePackingTests {
         #expect(placements[0].lane == 1)
         #expect(placements.allSatisfy { $0.laneCount == 2 })
     }
+    @Test("Screenshot overlap preserves times, hit targets and the following 20:00 start")
+    func screenshotFrames() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
+        func at(_ hour: Int, _ minute: Int = 0) -> Date {
+            day.addingTimeInterval(TimeInterval(hour * 3600 + minute * 60))
+        }
+        let intervals = [
+            DateInterval(start: at(10, 59), end: at(15, 59)),
+            DateInterval(start: at(15), end: at(20)),
+            DateInterval(start: at(20), end: at(24)),
+        ]
+        let frames = CalendarPositioning.laneFrames(
+            for: intervals, pixelsPerMinute: 1, columnWidth: 200, calendar: calendar
+        )
+        #expect(frames.map(\.minY) == [659, 900, 1200])
+        #expect(frames.map(\.maxY) == [959, 1200, 1440])
+        #expect(!frames[0].intersects(frames[1]))
+        #expect(frames[2].width == 200)
+        let plannedHit = CGPoint(x: frames[1].midX, y: 930)
+        #expect(frames[1].contains(plannedHit))
+        #expect(!frames[0].contains(plannedHit))
+        #expect(CalendarPositioning.nowLineOffset(
+            inBlockTop: frames[0].minY, now: at(12, 47), pixelsPerMinute: 1, calendar: calendar
+        ) + frames[0].minY == 767)
+
+        // Moving the plan beyond the actual window removes the overlap without
+        // changing the time-derived position of either block.
+        let moved = CalendarPositioning.laneFrames(
+            for: [intervals[0], DateInterval(start: at(16), end: at(21))],
+            pixelsPerMinute: 1, columnWidth: 200, calendar: calendar
+        )
+        #expect(moved.map(\.minY) == [659, 960])
+        #expect(moved.allSatisfy { $0.width == 200 })
+    }
+
+    @Test("Clipped midnight segments and narrow lanes stay within their column")
+    func clippedNarrowFrames() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
+        let segment = try #require(CalendarPositioning.visibleSegment(
+            of: DateInterval(start: day.addingTimeInterval(-3600), duration: 5 * 3600),
+            on: day, calendar: calendar
+        ))
+        let clipped = DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
+        let frames = CalendarPositioning.laneFrames(
+            for: [clipped, clipped, clipped], pixelsPerMinute: 0.5, columnWidth: 3, calendar: calendar
+        )
+        #expect(segment.clippedStart)
+        #expect(frames.allSatisfy { $0.minY == 0 && $0.height == 120 })
+        #expect(frames.allSatisfy { $0.width > 0 && $0.minX >= 0 && $0.maxX <= 3 })
+        #expect(!frames[0].intersects(frames[1]))
+        #expect(!frames[1].intersects(frames[2]))
+    }
+
 }

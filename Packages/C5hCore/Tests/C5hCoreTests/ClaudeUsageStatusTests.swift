@@ -4,6 +4,15 @@ import Testing
 
 @Suite("ClaudeUsageStatus")
 struct ClaudeUsageStatusTests {
+    @Test("Preserves provider percentages at and above the allowance", arguments: [100, 105, 107])
+    func preservesOverLimitUsage(percent: Int) throws {
+        let status = try ClaudeUsageStatus.parsePayload("""
+        {"rate_limits":{"five_hour":{"used_percentage":\(percent),"resets_at":1778373600},"seven_day":{"used_percentage":\(percent),"resets_at":1778373600}}}
+        """)
+        #expect(status.fiveHour.usedPercentage == Double(percent))
+        #expect(status.sevenDay?.usedPercentage == Double(percent))
+    }
+
     @Test("Parses five hour reset from statusLine payload")
     func parsesFiveHourReset() throws {
         let status = try ClaudeUsageStatus.parsePayload("""

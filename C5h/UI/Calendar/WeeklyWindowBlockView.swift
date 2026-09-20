@@ -48,10 +48,8 @@ struct WeeklyWindowBlockView: View {
             pad: pad
         )
 
-        // The block is drawn behind the planned/actual lanes and is not
-        // interactive: taps are routed to the weekly window by
-        // `ProviderColumnView.windowSelection`, so every layer opts out of hit
-        // testing and lets the tap fall through to the column.
+        // Selection bubbles to the column. Keep reading rows hit-testable so
+        // provider-reported over-limit readings can expose their help text.
         ZStack(alignment: .topLeading) {
             shape
                 .fill(C5hColors.tintForProvider(window.providerID).opacity(0.12))
@@ -74,7 +72,6 @@ struct WeeklyWindowBlockView: View {
         }
         .frame(width: width, height: height, alignment: .topLeading)
         .clipShape(shape)
-        .allowsHitTesting(false)
     }
 
     /// One reading row styled like the 5h block: the clock time the usage command

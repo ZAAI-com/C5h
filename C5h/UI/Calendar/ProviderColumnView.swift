@@ -26,16 +26,14 @@ struct ProviderColumnView: View {
     @State private var dragPreviewStart: Date?
 
     private static let fiveHourSeconds = ClaudeUsageStatus.fiveHourDurationSeconds
-    private enum StackID: Hashable {
+    private enum BlockID: Hashable {
         case planned(UUID)
         case actual(UUID)
     }
 
-    private struct StackBlock {
-        let id: StackID
-        let yOffset: CGFloat
-        let height: CGFloat
-        let sortPriority: Int
+    private struct LaneBlock {
+        let id: BlockID
+        let interval: DateInterval
     }
 
     var body: some View {
@@ -53,12 +51,12 @@ struct ProviderColumnView: View {
                     .offset(y: yOffset(for: now))
                     .allowsHitTesting(false)
             }
-            let stackedYOffsets = stackedBlockYOffsets
+            let frames = blockFrames
             ForEach(activePlannedWindows) { window in
                 let isActive = hoveredPlannedID == window.id || draggingPlannedID == window.id
                 let displayStart = displayedStart(for: window)
                 if let segment = visibleSegment(start: displayStart, durationSeconds: window.durationSeconds) {
-                    let renderedTop = stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                    let frame = frames[.planned(window.id)] ?? .zero
                     PlannedWindowBlockView(
                         window: window,
                         now: now,
@@ -70,8 +68,8 @@ struct ProviderColumnView: View {
                         segmentStart: segment.start,
                         displayStart: draggingPlannedID == window.id ? displayStart : nil,
                         emphasizeEndTime: true,
-                        widthOverride: blockContentWidth,
-                        renderedTopOffset: renderedTop
+                        widthOverride: frame.width,
+                        renderedTopOffset: frame.minY
                     )
                     .overlay(alignment: .topTrailing) {
                         if isActive {
@@ -83,8 +81,8 @@ struct ProviderColumnView: View {
                         }
                     }
                     .offset(
-                        x: blockContentX,
-                        y: renderedTop
+                        x: blockContentX + frame.minX,
+                        y: frame.minY
                     )
                     .opacity(draggingPlannedID == window.id ? 0.85 : 1)
                     .zIndex(draggingPlannedID == window.id ? 3 : 1)
@@ -96,7 +94,7 @@ struct ProviderColumnView: View {
                         }
                     }
                     .highPriorityGesture(
-                        DragGesture(minimumDistance: 4)
+                        DragGesture(minimumDistance: 4, coordinateSpace: .named("provider-calendar-column"))
                             .onChanged { value in
                                 draggingPlannedID = window.id
                                 hoverY = nil
@@ -122,7 +120,7 @@ struct ProviderColumnView: View {
             ForEach(actualSegments) { actualSegment in
                 let window = actualSegment.window
                 if let segment = visibleSegment(start: actualSegment.startAt, durationSeconds: actualSegment.durationSeconds) {
-                    let renderedTop = stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                    let frame = frames[.actual(actualSegment.id)] ?? .zero
                     ActualWindowBlockView(
                         window: window,
                         history: history,
@@ -136,13 +134,13 @@ struct ProviderColumnView: View {
                         displayStart: actualSegment.startAt,
                         displayEnd: actualSegment.endAt,
                         marksResetEnd: actualSegment.marksResetEnd,
-                        widthOverride: blockContentWidth,
+                        widthOverride: frame.width,
                         isReset: resetWindowIDs.contains(actualSegment.id),
-                        renderedTopOffset: renderedTop
+                        renderedTopOffset: frame.minY
                     )
                     .offset(
-                        x: blockContentX,
-                        y: renderedTop
+                        x: blockContentX + frame.minX,
+                        y: frame.minY
                     )
                     .zIndex(2)
                 }
@@ -151,6 +149,7 @@ struct ProviderColumnView: View {
         .frame(width: columnWidth, height: layout.dayHeight, alignment: .topLeading)
         .clipped()
         .contentShape(Rectangle())
+        .coordinateSpace(name: "provider-calendar-column")
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
@@ -194,35 +193,17 @@ struct ProviderColumnView: View {
     /// checked first because they are drawn on top of the planned lane, so they
     /// win when a point falls in the lane overlap of both.
     private func windowSelection(at location: CGPoint) -> WindowHit? {
-        let stackedYOffsets = stackedBlockYOffsets
+        let frames = blockFrames
         for actualSegment in actualSegments {
-            guard let segment = visibleSegment(
-                start: actualSegment.startAt,
-                durationSeconds: actualSegment.durationSeconds
-            ) else { continue }
-            guard verticalSpan(
-                of: segment,
-                stackID: .actual(actualSegment.id),
-                yOffsets: stackedYOffsets
-            ).contains(location.y) else { continue }
-            if location.x >= blockContentX, location.x <= blockContentX + blockContentWidth {
+            if let frame = frames[.actual(actualSegment.id)],
+               frame.offsetBy(dx: blockContentX, dy: 0).contains(location) {
                 return .actual(actualSegment.window)
             }
         }
-        if blockContentX <= location.x, location.x <= blockContentX + blockContentWidth {
-            for window in activePlannedWindows {
-                let displayStart = displayedStart(for: window)
-                guard let segment = visibleSegment(
-                    start: displayStart,
-                    durationSeconds: window.durationSeconds
-                ) else { continue }
-                if verticalSpan(
-                    of: segment,
-                    stackID: .planned(window.id),
-                    yOffsets: stackedYOffsets
-                ).contains(location.y) {
-                    return .planned(window)
-                }
+        for window in activePlannedWindows {
+            if let frame = frames[.planned(window.id)],
+               frame.offsetBy(dx: blockContentX, dy: 0).contains(location) {
+                return .planned(window)
             }
         }
         // The weekly block is drawn beneath the planned/actual lanes (zIndex 0),
@@ -247,19 +228,6 @@ struct ProviderColumnView: View {
         return nil
     }
 
-    private func verticalSpan(
-        of segment: (start: Date, durationSeconds: Int, clippedStart: Bool, clippedEnd: Bool),
-        stackID: StackID,
-        yOffsets: [StackID: CGFloat]
-    ) -> ClosedRange<CGFloat> {
-        let top = yOffsets[stackID] ?? yOffset(for: segment.start)
-        let height = CalendarPositioning.blockHeight(
-            durationSeconds: segment.durationSeconds,
-            pixelsPerMinute: layout.pixelsPerMinute
-        )
-        return top...(top + height)
-    }
-
     private var activePlannedWindows: [PlannedWindow] {
         plannedWindows.filter { !$0.status.isTerminal }
     }
@@ -270,19 +238,17 @@ struct ProviderColumnView: View {
         max(0, columnWidth - 4)
     }
 
-    private var stackedBlockYOffsets: [StackID: CGFloat] {
-        var blocks: [StackBlock] = []
+    private var blockFrames: [BlockID: CGRect] {
+        var map: [BlockID: CGRect] = [:]
+        var blocks: [LaneBlock] = []
         for window in activePlannedWindows {
-            let displayStart = displayedStart(for: window)
             guard let segment = visibleSegment(
-                start: displayStart,
+                start: displayedStart(for: window),
                 durationSeconds: window.durationSeconds
             ) else { continue }
-            blocks.append(StackBlock(
+            blocks.append(LaneBlock(
                 id: .planned(window.id),
-                yOffset: yOffset(for: segment.start),
-                height: stackingHeight(durationSeconds: segment.durationSeconds),
-                sortPriority: 0
+                interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
             ))
         }
         for actualSegment in actualSegments {
@@ -290,41 +256,20 @@ struct ProviderColumnView: View {
                 start: actualSegment.startAt,
                 durationSeconds: actualSegment.durationSeconds
             ) else { continue }
-            blocks.append(StackBlock(
+            blocks.append(LaneBlock(
                 id: .actual(actualSegment.id),
-                yOffset: yOffset(for: segment.start),
-                height: stackingHeight(durationSeconds: segment.durationSeconds),
-                sortPriority: 1
+                interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
             ))
         }
-        let sorted = blocks.sorted {
-            if $0.yOffset != $1.yOffset { return $0.yOffset < $1.yOffset }
-            return $0.sortPriority < $1.sortPriority
-        }
-        let placements = CalendarPositioning.stackVertically(
-            sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-            gap: layout.blockVerticalGap,
-            maxY: layout.dayHeight
+        let frames = CalendarPositioning.laneFrames(
+            for: blocks.map(\.interval),
+            pixelsPerMinute: layout.pixelsPerMinute,
+            columnWidth: blockContentWidth
         )
-        var map: [StackID: CGFloat] = [:]
-        for (block, placement) in zip(sorted, placements) {
-            map[block.id] = placement.yOffset
+        for (block, frame) in zip(blocks, frames) {
+            map[block.id] = frame
         }
         return map
-    }
-
-    /// Space a block occupies for stacking purposes: its true duration on the
-    /// time scale, without the minimum height the rendered frame applies. A short
-    /// block inflated to the 24px minimum would claim far more of the timeline
-    /// than it covers and push every later block down for an overlap that does
-    /// not exist. Rendering and hit-testing keep using the minimum, so a short
-    /// block stays readable and clickable.
-    private func stackingHeight(durationSeconds: Int) -> CGFloat {
-        CalendarPositioning.blockHeight(
-            durationSeconds: durationSeconds,
-            pixelsPerMinute: layout.pixelsPerMinute,
-            minimum: 0
-        )
     }
 
     @ViewBuilder

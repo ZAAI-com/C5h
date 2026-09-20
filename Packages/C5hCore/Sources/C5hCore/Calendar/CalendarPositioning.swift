@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CoreFoundation
 
 public enum CalendarPositioning {
@@ -118,6 +119,30 @@ public enum CalendarPositioning {
             self.lane = lane
             self.laneCount = laneCount
         }
+    }
+
+    /// Frames for intervals already clipped to the displayed day. Packing changes
+    /// only horizontal geometry; timestamps always determine the vertical origin.
+    /// The minimum height matches calendar rendering and hit testing.
+    public static func laneFrames(
+        for intervals: [DateInterval],
+        pixelsPerMinute: CGFloat,
+        columnWidth: CGFloat,
+        gap: CGFloat = 4,
+        calendar: Calendar = .current
+    ) -> [CGRect] {
+        let placements = packLanes(intervals)
+        var frames: [CGRect] = []
+        for (interval, placement) in zip(intervals, placements) {
+            let slotWidth: CGFloat = max(0, columnWidth) / CGFloat(placement.laneCount)
+            let laneGap: CGFloat = placement.laneCount > 1 ? min(max(0, gap), slotWidth / 2) : 0
+            let x: CGFloat = CGFloat(placement.lane) * slotWidth + laneGap / 2
+            let y = yOffset(for: interval.start, pixelsPerMinute: pixelsPerMinute, calendar: calendar)
+            let width: CGFloat = max(0, slotWidth - laneGap)
+            let height = blockHeight(durationSeconds: Int(interval.duration), pixelsPerMinute: pixelsPerMinute)
+            frames.append(CGRect(x: x, y: y, width: width, height: height))
+        }
+        return frames
     }
 
     public struct VerticalStackInput: Sendable, Equatable {
