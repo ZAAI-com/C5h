@@ -1,0 +1,41 @@
+C5h/UI/Calendar/WeekCalendarView.swift
+  s_2738df24b4a60b::t_34bfdcc4302f84 344,349-351,357,363,376-377,382-383,394,412,414,419-420,452-453,455,461,463,471,473,476-479,481-482
+C5h/UI/Calendar/PlannedWindowBlockView.swift
+  s_2738df24b4a60b::t_34bfdcc4302f84 25
+C5h/UI/Calendar/ActualWindowBlockView.swift
+  s_2738df24b4a60b::t_f542c4172d06cd 279,282,494-495
+  s_2738df24b4a60b::t_34bfdcc4302f84 42
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_2738df24b4a60b::t_34bfdcc4302f84 29,34-36,54,59,71-72,84-85,123,137,139,142-143,196,198-199,203-206,241-243,246,249,251,259,261,264-267,269-270
+  s_2738df24b4a60b::t_cbad2649186d1e 97,152
+Packages/C5hCore/Tests/C5hCoreTests/CalendarLanePackingTests.swift
+  s_2738df24b4a60b::t_f542c4172d06cd 2
+  s_2738df24b4a60b::t_cbad2649186d1e 136-192
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeUsageStatusTests.swift
+  s_2738df24b4a60b::t_cbad2649186d1e 7-15
+Packages/C5hCore/Sources/C5hCore/Calendar/CalendarPositioning.swift
+  s_2738df24b4a60b::t_34bfdcc4302f84 124-133,144,146-147
+  s_2738df24b4a60b::t_85a75a44c616ef 134,138
+  s_2738df24b4a60b::t_f542c4172d06cd 2
+  s_2738df24b4a60b::t_d0d6c381b81ceb 135-137,139-143,145
+C5h/UI/Calendar/BlockFormatters.swift
+  s_2738df24b4a60b::t_f837470f676d3e 21-37,39,44
+C5h/UI/Calendar/WeeklyWindowBlockView.swift
+  s_2738df24b4a60b::t_2e9edb11c5201d 51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "9950e9e5f198d875e3836583329d733ca75db1c1",
+  "prompts": {},
+  "sessions": {
+    "s_2738df24b4a60b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b9ed-e704-7f80-979e-057f1bbb562d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
