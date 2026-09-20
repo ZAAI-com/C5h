@@ -284,4 +284,84 @@ struct CalendarPositioningTests {
         #expect(offset == 4.0)
         #expect(renderedTop + offset == CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm, calendar: cal))
     }
+
+    @Test("usage row straddling the now line moves above when there is room")
+    func usageRowAvoidingNowLinePlacedAbove() {
+        // Preferred 46 with height 14 straddles a line at 50; the upper side
+        // (50 - 14 - 4 = 32) clears the reserved top rows.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 46,
+            rowHeight: 14,
+            nowY: 50,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 32)
+    }
+
+    @Test("usage row falls below the now line when the upper side has no room")
+    func usageRowAvoidingNowLineForcedBelow() {
+        // Preferred 6 straddles a line at 10; above would land at -8, below
+        // the reserved top rows, so the row takes the lower side (10 + 4).
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 6,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 14)
+    }
+
+    @Test("usage row clamps when neither side of the now line fits")
+    func usageRowAvoidingNowLineClamped() {
+        // A block so short that neither above (-13) nor below (9) fits the
+        // reserved bounds [2, 8]: the preferred offset clamps into them.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: -5,
+            rowHeight: 14,
+            nowY: 5,
+            minOffset: 2,
+            maxOffset: 8,
+            gap: 4
+        )
+        #expect(offset == 2)
+    }
+
+    @Test("missing now line passes the preferred offset through, clamped")
+    func usageRowAvoidingNowLineMissingNowLine() {
+        let within = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 30,
+            rowHeight: 14,
+            nowY: nil,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(within == 30)
+        let outside = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 500,
+            rowHeight: 14,
+            nowY: nil,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(outside == 200)
+    }
+
+    @Test("row clear of the now line keeps its preferred offset")
+    func usageRowAvoidingNowLineNonStraddling() {
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 100,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 100)
+    }
 }

@@ -1,8 +1,8 @@
 import Foundation
 
 /// Read-only tripwire that detects local Claude Code activity by scanning the
-/// session transcripts (`*.jsonl`) Claude Code writes under
-/// `~/.claude/projects` for modification times after a reference date.
+/// session transcripts (`*.jsonl`) Claude Code writes under its configured
+/// projects directory for modification times after a reference date.
 ///
 /// Used by `UsageCheckGate` for providers whose usage probe consumes quota
 /// (`ProviderID.usageProbeConsumesQuota`): spawning Claude's REPL probe on an
@@ -41,8 +41,37 @@ public struct ClaudeLocalActivityDetector: Sendable {
     public static let standard = ClaudeLocalActivityDetector()
 
     public static var defaultProjectsDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude", isDirectory: true)
+        resolveProjectsDirectory(
+            environment: ProcessInfo.processInfo.environment,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+        )
+    }
+
+    /// Resolves Claude Code's projects directory from the launch environment.
+    /// Kept deterministic so callers can verify alternate account/configuration
+    /// roots without mutating process-global environment state.
+    static func resolveProjectsDirectory(
+        environment: [String: String],
+        homeDirectory: URL
+    ) -> URL {
+        let configuredRoot = environment["CLAUDE_CONFIG_DIR"]
+        let root: URL
+        if let configuredRoot,
+           !configuredRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if configuredRoot == "~" {
+                root = homeDirectory
+            } else if configuredRoot.hasPrefix("~/") {
+                root = homeDirectory.appendingPathComponent(
+                    String(configuredRoot.dropFirst(2)),
+                    isDirectory: true
+                )
+            } else {
+                root = URL(fileURLWithPath: configuredRoot, isDirectory: true)
+            }
+        } else {
+            root = homeDirectory.appendingPathComponent(".claude", isDirectory: true)
+        }
+        return root
             .appendingPathComponent("projects", isDirectory: true)
     }
 
@@ -84,19 +113,24 @@ public struct ClaudeLocalActivityDetector: Sendable {
             Self.latestActivityBlocking(
                 projectsDirectory: projectsDirectory,
                 excludedProjectDirectoryNames: excludedProjectDirectoryNames,
-                maxScannedFiles: maxScannedFiles
+                maxScannedFiles: maxScannedFiles,
+                now: now
             )
         }
         guard let latestModificationDate = result.latestModificationDate else {
             return false
         }
-        return latestModificationDate > reference
+        // Keep the caller-side upper bound as well as the per-file scan filter:
+        // an in-flight scan that started with a later `now` may be shared by a
+        // caller after a wall-clock rollback.
+        return latestModificationDate > reference && latestModificationDate <= now
     }
 
     private static func latestActivityBlocking(
         projectsDirectory: URL,
         excludedProjectDirectoryNames: Set<String>,
-        maxScannedFiles: Int
+        maxScannedFiles: Int,
+        now: Date
     ) -> ClaudeLocalActivityScanResult {
         let fileManager = FileManager.default
         var isDirectory: ObjCBool = false
@@ -143,7 +177,8 @@ public struct ClaudeLocalActivityDetector: Sendable {
                 guard let values = try? fileURL.resourceValues(
                     forKeys: [.contentModificationDateKey, .isRegularFileKey]
                 ), values.isRegularFile == true,
-                      let modificationDate = values.contentModificationDate else {
+                      let modificationDate = values.contentModificationDate,
+                      modificationDate <= now else {
                     continue
                 }
                 if latestModificationDate.map({ modificationDate > $0 }) ?? true {

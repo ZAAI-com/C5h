@@ -34,6 +34,14 @@
 	<string>https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>pFX9RhGOWNCnJx+pFvFMVmC7V2yIXAjLXMGpGbYZj6U=</string>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<!-- Never let Sparkle fall back to unsigned feed metadata after repeated
+	     signature failures. Mirrors must serve the exact signed artifact. -->
+	<key>SUSignedFeedFailureExpirationInterval</key>
+	<integer>0</integer>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUAutomaticallyUpdate</key>

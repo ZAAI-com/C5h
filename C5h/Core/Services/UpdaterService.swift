@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import Observation
 @preconcurrency import Sparkle
@@ -39,7 +38,7 @@ final class UpdaterService {
     @ObservationIgnored private let controller: SPUStandardUpdaterController
     // Sparkle references the updater delegate weakly, so it must be retained here.
     @ObservationIgnored private let feedFailover: FeedFailoverController
-    @ObservationIgnored private var cancellables: Set<AnyCancellable> = []
+    @ObservationIgnored private var canCheckForUpdatesObservation: NSKeyValueObservation?
 
     init() {
         #if DEBUG
@@ -65,20 +64,23 @@ final class UpdaterService {
             self?.refreshFromUpdater()
         }
 
+        // SPUUpdater is main-thread bound, so its KVO notifications are
+        // delivered on the main thread as well. Retaining the observation
+        // token keeps this bridge in the app's Observation-only state model.
+        canCheckForUpdatesObservation = controller.updater.observe(
+            \.canCheckForUpdates,
+            options: [.initial, .new]
+        ) { [weak self] updater, _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.canCheckForUpdates = updater.canCheckForUpdates
+                self.refreshFromUpdater()
+            }
+        }
+
         if isEnabled {
             startUpdaterQuietly()
         }
-
-        controller.updater.publisher(for: \.canCheckForUpdates)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] canCheck in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.canCheckForUpdates = canCheck
-                    self.refreshFromUpdater()
-                }
-            }
-            .store(in: &cancellables)
     }
 
     /// Presents Sparkle's standard update UI. No-op when the updater is not
@@ -89,7 +91,7 @@ final class UpdaterService {
     }
 
     /// Re-reads the mirrored values from Sparkle. Update-cycle completion keeps
-    /// lastUpdateCheckDate current, while the canCheckForUpdates KVO stream also
+    /// lastUpdateCheckDate current, while the canCheckForUpdates KVO observation also
     /// catches Sparkle's own alert UI mutating the preferences behind the
     /// mirrors (the didSet equality guards keep this loop-free).
     func refreshFromUpdater() {
@@ -158,11 +160,11 @@ final class UpdaterService {
 /// which one is current does not affect correctness. Sparkle invokes
 /// SPUUpdaterDelegate methods on the main thread.
 @MainActor
-private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
+final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
     private let feeds: [String]
     var updateCycleDidFinish: (@MainActor () -> Void)?
     private var activeIndex = 0
-    private var appcastLoadedThisCycle = false
+    private var reachedTrustedContentThisCycle = false
     // Advances taken within the current triggered check, capped so a round
     // where every mirror is down tries each once and then waits for the next
     // scheduled check rather than looping.
@@ -178,15 +180,25 @@ private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
 
     func feedURLString(for updater: SPUUpdater) -> String? {
         self.updater = updater
-        appcastLoadedThisCycle = false
         // With no configured mirror, defer to Sparkle's own SUFeedURL handling
         // (returning nil) so behavior is unchanged when the list is absent.
         guard feeds.count > 1, activeIndex < feeds.count else { return nil }
         return feeds[activeIndex]
     }
 
+    func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
+        self.updater = updater
+        reachedTrustedContentThisCycle = false
+    }
+
     func updater(_ updater: SPUUpdater, didFinishLoading appcast: SUAppcast) {
-        appcastLoadedThisCycle = true
+        reachedTrustedContentThisCycle = true
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        // A resumed update may reuse a previously validated item without
+        // loading the appcast again during this process lifetime.
+        reachedTrustedContentThisCycle = true
     }
 
     func updater(
@@ -195,11 +207,11 @@ private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
         error: Error?
     ) {
         updateCycleDidFinish?()
-        // Fail over only when the feed itself never loaded and we have not
-        // already tried every mirror this round. Otherwise the sequence ends:
-        // the current feed stays sticky for the next check.
-        let feedUnreachable = error != nil && !appcastLoadedThisCycle
-        guard feedUnreachable, feeds.count > 1, advancesThisSequence < feeds.count - 1 else {
+        // Fail over only for a feed-phase Sparkle error before any trusted
+        // appcast content was reached. Resume, archive download, extraction,
+        // cancellation, and installation failures must not rotate mirrors.
+        let shouldFailOver = !reachedTrustedContentThisCycle && Self.isFeedFailure(error)
+        guard shouldFailOver, feeds.count > 1, advancesThisSequence < feeds.count - 1 else {
             advancesThisSequence = 0
             return
         }
@@ -221,5 +233,15 @@ private final class FeedFailoverController: NSObject, SPUUpdaterDelegate {
                 updater.checkForUpdatesInBackground()
             }
         }
+    }
+
+    /// Error codes are defined by Sparkle's public SUErrors.h. SUDownloadError
+    /// is feed-specific here because this is only consulted before trusted
+    /// appcast content; later archive download errors are excluded above.
+    static func isFeedFailure(_ error: Error?) -> Bool {
+        guard let error = error as NSError?, error.domain == SUSparkleErrorDomain else {
+            return false
+        }
+        return [3, 4, 1_000, 1_002, 2_001].contains(error.code)
     }
 }

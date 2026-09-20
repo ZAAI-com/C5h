@@ -31,6 +31,44 @@ public enum CalendarPositioning {
         yOffset(for: now, pixelsPerMinute: pixelsPerMinute, calendar: calendar) - renderedTop
     }
 
+    /// Resolves a floating usage row's final vertical offset so it clears the
+    /// rendered now-line when the two would collide. `preferred` is the row's
+    /// time-anchored offset. When the now-line is not rendered in this block
+    /// (`nowY == nil`) the preferred offset is clamped to the bounds and
+    /// returned; when it is rendered but the row does not straddle it, the
+    /// preferred offset passes through unchanged. A straddling row prefers the
+    /// upper side (`nowY - rowHeight - gap`): space above the line keeps
+    /// growing as time advances, so a row placed there stays clear, while a
+    /// row placed below is soon engulfed again as the line advances toward it.
+    /// The lower side (`nowY + gap`) is used only when there is no room above,
+    /// and when neither side fits the preferred offset is clamped back into
+    /// bounds.
+    public static func usageRowOffsetAvoidingNowLine(
+        preferred: CGFloat,
+        rowHeight: CGFloat,
+        nowY: CGFloat?,
+        minOffset: CGFloat,
+        maxOffset: CGFloat,
+        gap: CGFloat
+    ) -> CGFloat {
+        guard let nowY else {
+            return min(max(preferred, minOffset), maxOffset)
+        }
+        let straddles = preferred < nowY + gap && preferred + rowHeight > nowY - gap
+        if !straddles {
+            return preferred
+        }
+        let above = nowY - rowHeight - gap
+        if above >= minOffset {
+            return above
+        }
+        let below = nowY + gap
+        if below <= maxOffset {
+            return below
+        }
+        return min(max(preferred, minOffset), maxOffset)
+    }
+
     public static func blockHeight(
         durationSeconds: Int,
         pixelsPerMinute: CGFloat,

@@ -72,7 +72,21 @@ public extension UsageCheckGate {
                     .filter { $0.providerID == providerID }
                     .map(\.endAt)
                     .max()
-                let reference = max(lastRecordedEnd ?? .distantPast, floor)
+                // A snapshot can outlive its corresponding row when upgrading
+                // from older 0%-usage behavior, or when snapshot persistence
+                // succeeds before the row upsert fails. Once that snapshot's
+                // window expires, its boundary must also retire transcripts
+                // written inside the old window. Future ends remain governed by
+                // the believed-active and expiring-window checks.
+                let latestSnapshotEnd = try await usageSnapshotRepository
+                    .fetchLatest(providerID: providerID)
+                    .flatMap { UsageNormalizer.decode($0.normalizedJSON)?.windowEndsAt }
+                let lastExpiredSnapshotEnd = latestSnapshotEnd.flatMap {
+                    $0 <= now ? $0 : nil
+                }
+                let reference = [floor, lastRecordedEnd, lastExpiredSnapshotEnd]
+                    .compactMap { $0 }
+                    .max() ?? floor
                 // The gate itself may be evaluated every helper tick so newly
                 // active/planned DB state is noticed promptly. Cache only this
                 // recursive filesystem leaf at the user's refresh cadence.

@@ -104,6 +104,59 @@ struct CommandRunRepositoryTests {
         #expect(missingEvidence == nil)
     }
 
+    @Test("Command filters include current and legacy raw values")
+    func commandFiltersIncludeLegacyNames() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBCommandRunRepository(database: db)
+        let mappings: [(command: CommandName, legacy: String)] = [
+            (.version, "VersionCommand"),
+            (.authStatus, "AuthStatusCommand"),
+            (.usage, "UsageCommand"),
+            (.prompt, "PromptCommand"),
+        ]
+        var expectedIDs: [CommandName: Set<String>] = [:]
+
+        for (index, mapping) in mappings.enumerated() {
+            let currentID = UUID().uuidString
+            let legacyID = UUID().uuidString
+            expectedIDs[mapping.command] = [currentID, legacyID]
+            try await db.writer.write { gdb in
+                for (id, rawValue) in [
+                    (currentID, mapping.command.rawValue),
+                    (legacyID, mapping.legacy),
+                ] {
+                    try gdb.execute(
+                        sql: """
+                        INSERT INTO command_runs
+                        (id, provider_id, run_type, command, arguments_json, started_at, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        arguments: [
+                            id, "claude", rawValue, "claude", "[]",
+                            "2026-07-13T20:45:\(String(format: "%02d", index)).000Z",
+                            "succeeded"
+                        ]
+                    )
+                }
+            }
+        }
+
+        for mapping in mappings {
+            let entries = try await repo.fetchRecentEntries(
+                limit: 20,
+                filter: CommandRunFilter(commandName: mapping.command)
+            )
+            #expect(Set(entries.map(\.id)) == expectedIDs[mapping.command])
+            #expect(entries.count == 2)
+            #expect(entries.contains { $0.run?.commandName == mapping.command })
+            #expect(entries.contains {
+                if case .unreadable = $0 { return true }
+                return false
+            })
+        }
+    }
+
     @Test("Sweep stale running marks them cancelled")
     func sweepStale() async throws {
         let db = try Database.inMemory()

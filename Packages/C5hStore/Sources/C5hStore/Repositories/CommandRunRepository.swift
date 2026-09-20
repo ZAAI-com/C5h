@@ -114,11 +114,10 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
               let startedAt = DateTimeService.parseUTC(record.startedAt) else {
             throw C5hError.databaseError("Invalid command-run attribution evidence: \(record.id)")
         }
-        let promptRawValues = [CommandName.prompt.rawValue, "PromptCommand"]
         return TriggerAttributionEvidence(
             providerID: providerID,
             startedAt: startedAt,
-            isPrompt: promptRawValues.contains(record.runType)
+            isPrompt: Self.rawValues(for: .prompt).contains(record.runType)
         )
     }
 
@@ -159,12 +158,24 @@ public struct GRDBCommandRunRepository: CommandRunRepository {
             request = request.filter(Column("status") == st.rawValue)
         }
         if let name = filter.commandName {
-            request = request.filter(Column("run_type") == name.rawValue)
+            request = request.filter(Self.rawValues(for: name).contains(Column("run_type")))
         }
         if let since = filter.since {
             request = request.filter(Column("started_at") >= DateTimeService.formatUTC(since))
         }
         return request
+    }
+
+    private static func rawValues(for commandName: CommandName) -> [String] {
+        // The `*Command` values were written by pre-rename builds and
+        // intentionally remain undecodable as `CommandName`; they still
+        // participate in filtering and attribution.
+        switch commandName {
+        case .version: [commandName.rawValue, "VersionCommand"]
+        case .authStatus: [commandName.rawValue, "AuthStatusCommand"]
+        case .usage: [commandName.rawValue, "UsageCommand"]
+        case .prompt: [commandName.rawValue, "PromptCommand"]
+        }
     }
 
     public func sweepStaleRunning(

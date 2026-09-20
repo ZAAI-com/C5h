@@ -160,6 +160,8 @@ https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml
 `Toolkit/Release/appcast.sh` generates and signs `build/appcast.xml` after
 `Toolkit/Release/release.sh`; S2 uploads it alongside the DMG so the
 `releases/latest/download/` URL always serves the newest release's feed.
+Both the DMG enclosure and the appcast metadata are EdDSA-signed. Release
+validation cryptographically verifies the completed feed before publication.
 
 S2 requires two independent release identifiers:
 
@@ -190,7 +192,8 @@ which becomes a tight loop during a sustained primary outage. Requirements for
 a mirror:
 
 - It must serve the same EdDSA-signed `appcast.xml` (same private key), so copy
-  the S2 artifact verbatim; do not re-sign with a different key.
+  the S2 artifact byte-for-byte; do not modify it or re-sign with a different
+  key.
 - Enclosure URLs in that appcast still point at the GitHub release download
   (from `--download-url-prefix`), so a mirror feed helps when the `latest`
   redirect is flaky or rate-limited, not when GitHub is fully down (the DMG
@@ -226,6 +229,13 @@ Rules:
 - The Sparkle tools pin lives in `Toolkit/Release/appcast.sh`
   (`SPARKLE_TOOLS_VERSION` + `SPARKLE_TOOLS_SHA256`); bump the version and the
   checksum together.
+- `Toolkit/Release/Tests/validate-appcast-signature.sh` is the negative control
+  for the `sign_update --verify` gate in `appcast.sh` (it proves bad feeds are
+  rejected); S2 runs it right after `appcast.sh`, and it can be run locally
+  once the pinned tools are present (after one `appcast.sh` run).
+- `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` must remain enabled,
+  and `SUSignedFeedFailureExpirationInterval` must remain `0`; C5h never accepts
+  unsigned feed metadata as a recovery path.
 - Re-run S3 after any S2 re-run so the Homebrew cask stays in sync with the feed.
 - Never delete release objects of shipped versions: a recreated release becomes
   `latest` and poisons the appcast feed.

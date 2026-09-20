@@ -71,7 +71,7 @@ final class DayCalendarViewModel {
         if Self.isTodayOrTomorrow(date) {
             await loadWeeklyContext(now: .now)
         } else {
-            if !weeklyWindows.isEmpty { weeklyWindows = [:] }
+            setWeeklyWindows([:])
         }
     }
 
@@ -94,7 +94,30 @@ final class DayCalendarViewModel {
                 windows[providerID] = window
             }
         }
-        if self.weeklyWindows != windows { self.weeklyWindows = windows }
+        setWeeklyWindows(windows)
+    }
+
+    /// Single assignment funnel for `weeklyWindows`. Assigns the dictionary
+    /// only when changed (preserving the animation-restart guard), then
+    /// reconciles a `.weekly` selection with the refreshed state: a window
+    /// still present under the same id is swapped for its refreshed value so
+    /// the inspector shows current data and tap-to-toggle equality still
+    /// matches, and any selection the reload filtered out (expired, replaced
+    /// by a new id, removed, or no longer weekly-only) is cleared. A window
+    /// that was not already selected is never selected. `.planned` and
+    /// `.actual` selections are untouched.
+    private func setWeeklyWindows(_ windows: [ProviderID: ActualWindow7d]) {
+        if weeklyWindows != windows {
+            weeklyWindows = windows
+        }
+        guard case let .weekly(selected)? = selection else { return }
+        if let refreshed = windows[selected.providerID], refreshed.id == selected.id {
+            if refreshed != selected {
+                selection = .weekly(refreshed)
+            }
+        } else {
+            selection = nil
+        }
     }
 
     /// True when the provider's latest usage snapshot reports a weekly limit but

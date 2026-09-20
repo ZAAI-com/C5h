@@ -48,6 +48,10 @@ struct ActualWindowBlockView: View {
             durationSeconds: duration,
             pixelsPerMinute: layout.pixelsPerMinute
         )
+        // The single rendered now-line offset, consumed by both the drawn line
+        // and the usage-row collision check so the label dodges the line
+        // exactly where it is rendered.
+        let nowY = renderedNowLineOffset(height: height)
         let density = BlockDensity.forHeight(height, compact: compact)
         let radius = layout.blockCornerRadius
         let shape = UnevenRoundedRectangle(
@@ -159,7 +163,7 @@ struct ActualWindowBlockView: View {
                             capturedAt: reading.capturedAt,
                             rowHeight: usageRowHeight(reading: reading, contentWidth: contentWidth),
                             height: height,
-                            duration: duration,
+                            nowY: nowY,
                             pad: pad,
                             topReservedHeight: cornerHeights.top,
                             bottomReservedHeight: cornerHeights.bottom
@@ -174,35 +178,43 @@ struct ActualWindowBlockView: View {
                 shape.fill(brandColor)
                 shape.strokeBorder(Color.white.opacity(0.9), lineWidth: 1)
                     .allowsHitTesting(false)
-                nowLine(height: height)
+                nowLine(nowY: nowY)
             }
         }
         .clipShape(shape)
         .foregroundStyle(.white)
     }
 
-    /// The red current-time line, drawn in the block's background layer so it sits
-    /// above the colored fill and border but behind the white text. Shown only
-    /// while `now` falls within the block's visible vertical span, which happens
-    /// only on the day rendered as today.
+    /// The single rendered now-line offset for this block, or `nil` when the
+    /// line is not drawn here. `yOffset` is time-of-day only, so without a day
+    /// guard a block on a non-today column (Week view, or a navigated Day)
+    /// whose clock-time span contains the current time would report a stray
+    /// line. This mirrors the column-level guard in ProviderColumnView. The
+    /// offset derives from the rendered block top (honoring `renderedTopOffset`
+    /// from vertical stacking) and is returned only when it falls inside the
+    /// block's visible span, which folds the old visibility test into this one
+    /// definition.
+    private func renderedNowLineOffset(height: CGFloat) -> CGFloat? {
+        guard Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) else { return nil }
+        let ppm = layout.pixelsPerMinute
+        let blockTop = renderedTopOffset
+            ?? CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
+        let y = CalendarPositioning.nowLineOffset(inBlockTop: blockTop, now: now, pixelsPerMinute: ppm)
+        return (0...height).contains(y) ? y : nil
+    }
+
+    /// The red current-time line, drawn in the block's background layer so it
+    /// sits above the colored fill and border but behind the white text.
+    /// `nowY` comes from `renderedNowLineOffset(height:)`; `nil` means the
+    /// line is not drawn in this block.
     @ViewBuilder
-    private func nowLine(height: CGFloat) -> some View {
-        // `yOffset` is time-of-day only, so without a day guard a block on a
-        // non-today column (Week view, or a navigated Day) whose clock-time span
-        // contains the current time would draw a stray red line. Mirror the
-        // column-level guard in ProviderColumnView.
-        if Calendar.current.isDate(effectiveSegmentStart, inSameDayAs: now) {
-            let ppm = layout.pixelsPerMinute
-            let blockTop = renderedTopOffset
-                ?? CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
-            let y = CalendarPositioning.nowLineOffset(inBlockTop: blockTop, now: now, pixelsPerMinute: ppm)
-            if y >= 0, y <= height {
-                Rectangle()
-                    .fill(Color.red)
-                    .frame(height: 1)
-                    .offset(y: y)
-                    .allowsHitTesting(false)
-            }
+    private func nowLine(nowY: CGFloat?) -> some View {
+        if let nowY {
+            Rectangle()
+                .fill(Color.red)
+                .frame(height: 1)
+                .offset(y: nowY)
+                .allowsHitTesting(false)
         }
     }
 
@@ -513,10 +525,27 @@ struct ActualWindowBlockView: View {
         CGFloat(text.count) * usageFontSize * 0.64
     }
 
+    /// Vertical bounds shared by the anchored placement and the now-line
+    /// avoidance, so both provably use identical limits: the row must stay
+    /// inside the block, clear of the padding and the reserved corner rows.
+    private func usageRowBounds(
+        height: CGFloat,
+        rowHeight: CGFloat,
+        pad: CGFloat,
+        topReservedHeight: CGFloat,
+        bottomReservedHeight: CGFloat
+    ) -> (min: CGFloat, max: CGFloat) {
+        let minOffset = pad + topReservedHeight
+        let maxOffset = max(minOffset, height - pad - bottomReservedHeight - rowHeight)
+        return (minOffset, maxOffset)
+    }
+
     /// Vertical offset (from the block's top edge) that places a reading row so
     /// its center sits at `asOf` on the time scale, clamped to stay inside the
     /// block and clear of the start (top) and end (bottom) corner rows.
-    /// `rowHeight` is the row's rendered height.
+    /// `rowHeight` is the row's rendered height. Reading anchors stay on the
+    /// logical timeline: the origin is always the time-derived segment top,
+    /// never the stacked `renderedTopOffset`.
     private func anchoredOffset(
         forAsOf asOf: Date,
         height: CGFloat,
@@ -528,24 +557,31 @@ struct ActualWindowBlockView: View {
         let ppm = layout.pixelsPerMinute
         let top = CalendarPositioning.yOffset(for: effectiveSegmentStart, pixelsPerMinute: ppm)
         let raw = CalendarPositioning.yOffset(for: asOf, pixelsPerMinute: ppm) - top
-        let minOffset = pad + topReservedHeight
-        let maxOffset = max(minOffset, height - pad - bottomReservedHeight - rowHeight)
-        return min(max(raw - rowHeight / 2, minOffset), maxOffset)
+        let bounds = usageRowBounds(
+            height: height,
+            rowHeight: rowHeight,
+            pad: pad,
+            topReservedHeight: topReservedHeight,
+            bottomReservedHeight: bottomReservedHeight
+        )
+        return min(max(raw - rowHeight / 2, bounds.min), bounds.max)
     }
 
-    /// Like `anchoredOffset`, but for the in-progress window (one that contains
-    /// `now`) nudges the usage row above the red now-line when possible, falling
-    /// below only when the upper side has no room.
+    /// Like `anchoredOffset`, but for a block whose rendered now line falls
+    /// inside it (`nowY != nil`) moves the usage row clear of the red line,
+    /// preferring the space above it and falling below only when the upper
+    /// side has no room. The pure decision lives in
+    /// `CalendarPositioning.usageRowOffsetAvoidingNowLine` so it is testable.
     private func usageRowOffset(
         capturedAt: Date,
         rowHeight: CGFloat,
         height: CGFloat,
-        duration: Int,
+        nowY: CGFloat?,
         pad: CGFloat,
         topReservedHeight: CGFloat,
         bottomReservedHeight: CGFloat
     ) -> CGFloat {
-        let offset = anchoredOffset(
+        let preferred = anchoredOffset(
             forAsOf: capturedAt,
             height: height,
             rowHeight: rowHeight,
@@ -553,26 +589,21 @@ struct ActualWindowBlockView: View {
             topReservedHeight: topReservedHeight,
             bottomReservedHeight: bottomReservedHeight
         )
-        let visibleStart = effectiveSegmentStart
-        let segmentEnd = visibleStart.addingTimeInterval(TimeInterval(duration))
-        guard visibleStart <= now, now < segmentEnd else { return offset }
-        let ppm = layout.pixelsPerMinute
-        let top = CalendarPositioning.yOffset(for: visibleStart, pixelsPerMinute: ppm)
-        let nowY = CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm) - top
-        let gap: CGFloat = 4
-        let straddles = offset < nowY + gap && offset + rowHeight > nowY - gap
-        guard straddles else { return offset }
-        let minOffset = pad + topReservedHeight
-        let maxOffset = max(minOffset, height - pad - bottomReservedHeight - rowHeight)
-        let above = nowY - rowHeight - gap
-        if above >= minOffset {
-            return above
-        }
-        let below = nowY + gap
-        if below <= maxOffset {
-            return below
-        }
-        return min(max(offset, minOffset), maxOffset)
+        let bounds = usageRowBounds(
+            height: height,
+            rowHeight: rowHeight,
+            pad: pad,
+            topReservedHeight: topReservedHeight,
+            bottomReservedHeight: bottomReservedHeight
+        )
+        return CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: preferred,
+            rowHeight: rowHeight,
+            nowY: nowY,
+            minOffset: bounds.min,
+            maxOffset: bounds.max,
+            gap: 4
+        )
     }
 
     /// Returns the 7d value whenever the snapshot carried one, including readings

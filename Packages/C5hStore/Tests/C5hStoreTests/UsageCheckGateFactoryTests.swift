@@ -457,13 +457,86 @@ struct UsageCheckGateFactoryTests {
         )
         #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
 
-        // Once the reported window has fully expired (not merely expiring), the
-        // guard no longer applies and fresh local activity resumes probing.
+        // Once the reported window has fully expired, its boundary retires
+        // activity written inside that snapshot-only window.
         try await snapshotRepo.create(makeSnapshot(
             capturedAt: now.addingTimeInterval(-30),
             windowEndsAt: now.addingTimeInterval(-1)
         ))
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+
+        // Activity after the expired boundary is evidence of a new window.
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "after-expiry.jsonl",
+            modifiedAt: now.addingTimeInterval(60)
+        )
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(300)
+        ))
+    }
+
+    @Test("A malformed snapshot does not suppress valid local activity")
+    func malformedSnapshotDoesNotSuppressLocalActivity() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        try await snapshotRepo.create(UsageSnapshot(
+            providerID: .claude,
+            capturedAt: now.addingTimeInterval(-30),
+            rawJSON: "{}",
+            normalizedJSON: "not-json"
+        ))
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
         #expect(await gate.shouldCheck(providerID: .claude, now: now))
+    }
+
+    @Test("A snapshot read failure fails local activity closed")
+    func snapshotReadFailureFailsLocalActivityClosed() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "fresh.jsonl",
+            modifiedAt: now.addingTimeInterval(-60)
+        )
+        let gate = UsageCheckGate.make(
+            appSettings: StaticAppSettingsRepository(idleCheckEnabled: true),
+            actual5hRepository: EmptyActualWindow5hRepository(),
+            plannedWindowRepository: RecordingPlannedWindowRepository(windows: []),
+            usageSnapshotRepository: ThrowingUsageSnapshotRepository(),
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
     }
 
     @Test("An upcoming planned window suppresses Claude probing despite strong evidence")
@@ -689,6 +762,20 @@ private struct EmptyUsageSnapshotRepository: UsageSnapshotRepository {
     func fetchLatest(providerID: ProviderID) async throws -> UsageSnapshot? { nil }
 
     func fetchInRange(providerID: ProviderID, interval: DateInterval) async throws -> [UsageSnapshot] { [] }
+}
+
+private struct ThrowingUsageSnapshotRepository: UsageSnapshotRepository {
+    private struct ReadFailure: Error {}
+
+    func create(_ snapshot: UsageSnapshot) async throws {}
+
+    func fetchLatest(providerID: ProviderID) async throws -> UsageSnapshot? {
+        throw ReadFailure()
+    }
+
+    func fetchInRange(providerID: ProviderID, interval: DateInterval) async throws -> [UsageSnapshot] {
+        throw ReadFailure()
+    }
 }
 
 private actor RecordingPlannedWindowRepository: PlannedWindowRepository {

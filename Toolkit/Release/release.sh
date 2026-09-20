@@ -162,7 +162,12 @@ if [ "${BUNDLE_VERSION}" != "${BUILD_NUMBER}" ]; then
   echo "ERROR: CFBundleVersion is '${BUNDLE_VERSION}', expected build '${BUILD_NUMBER}'; Sparkle would misorder this release." >&2
   exit 3
 fi
-for key in SUPublicEDKey SUFeedURL; do
+for key in \
+  SUPublicEDKey \
+  SUFeedURL \
+  SURequireSignedFeed \
+  SUVerifyUpdateBeforeExtraction \
+  SUSignedFeedFailureExpirationInterval; do
   if ! /usr/libexec/PlistBuddy -c "Print :${key}" "${INFO_PLIST}" >/dev/null 2>&1; then
     echo "ERROR: ${key} missing from the app's Info.plist; Sparkle updates would not work." >&2
     exit 3
@@ -173,6 +178,21 @@ done
 ED_PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "${INFO_PLIST}")"
 if [ "${ED_PUBLIC_KEY}" = "REPLACE_WITH_GENERATE_KEYS_PUBLIC_KEY" ]; then
   echo "ERROR: SUPublicEDKey is still the placeholder; run generate_keys and put the real public key in C5h/Info.plist (see the Sparkle Auto-Updates runbook in .claude/CLAUDE.md)." >&2
+  exit 3
+fi
+REQUIRE_SIGNED_FEED="$(/usr/libexec/PlistBuddy -c 'Print :SURequireSignedFeed' "${INFO_PLIST}")"
+VERIFY_BEFORE_EXTRACTION="$(/usr/libexec/PlistBuddy -c 'Print :SUVerifyUpdateBeforeExtraction' "${INFO_PLIST}")"
+SIGNED_FEED_FAILURE_EXPIRATION="$(/usr/libexec/PlistBuddy -c 'Print :SUSignedFeedFailureExpirationInterval' "${INFO_PLIST}")"
+if [ "${REQUIRE_SIGNED_FEED}" != "true" ]; then
+  echo "ERROR: SURequireSignedFeed must be true so appcast metadata is authenticated." >&2
+  exit 3
+fi
+if [ "${VERIFY_BEFORE_EXTRACTION}" != "true" ]; then
+  echo "ERROR: SUVerifyUpdateBeforeExtraction must be true when signed feeds are required." >&2
+  exit 3
+fi
+if [ "${SIGNED_FEED_FAILURE_EXPIRATION}" != "0" ]; then
+  echo "ERROR: SUSignedFeedFailureExpirationInterval must be 0 so unsigned feeds are never accepted." >&2
   exit 3
 fi
 

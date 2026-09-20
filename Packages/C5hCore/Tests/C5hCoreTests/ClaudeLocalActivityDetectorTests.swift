@@ -6,6 +6,45 @@ import Testing
 struct ClaudeLocalActivityDetectorTests {
     private let reference = Date(timeIntervalSince1970: 1_000_000)
 
+    @Test("Resolves projects under a custom Claude config directory")
+    func resolvesCustomConfigDirectory() {
+        let home = URL(fileURLWithPath: "/Users/tester", isDirectory: true)
+        let projects = ClaudeLocalActivityDetector.resolveProjectsDirectory(
+            environment: ["CLAUDE_CONFIG_DIR": "/Volumes/Accounts/claude-work"],
+            homeDirectory: home
+        )
+
+        #expect(projects.path == "/Volumes/Accounts/claude-work/projects")
+    }
+
+    @Test("Falls back to the home Claude directory when no config directory is set")
+    func resolvesDefaultConfigDirectory() {
+        let home = URL(fileURLWithPath: "/Users/tester", isDirectory: true)
+
+        #expect(ClaudeLocalActivityDetector.resolveProjectsDirectory(
+            environment: [:],
+            homeDirectory: home
+        ).path == "/Users/tester/.claude/projects")
+        #expect(ClaudeLocalActivityDetector.resolveProjectsDirectory(
+            environment: ["CLAUDE_CONFIG_DIR": "  "],
+            homeDirectory: home
+        ).path == "/Users/tester/.claude/projects")
+    }
+
+    @Test("Expands a tilde in the Claude config directory")
+    func expandsTildeInConfigDirectory() {
+        let home = URL(fileURLWithPath: "/Users/tester", isDirectory: true)
+
+        #expect(ClaudeLocalActivityDetector.resolveProjectsDirectory(
+            environment: ["CLAUDE_CONFIG_DIR": "~/accounts/personal"],
+            homeDirectory: home
+        ).path == "/Users/tester/accounts/personal/projects")
+        #expect(ClaudeLocalActivityDetector.resolveProjectsDirectory(
+            environment: ["CLAUDE_CONFIG_DIR": "~"],
+            homeDirectory: home
+        ).path == "/Users/tester/projects")
+    }
+
     @Test("Reports no activity when the projects directory does not exist")
     func reportsNoActivityWhenProjectsDirectoryMissing() async {
         let missing = FileManager.default.temporaryDirectory
@@ -29,6 +68,60 @@ struct ClaudeLocalActivityDetectorTests {
         )
         let detector = ClaudeLocalActivityDetector(projectsDirectory: projects, excludedProjectPaths: [])
         #expect(await detector.hasActivity(since: reference))
+    }
+
+    @Test("Ignores a transcript modified after the scan time")
+    func ignoresFutureDatedTranscript() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let now = reference.addingTimeInterval(120)
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "future.jsonl",
+            modifiedAt: now.addingTimeInterval(1)
+        )
+        let detector = ClaudeLocalActivityDetector(projectsDirectory: projects, excludedProjectPaths: [])
+
+        #expect(await detector.hasActivity(since: reference, now: now) == false)
+    }
+
+    @Test("A future transcript does not hide valid current activity")
+    func detectsValidActivityAlongsideFutureDatedTranscript() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let now = reference.addingTimeInterval(120)
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "valid.jsonl",
+            modifiedAt: now.addingTimeInterval(-1)
+        )
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "future.jsonl",
+            modifiedAt: now.addingTimeInterval(1)
+        )
+        let detector = ClaudeLocalActivityDetector(projectsDirectory: projects, excludedProjectPaths: [])
+
+        #expect(await detector.hasActivity(since: reference, now: now))
+    }
+
+    @Test("Accepts a transcript modified exactly at the scan time")
+    func acceptsTranscriptAtScanTime() async throws {
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+        let now = reference.addingTimeInterval(120)
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "current.jsonl",
+            modifiedAt: now
+        )
+        let detector = ClaudeLocalActivityDetector(projectsDirectory: projects, excludedProjectPaths: [])
+
+        #expect(await detector.hasActivity(since: reference, now: now))
     }
 
     @Test("Ignores session files modified at or before the reference date")

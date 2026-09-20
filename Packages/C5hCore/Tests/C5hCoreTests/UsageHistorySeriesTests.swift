@@ -70,6 +70,43 @@ struct UsageHistorySeriesTests {
         #expect(series.points[0].sevenDayResetsAt?.timeIntervalSince1970 == 1_784_666_161)
     }
 
+    @Test("Latest weekly-only snapshots cannot supply an old 5h card", arguments: ["primary", "secondary"])
+    func weeklyOnlySnapshotCannotSupplyFiveHourCard(slot: String) {
+        let capturedAt = Date(timeIntervalSince1970: 1_780_000_000)
+        let oldFiveHourEnd = capturedAt.addingTimeInterval(3600)
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"\(slot)":{"usedPercent":73,"windowDurationMins":10080,"resetsAt":1780500000}}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [snapshot])
+
+        #expect(series.latest?.sevenDay == 73)
+        #expect(series.latestFiveHourPoint() == nil)
+        #expect(series.scoped(toFiveHourWindowEndingAt: oldFiveHourEnd).latestFiveHourPoint() == nil)
+    }
+
+    @Test("Latest Codex reading supplies only the matching 5h card")
+    func latestCodexReadingMatchesFiveHourReset() {
+        let capturedAt = Date(timeIntervalSince1970: 1_780_000_000)
+        let reset = capturedAt.addingTimeInterval(3600)
+        let snapshot = UsageSnapshot(
+            providerID: .codex,
+            capturedAt: capturedAt,
+            rawJSON: """
+            {"rateLimits":{"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1780003600},"secondary":{"usedPercent":73,"windowDurationMins":10080,"resetsAt":1780500000}}}
+            """,
+            normalizedJSON: "{}"
+        )
+        let series = UsageHistorySeries(providerID: .codex, snapshots: [snapshot])
+
+        #expect(series.scoped(toFiveHourWindowEndingAt: reset).latestFiveHourPoint()?.value == 12)
+        #expect(series.scoped(toFiveHourWindowEndingAt: reset.addingTimeInterval(120)).latestFiveHourPoint() == nil)
+    }
+
     @Test("sevenDayPercent returns nil before any point")
     func sevenDayPercentBeforeAnyPoint() {
         let snapshot = claudeSnapshot(

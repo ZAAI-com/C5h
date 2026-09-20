@@ -266,30 +266,24 @@ final class DashboardViewModel {
 
     private func refreshUsagePercentages() async {
         var next: [UUID: Double] = [:]
-        var cache: [ProviderID: NormalizedUsage?] = [:]
+        var cache: [ProviderID: UsageHistorySeries] = [:]
         for window in activeWindows {
-            let normalized: NormalizedUsage?
-            if let cached = cache[window.providerID] {
-                normalized = cached
-            } else {
-                normalized = try? await loadLatestNormalized(providerID: window.providerID)
-                cache[window.providerID] = normalized
+            if cache[window.providerID] == nil {
+                let snapshot = try? await usageRepo.fetchLatest(providerID: window.providerID)
+                cache[window.providerID] = UsageHistorySeries(
+                    providerID: window.providerID,
+                    snapshots: snapshot.map { [$0] } ?? []
+                )
             }
-            if let pct = normalized?.usedPercentage {
-                next[window.id] = pct
+            // Generic normalized usage may describe a weekly-only account.
+            // Attribute only a short-limit reading with this window's reset.
+            if let reading = cache[window.providerID]?
+                .scoped(toFiveHourWindowEndingAt: window.endAt)
+                .latestFiveHourPoint() {
+                next[window.id] = reading.value
             }
         }
         self.activeWindowUsagePercentages = next
-    }
-
-    private func loadLatestNormalized(providerID: ProviderID) async throws -> NormalizedUsage? {
-        guard let snapshot = try await usageRepo.fetchLatest(providerID: providerID) else {
-            return nil
-        }
-        guard let data = snapshot.normalizedJSON.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(NormalizedUsage.self, from: data)
     }
 
 }

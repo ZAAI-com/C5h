@@ -120,11 +120,24 @@ printf '%s\n' "${ED_KEY}" | "${SPARKLE_TOOLS_DIR}/bin/generate_appcast" \
 
 echo "==> Validate appcast"
 xmllint --noout "${APPCAST}"
-# generate_appcast only WARNS when it cannot sign (e.g. key mismatch), so a
-# missing EdDSA signature must hard-fail here instead of shipping a feed that
-# every client rejects.
+# The enclosure signature authenticates the DMG bytes. It is separate from the
+# embedded feed signature that authenticates the appcast metadata itself.
 if ! grep -q 'sparkle:edSignature=' "${APPCAST}"; then
-  echo "ERROR: appcast has no sparkle:edSignature; the DMG was not signed with the EdDSA key." >&2
+  echo "ERROR: appcast has no enclosure sparkle:edSignature; the DMG was not signed with the EdDSA key." >&2
+  exit 3
+fi
+if ! grep -q '<!-- sparkle-signatures:' "${APPCAST}"; then
+  echo "ERROR: appcast has no embedded sparkle-signatures block; the feed metadata was not signed." >&2
+  exit 3
+fi
+# Verify the finished feed with the same pinned Sparkle implementation clients
+# use. The private seed is passed over stdin so neither it nor a derived public
+# key is written to the CI filesystem.
+if ! printf '%s\n' "${ED_KEY}" | "${SPARKLE_TOOLS_DIR}/bin/sign_update" \
+  --verify \
+  --ed-key-file - \
+  "${APPCAST}"; then
+  echo "ERROR: appcast embedded signature could not be verified with the configured EdDSA key." >&2
   exit 3
 fi
 

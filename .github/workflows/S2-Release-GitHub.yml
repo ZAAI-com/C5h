@@ -123,6 +123,9 @@ jobs:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
 
+      - name: Validate appcast signature gate
+        run: ./Toolkit/Release/Tests/validate-appcast-signature.sh
+
       - name: Clean up keychain
         if: always()
         run: security delete-keychain c5h-build.keychain || true
