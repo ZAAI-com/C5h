@@ -1,0 +1,31 @@
+C5h/UI/Calendar/DayCalendarViewModel.swift
+  s_93bc2fcd196d42::t_ace3dd26ef5e95 17-20,66-70,84,86-101,106-107,109,123-131,377-383,386-394,419,423-425,427
+Packages/C5hStore/Tests/C5hStoreTests/PlannedWindowRepositoryTests.swift
+  s_93bc2fcd196d42::t_831fc179ac8aa6 212-239
+Packages/C5hStore/Sources/C5hStore/Repositories/PlannedWindowRepository.swift
+  s_93bc2fcd196d42::t_e92274d48dfde8 112-116,120
+C5h/UI/Calendar/DayCalendarScreen.swift
+  s_93bc2fcd196d42::t_81a6b7c6d688ca 105
+Packages/C5hCore/Sources/C5hCore/Calendar/PlannedSlotResolver.swift
+  s_93bc2fcd196d42::t_972af67af948f4 1-33
+Packages/C5hCore/Tests/C5hCoreTests/PlannedSlotResolverTests.swift
+  s_93bc2fcd196d42::t_9cb2614b5542a2 1-79
+C5h/UI/Calendar/ProviderColumnView.swift
+  s_93bc2fcd196d42::t_1a6ecf7dd9e7a8 132-135,139-141,439,445-447,449-453,467
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "0343ba21cef6828bc248c84ef0fa3b4dfcc85f84",
+  "prompts": {},
+  "sessions": {
+    "s_93bc2fcd196d42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db929652-0e6b-4434-84e6-d3ef1c2019ed",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
