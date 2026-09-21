@@ -1,0 +1,21 @@
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_e269fee58f4b76::t_1ff70ffd3dde51 62-65,67-70
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_e269fee58f4b76::t_1ff70ffd3dde51 513-541
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "170c27163c6e17d6f906f05e0967f2f72888d49e",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
