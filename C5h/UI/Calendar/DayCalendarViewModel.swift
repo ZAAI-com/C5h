@@ -14,6 +14,16 @@ final class DayCalendarViewModel {
     var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
+    /// Non-blocking notice from the last quick-plan (currently the chain-risk
+    /// advisory). Cleared on the next plan action.
+    var lastAdvisory: String?
+    /// Same-provider windows from the slot immediately *before* the displayed
+    /// day, held only for chain-risk validation. A window ending at 23:00 is
+    /// exactly what makes a 00:30 plan risky, and the day-bounded render query
+    /// cannot see it. Deliberately kept out of `planned`/`actual` so it never
+    /// renders.
+    private(set) var chainHistoryActual: [ActualWindow5h] = []
+    private(set) var chainHistoryPlanned: [PlannedWindow] = []
 
     private let plannedRepository: any PlannedWindowRepository
     private let actual5hRepository: any ActualWindow5hRepository
@@ -51,11 +61,22 @@ final class DayCalendarViewModel {
 
     private func loadLocalWindows() async {
         let interval = CalendarPositioning.dayInterval(for: date)
+        // One provider slot before the day, for chain-risk lookback only.
+        let lookback = DateInterval(
+            start: interval.start.addingTimeInterval(
+                -PlannedWindowValidator.defaultProviderSlotLength
+            ),
+            end: interval.start
+        )
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
             async let actual = actual5hRepository.fetchWindows(for: interval)
+            async let priorPlanned = plannedRepository.fetchWindows(for: lookback)
+            async let priorActual = actual5hRepository.fetchWindows(for: lookback)
             let fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
             let fetchedActual = try await actual
+            self.chainHistoryPlanned = try await priorPlanned.filter { !$0.status.isTerminal }
+            self.chainHistoryActual = try await priorActual
             // Assign only when changed so a coarse change signal (which can fire
             // for a different day) doesn't re-render and restart block animations.
             if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
@@ -367,6 +388,15 @@ final class DayCalendarViewModel {
             durationSeconds: duration,
             status: .scheduled
         )
+        // Advisory, not a veto: the plan is created either way. The chained
+        // boundary can also decay, and a short gap is sometimes intentional.
+        // Lookback windows are included so a plan early in the day still sees
+        // the previous evening's window.
+        lastAdvisory = PlannedWindowValidator.chainRisk(
+            candidate: window,
+            against: planned + chainHistoryPlanned,
+            actualWindows: actual + chainHistoryActual
+        ).map(Self.chainRiskMessage)
         do {
             try await plannedRepository.create(window)
             let wakePrompt = await defaultWakePrompt(for: provider)
@@ -391,6 +421,21 @@ final class DayCalendarViewModel {
         } catch {
             self.lastError = errorMessage(error)
         }
+    }
+
+    /// Explains the projected shortfall and the nearest safe starts, using the
+    /// suggested starts the validator already computed (back-to-back with the
+    /// previous window, or at the chained slot's end for a full-length window).
+    private static func chainRiskMessage(_ risk: PlannedWindowChainRisk) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let minutes = max(1, risk.shortfallSeconds / 60)
+        let starts = risk.suggestedStarts
+            .map { formatter.string(from: $0) }
+            .joined(separator: " or ")
+        let projected = formatter.string(from: risk.projectedEffectiveEnd)
+        return "Planned inside the previous window's chained slot: it may end around "
+            + "\(projected), \(minutes) min short. Try \(starts)."
     }
 
     private func defaultWakePrompt(for provider: ProviderID) async -> String {

@@ -44,7 +44,29 @@ public struct PlannedWindowValidationResult: Sendable, Hashable {
 }
 
 public enum PlannedWindowValidator {
-    private static let providerSlotLength: TimeInterval = 5 * 60 * 60
+    /// Slot length assumed when the provider's own duration is unknown.
+    public static let defaultProviderSlotLength: TimeInterval = 5 * 60 * 60
+
+    /// The provider's observed 5h-class slot length, taken from the most recent
+    /// provider-anchored window in `actualWindows`. Codex reports this duration
+    /// through `window_minutes`, so it is not always 300 minutes; assuming five
+    /// hours projected the wrong effective boundary and could warn about a
+    /// schedule that is actually safe. Falls back to five hours when there is no
+    /// observed window to learn from.
+    static func observedSlotLength(
+        for providerID: ProviderID,
+        in actualWindows: [ActualWindow5h]
+    ) -> TimeInterval {
+        let latest = actualWindows
+            .filter {
+                $0.providerID == providerID
+                    && $0.durationSeconds > 0
+                    && $0.hasProviderAnchoredUsageWindow
+            }
+            .max { $0.startAt < $1.startAt }
+        guard let latest else { return defaultProviderSlotLength }
+        return TimeInterval(latest.durationSeconds)
+    }
 
     public static func validate(
         candidate: PlannedWindow,
@@ -110,6 +132,10 @@ public enum PlannedWindowValidator {
         actualWindows: [ActualWindow5h]
     ) -> PlannedWindowChainRisk? {
         guard candidate.durationSeconds > 0 else { return nil }
+        let slotLength = observedSlotLength(
+            for: candidate.providerID,
+            in: actualWindows
+        )
 
         var previousEnds = actualWindows
             .filter {
@@ -126,15 +152,15 @@ public enum PlannedWindowValidator {
                     && other.durationSeconds >= 0
                     && other.startAt < candidate.startAt
             }
-            .map { $0.startAt.addingTimeInterval(Self.providerSlotLength) }
+            .map { $0.startAt.addingTimeInterval(slotLength) }
 
         guard let previousEnd = previousEnds.filter({ $0 <= candidate.startAt }).max() else {
             return nil
         }
         let gap = candidate.startAt.timeIntervalSince(previousEnd)
-        guard gap > 0, gap < Self.providerSlotLength else { return nil }
+        guard gap > 0, gap < slotLength else { return nil }
 
-        let projectedEffectiveEnd = previousEnd.addingTimeInterval(Self.providerSlotLength)
+        let projectedEffectiveEnd = previousEnd.addingTimeInterval(slotLength)
         guard candidate.endAt > projectedEffectiveEnd else { return nil }
         return PlannedWindowChainRisk(
             previousWindowEnd: previousEnd,

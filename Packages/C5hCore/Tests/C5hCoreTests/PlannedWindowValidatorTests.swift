@@ -185,6 +185,68 @@ struct PlannedWindowValidatorTests {
         )
     }
 
+    @Test("Chain risk uses the provider's observed slot length")
+    func chainRiskUsesObservedSlotLength() throws {
+        // Codex reports its 5h-class duration through window_minutes, so the
+        // slot is not always 300 minutes. A 240-minute observed window must
+        // project a 240-minute chained boundary, not a five-hour one.
+        let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
+        let fourHours: TimeInterval = 4 * 3600
+        let previous = ActualWindow5h(
+            providerID: .codex,
+            startAt: previousEnd.addingTimeInterval(-fourHours),
+            durationSeconds: Int(fourHours),
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let candidate = PlannedWindow(
+            providerID: .codex,
+            startAt: previousEnd.addingTimeInterval(3600),
+            durationSeconds: Int(fourHours)
+        )
+
+        let risk = try #require(PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            actualWindows: [previous]
+        ).chainRisk)
+
+        #expect(risk.projectedEffectiveEnd == previousEnd.addingTimeInterval(fourHours))
+        #expect(risk.shortfallSeconds == 3600)
+
+        // A gap of a full observed slot is safe even though it is under 5h.
+        let safe = PlannedWindow(
+            providerID: .codex,
+            startAt: previousEnd.addingTimeInterval(fourHours),
+            durationSeconds: Int(fourHours)
+        )
+        #expect(PlannedWindowValidator.validate(
+            candidate: safe, against: [], actualWindows: [previous]
+        ).chainRisk == nil)
+    }
+
+    @Test("Chain risk sees a previous window supplied from before the day")
+    func chainRiskSeesPreviousDayWindow() throws {
+        // A window ending at 23:00 and a plan at 00:30: the day-bounded render
+        // query cannot see the previous window, so the caller must supply it.
+        let previousEnd = Date(timeIntervalSince1970: 1_730_000_000)
+        let candidate = PlannedWindow(
+            providerID: .claude,
+            startAt: previousEnd.addingTimeInterval(90 * 60),
+            durationSeconds: Int(Self.fiveHours)
+        )
+
+        #expect(PlannedWindowValidator.validate(
+            candidate: candidate, against: [], actualWindows: []
+        ).chainRisk == nil)
+        let risk = try #require(PlannedWindowValidator.validate(
+            candidate: candidate,
+            against: [],
+            actualWindows: [actualEnding(at: previousEnd)]
+        ).chainRisk)
+        #expect(risk.previousWindowEnd == previousEnd)
+    }
+
     @Test("Warns when the start lands inside the previous window's chained slot")
     func chainRiskWarnsInsideChainedSlot() throws {
         // The incident shape: previous window ended 03:10, plan starts 80

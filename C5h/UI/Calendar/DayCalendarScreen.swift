@@ -106,14 +106,22 @@ struct DayCalendarScreen: View {
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {
-            if let err = viewModel.lastError {
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(C5hTypography.captionFont)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, C5hSpacing.lg)
-                    .padding(.vertical, C5hSpacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: C5hSpacing.xs) {
+                if let err = viewModel.lastError {
+                    Label(err, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+                // Advisory, not an error: the plan was created. Orange keeps it
+                // visually distinct from a failure.
+                if let advisory = viewModel.lastAdvisory {
+                    Label(advisory, systemImage: "link")
+                        .foregroundStyle(.orange)
+                }
             }
+            .font(C5hTypography.captionFont)
+            .padding(.horizontal, C5hSpacing.lg)
+            .padding(.vertical, C5hSpacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .toolbar { actionToolbar(viewModel: viewModel) }
         // Keep the inspector inside the detail content instead of using
