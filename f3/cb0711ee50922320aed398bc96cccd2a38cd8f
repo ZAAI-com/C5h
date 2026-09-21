@@ -1,0 +1,22 @@
+Packages/C5hStore/Tests/C5hStoreTests/ActiveWindowResolverIntegrationTests.swift
+  s_e269fee58f4b76::t_e68059b5ae611e 147-156,161,165-169,174,189-194
+  s_e269fee58f4b76::t_36e77c3ed9969b 216-219,223-224,241,244
+  s_e269fee58f4b76::t_2178e5d4588736 197-215,220-222,225-240,242-243,245-246
+  s_e269fee58f4b76::t_588e70c32d73e9 1-146,157-160,162-164,170-173,175-188,195-196,247-335
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "f3cb0711ee50922320aed398bc96cccd2a38cd8f",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
