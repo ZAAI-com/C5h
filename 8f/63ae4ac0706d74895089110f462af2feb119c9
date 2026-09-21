@@ -1,0 +1,21 @@
+Packages/C5hCore/Sources/C5hCore/Usage/ActiveWindowResolver.swift
+  s_e269fee58f4b76::t_284392079b847b 276,281-288,451-455,458-459
+Packages/C5hCore/Tests/C5hCoreTests/ActiveWindowResolverTests.swift
+  s_e269fee58f4b76::t_3db79aafd50ff0 755-867
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "8f63ae4ac0706d74895089110f462af2feb119c9",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
