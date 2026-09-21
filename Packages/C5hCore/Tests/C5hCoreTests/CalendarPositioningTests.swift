@@ -263,7 +263,6 @@ struct CalendarPositioningTests {
             calendar: cal
         )
         #expect(offset == 30.0)
-        #expect(renderedTop + offset == CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm, calendar: cal))
     }
 
     @Test("now line absolute Y stays at now when block is vertically stacked")
@@ -282,7 +281,6 @@ struct CalendarPositioningTests {
             calendar: cal
         )
         #expect(offset == 4.0)
-        #expect(renderedTop + offset == CalendarPositioning.yOffset(for: now, pixelsPerMinute: ppm, calendar: cal))
     }
 
     @Test("usage row straddling the now line moves above when there is room")

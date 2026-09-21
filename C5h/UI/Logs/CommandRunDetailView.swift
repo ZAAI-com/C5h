@@ -27,7 +27,7 @@ struct CommandRunDetailView: View {
                 .foregroundStyle(.orange)
             Text("Log not readable")
                 .font(C5hTypography.bodyFont)
-            Text("This entry was written by an older version and can no longer be decoded.")
+            Text("This entry could not be decoded. Its stored values may be malformed or unrecognised.")
                 .font(C5hTypography.captionFont)
                 .foregroundStyle(C5hColors.fgSecondary)
                 .multilineTextAlignment(.center)

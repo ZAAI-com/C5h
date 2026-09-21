@@ -13,8 +13,14 @@ public struct CodexAppServerClient: Sendable {
     public static let methodRateLimits = "account/rateLimits/read"
 
     /// Version advertised to `codex app-server` in the initialize handshake.
-    /// Single source of truth so every construction path (including
-    /// `CodexUsageCollector`, which defaults to this) reports the same value.
+    /// Single source of truth for every construction path (including
+    /// `CodexUsageCollector`, which defaults to this), so they all report the
+    /// same value.
+    ///
+    /// Keep in sync with `MARKETING_VERSION` in `C5h.xcodeproj` when releasing:
+    /// C5hCore is a SwiftPM package with no access to the app bundle's
+    /// Info.plist, so the value cannot be read back at runtime, and a bumped
+    /// marketing version would otherwise advertise a stale one here.
     public static let defaultClientVersion = "2.0.0"
 
     public let executableURL: URL

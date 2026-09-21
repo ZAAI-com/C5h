@@ -221,7 +221,7 @@ struct CodexUsageStatusTests {
         #expect(status.primary == nil)
         #expect(status.secondary?.usedPercentage == 45)
         #expect(status.primaryDurationSeconds == nil)
-        #expect(status.hasActivePrimaryWindow == false)
+        #expect(status.hasActiveFiveHourWindow == false)
         #expect(status.actualWindow() == nil)
         let weekly = try #require(status.secondaryActualWindow())
         #expect(weekly.usedPercentage == 45)

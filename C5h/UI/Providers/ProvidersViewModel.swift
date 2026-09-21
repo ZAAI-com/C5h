@@ -190,10 +190,7 @@ final class ProvidersViewModel {
     }
 
     private static func normalizedUsage(from snapshot: UsageSnapshot) -> NormalizedUsage? {
-        guard let data = snapshot.normalizedJSON.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(NormalizedUsage.self, from: data)
+        UsageNormalizer.decode(snapshot.normalizedJSON)
     }
 }
 

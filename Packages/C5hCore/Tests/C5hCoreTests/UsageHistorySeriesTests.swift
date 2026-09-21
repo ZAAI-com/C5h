@@ -70,10 +70,9 @@ struct UsageHistorySeriesTests {
         #expect(series.points[0].sevenDayResetsAt?.timeIntervalSince1970 == 1_784_666_161)
     }
 
-    @Test("Latest weekly-only snapshots cannot supply an old 5h card", arguments: ["primary", "secondary"])
-    func weeklyOnlySnapshotCannotSupplyFiveHourCard(slot: String) {
+    @Test("Weekly-only snapshots carry no 5h data in any slot", arguments: ["primary", "secondary"])
+    func weeklyOnlySnapshotCannotSupplyFiveHourCard(slot: String) throws {
         let capturedAt = Date(timeIntervalSince1970: 1_780_000_000)
-        let oldFiveHourEnd = capturedAt.addingTimeInterval(3600)
         let snapshot = UsageSnapshot(
             providerID: .codex,
             capturedAt: capturedAt,
@@ -84,9 +83,16 @@ struct UsageHistorySeriesTests {
         )
         let series = UsageHistorySeries(providerID: .codex, snapshots: [snapshot])
 
-        #expect(series.latest?.sevenDay == 73)
+        // A weekly-only payload carries no 5h data at all, so the parsed point
+        // must report no 5h value, no reset, and no active 5h window. Asserting
+        // the scoped series is nil here would be vacuous: scoping only filters
+        // points, and there is no stored fiveHour value for it to keep.
+        let point = try #require(series.latest)
+        #expect(point.sevenDay == 73)
+        #expect(point.fiveHour == nil)
+        #expect(point.fiveHourResetsAt == nil)
+        #expect(point.hasActiveFiveHourWindow == false)
         #expect(series.latestFiveHourPoint() == nil)
-        #expect(series.scoped(toFiveHourWindowEndingAt: oldFiveHourEnd).latestFiveHourPoint() == nil)
     }
 
     @Test("Latest Codex reading supplies only the matching 5h card")

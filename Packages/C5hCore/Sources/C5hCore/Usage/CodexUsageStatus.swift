@@ -62,15 +62,6 @@ public struct CodexUsageStatus: Sendable, Hashable {
         return limit.window.resetsAt.addingTimeInterval(-TimeInterval(limit.durationSeconds))
     }
 
-    /// True when Codex appears to be reporting a real, anchored 5h window;
-    /// false when no primary limit was reported or the reported `resetsAt` is
-    /// the synthetic "fresh slot" value (`eventTimestamp + primaryDuration`)
-    /// that Codex returns before any usage has anchored the current window.
-    public var hasActivePrimaryWindow: Bool {
-        guard let primary, let duration = primaryDurationSeconds else { return false }
-        return Self.isActive(window: primary, durationSeconds: duration, eventTimestamp: eventTimestamp)
-    }
-
     /// True when the duration-classified 5h slot is anchored. This follows the
     /// selected short window even if Codex reports it in the secondary slot.
     public var hasActiveFiveHourWindow: Bool {
