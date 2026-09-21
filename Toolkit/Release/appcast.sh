@@ -97,7 +97,28 @@ if [ ! -x "${SPARKLE_TOOLS_DIR}/bin/generate_appcast" ]; then
   rm -rf "${SPARKLE_TOOLS_DIR}"
   mkdir -p "${SPARKLE_TOOLS_DIR}"
   tar -xJf "${SPARKLE_TOOLS_TARBALL}" -C "${SPARKLE_TOOLS_DIR}"
+  # 2.9.4 extracts flat (bin/ at the root), but a future pin could wrap its
+  # contents in a top-level directory. Flatten that case so the tool paths
+  # below, and the ones validate-appcast-signature.sh derives, stay valid.
+  if [ ! -x "${SPARKLE_TOOLS_DIR}/bin/generate_appcast" ]; then
+    NESTED_BIN="$(find "${SPARKLE_TOOLS_DIR}" -maxdepth 3 -type f -name generate_appcast -perm -u+x | head -n 1)"
+    if [ -n "${NESTED_BIN}" ]; then
+      NESTED_ROOT="$(dirname "$(dirname "${NESTED_BIN}")")"
+      if [ "${NESTED_ROOT}" != "${SPARKLE_TOOLS_DIR}" ]; then
+        mv "${NESTED_ROOT}"/* "${SPARKLE_TOOLS_DIR}/"
+      fi
+    fi
+  fi
 fi
+
+# Fail here, with the reason, rather than several steps later on a missing path.
+for tool in generate_appcast sign_update; do
+  if [ ! -x "${SPARKLE_TOOLS_DIR}/bin/${tool}" ]; then
+    echo "ERROR: ${SPARKLE_TOOLS_DIR}/bin/${tool} is missing after extracting Sparkle ${SPARKLE_TOOLS_VERSION}." >&2
+    echo "The pinned tarball's layout may have changed; check SPARKLE_TOOLS_VERSION and SPARKLE_TOOLS_SHA256." >&2
+    exit 2
+  fi
+done
 
 echo "==> Stage DMG"
 # generate_appcast turns every update archive in the directory into a feed

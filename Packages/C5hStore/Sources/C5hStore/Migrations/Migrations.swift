@@ -172,6 +172,34 @@ enum Migrations {
             try dropProspectiveFiveHourWindows(db)
             try dropProspectiveWeeklyWindows(db)
         }
+
+        migrator.registerMigration("v5_rename_legacy_command_run_types") { db in
+            try renameLegacyCommandRunTypes(db)
+        }
+    }
+
+    /// `CommandName`'s raw values lost their redundant "Command" suffix, but
+    /// `run_type` stores the raw value, so every row written before the rename
+    /// stops decoding. `CommandRunRecord.toEntry()` keeps those rows visible as
+    /// `.unreadable` rather than throwing, so nothing breaks, but the user's
+    /// whole command history turns into placeholders. The old and new values map
+    /// one-to-one, so rewriting them restores the history exactly.
+    ///
+    /// Scoped to the four known legacy spellings: an unrecognised `run_type` is
+    /// left alone rather than guessed at.
+    private static func renameLegacyCommandRunTypes(_ db: GRDB.Database) throws {
+        let renames: [(legacy: String, current: CommandName)] = [
+            ("VersionCommand", .version),
+            ("AuthStatusCommand", .authStatus),
+            ("UsageCommand", .usage),
+            ("PromptCommand", .prompt),
+        ]
+        for rename in renames {
+            try db.execute(
+                sql: "UPDATE command_runs SET run_type = ? WHERE run_type = ?",
+                arguments: [rename.current.rawValue, rename.legacy]
+            )
+        }
     }
 
     /// Both providers report a *prospective* quota window while an account is

@@ -494,6 +494,61 @@ struct MigrationsTests {
         )
     }
 
+    @Test("v5 restores command runs written before the CommandName rename")
+    func v5RenamesLegacyCommandRunTypes() throws {
+        let queue = try makePreV3Database()
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let legacy = ["VersionCommand", "AuthStatusCommand", "UsageCommand", "PromptCommand"]
+
+        try queue.write { db in
+            for (index, runType) in legacy.enumerated() {
+                try db.execute(
+                    sql: """
+                        INSERT INTO command_runs
+                        (id, provider_id, run_type, command, arguments_json, started_at, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                    arguments: [
+                        UUID().uuidString,
+                        ProviderID.claude.rawValue,
+                        runType,
+                        "claude",
+                        "[]",
+                        DateTimeService.formatUTC(startedAt.addingTimeInterval(Double(index))),
+                        CommandRunStatus.succeeded.rawValue,
+                    ]
+                )
+            }
+            // An unrecognised value must be left alone rather than guessed at.
+            try db.execute(
+                sql: """
+                    INSERT INTO command_runs
+                    (id, provider_id, run_type, command, arguments_json, started_at, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    UUID().uuidString,
+                    ProviderID.claude.rawValue,
+                    "SomethingElse",
+                    "claude",
+                    "[]",
+                    DateTimeService.formatUTC(startedAt.addingTimeInterval(99)),
+                    CommandRunStatus.succeeded.rawValue,
+                ]
+            )
+        }
+
+        try Migrator.shared.migrate(queue)
+
+        let records = try queue.read { try CommandRunRecord.fetchAll($0) }
+        #expect(records.count == 5)
+        // Every legacy row decodes again instead of showing as .unreadable.
+        let decoded = records.compactMap { try? $0.toCommandRun() }
+        #expect(Set(decoded.map(\.commandName)) == Set(CommandName.allCases))
+        #expect(decoded.count == 4)
+        #expect(records.contains { $0.runType == "SomethingElse" })
+    }
+
     private func makePreV3Database() throws -> DatabaseQueue {
         var configuration = Configuration()
         configuration.foreignKeysEnabled = true
