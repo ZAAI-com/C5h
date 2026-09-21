@@ -59,8 +59,15 @@ public extension UsageCheckGate {
                 // expires, so it applies to the end bound only: a window that
                 // has not started yet must not authorise a probe, or the gate
                 // would open up to `consumingProbeEndMargin` early.
+                // The repository's overlap predicate is strict (`start_at <
+                // interval.end`), so the interval needs non-zero width or a
+                // window starting exactly at `now` is missed. For a read-only
+                // probe `checkDate == now`, hence the 1s floor.
                 let windows = try await actual5hRepository.fetchWindows(
-                    for: DateInterval(start: now, end: max(now, checkDate))
+                    for: DateInterval(
+                        start: now,
+                        duration: max(1, checkDate.timeIntervalSince(now))
+                    )
                 )
                 return windows.contains {
                     $0.providerID == providerID

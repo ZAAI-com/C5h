@@ -510,6 +510,35 @@ struct UsageCheckGateFactoryTests {
         ))
     }
 
+    @Test("A window starting exactly at now counts as active")
+    func windowStartingExactlyAtNowIsActive() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .codex), value: false)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        try await actualRepo.upsertByEndAt(ActualWindow5h(
+            providerID: .codex,
+            startAt: now,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ), tolerance: 0)
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: EmptyUsageSnapshotRepository(),
+            localActivityDetector: Self.emptyDetector()
+        )
+
+        // Codex is read-only, so checkDate == now: the lookup interval must
+        // still have width, or the repository's strict overlap predicate
+        // (`start_at < interval.end`) drops the row.
+        #expect(await gate.shouldCheck(providerID: .codex, now: now))
+    }
+
     @Test("An undecodable newest snapshot falls back to the previous boundary")
     func undecodableNewestSnapshotFallsBackToPreviousBoundary() async throws {
         let db = try Database.inMemory()
