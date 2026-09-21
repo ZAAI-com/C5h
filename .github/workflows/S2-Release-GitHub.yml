@@ -123,7 +123,10 @@ jobs:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: ./Toolkit/Release/appcast.sh "${{ inputs.version }}" "${{ inputs.build_number }}"
 
-      - name: Validate appcast signature gate
+      # Negative control for the sign_update --verify gate inside appcast.sh:
+      # it proves bad feeds are rejected, using a disposable key on scratch
+      # feeds. The run's own build/appcast.xml is verified by appcast.sh above.
+      - name: Validate appcast signing tooling rejects bad feeds
         run: ./Toolkit/Release/Tests/validate-appcast-signature.sh
 
       - name: Clean up keychain

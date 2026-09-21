@@ -159,9 +159,16 @@ https://github.com/ZAAI-com/C5h/releases/latest/download/appcast.xml
 
 `Toolkit/Release/appcast.sh` generates and signs `build/appcast.xml` after
 `Toolkit/Release/release.sh`; S2 uploads it alongside the DMG so the
-`releases/latest/download/` URL always serves the newest release's feed.
+`releases/latest/download/` URL serves the newest *stable* release's feed.
 Both the DMG enclosure and the appcast metadata are EdDSA-signed. Release
 validation cryptographically verifies the completed feed before publication.
+
+Prereleases are the exception. GitHub's `/releases/latest` alias skips
+prereleases, so an appcast uploaded by an S2 run with `prerelease: true` is
+never fetched by any installed app: it is dead output. A prerelease build stays
+on its own build until the next stable release publishes a feed, and shipping
+updates to a prerelease channel would need its own feed URL. S3 refuses to
+publish a prerelease tag to the Homebrew cask for the same reason.
 
 S2 requires two independent release identifiers:
 
@@ -228,11 +235,14 @@ Rules:
   verification (`codesign --verify --deep`) stays fine.
 - The Sparkle tools pin lives in `Toolkit/Release/appcast.sh`
   (`SPARKLE_TOOLS_VERSION` + `SPARKLE_TOOLS_SHA256`); bump the version and the
-  checksum together.
+  checksum together. That file is the only copy:
+  `Toolkit/Release/Tests/validate-appcast-signature.sh` reads the version back
+  out of it rather than repeating it.
 - `Toolkit/Release/Tests/validate-appcast-signature.sh` is the negative control
   for the `sign_update --verify` gate in `appcast.sh` (it proves bad feeds are
-  rejected); S2 runs it right after `appcast.sh`, and it can be run locally
-  once the pinned tools are present (after one `appcast.sh` run).
+  rejected) and does not itself inspect the run's `build/appcast.xml`, which
+  `appcast.sh` verifies. S2 runs it right after `appcast.sh`, and it can be run
+  locally once the pinned tools are present (after one `appcast.sh` run).
 - `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` must remain enabled,
   and `SUSignedFeedFailureExpirationInterval` must remain `0`; C5h never accepts
   unsigned feed metadata as a recovery path.

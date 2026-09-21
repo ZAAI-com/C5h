@@ -3,7 +3,17 @@ set -euo pipefail
 
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPOSITORY_ROOT="$(cd "${TESTS_DIR}/../../.." && pwd)"
-SPARKLE_TOOLS_VERSION="2.9.4"
+# Derived from appcast.sh rather than duplicated: a second literal here would
+# silently keep probing the old tools path after the pin is bumped, failing
+# every release at this gate even though appcast generation succeeded.
+APPCAST_SH="${TESTS_DIR}/../appcast.sh"
+SPARKLE_TOOLS_VERSION="$(
+  sed -n 's/^SPARKLE_TOOLS_VERSION="\(.*\)"$/\1/p' "${APPCAST_SH}" | head -n 1
+)"
+if [ -z "${SPARKLE_TOOLS_VERSION}" ]; then
+  echo "FAIL: could not read SPARKLE_TOOLS_VERSION from ${APPCAST_SH}" >&2
+  exit 1
+fi
 SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-${REPOSITORY_ROOT}/build/sparkle-tools-${SPARKLE_TOOLS_VERSION}/bin/sign_update}"
 PASS_COUNT=0
 
