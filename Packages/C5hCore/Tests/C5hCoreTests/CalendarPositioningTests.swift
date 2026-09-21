@@ -212,4 +212,197 @@ struct CalendarPositioningTests {
             .init(yOffset: 88),
         ])
     }
+
+    @Test("vertical stack never displaces a block past the column bound")
+    func verticalStackClampsToMaxY() {
+        // Shifts accumulate, so an unbounded stack walks a dense cluster off the
+        // end of the column, where blocks are neither drawn nor hit-tested. Past
+        // the bound a block stops moving and overlaps in place instead.
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 10, height: 50),
+            .init(yOffset: 40, height: 20),
+            .init(yOffset: 45, height: 20),
+            .init(yOffset: 50, height: 20),
+        ], gap: 4, maxY: 100)
+
+        #expect(placements == [
+            .init(yOffset: 10),
+            .init(yOffset: 64),
+            .init(yOffset: 80),
+            .init(yOffset: 80),
+        ])
+    }
+
+    @Test("vertical stack bound never lifts a block above its true position")
+    func verticalStackBoundKeepsLateBlocksInPlace() {
+        // A block genuinely near the end of the day already extends past the
+        // bound. Clamping must not drag it upward, away from its own time.
+        let placements = CalendarPositioning.stackVertically([
+            .init(yOffset: 80, height: 40),
+            .init(yOffset: 90, height: 40),
+        ], gap: 4, maxY: 100)
+
+        #expect(placements == [
+            .init(yOffset: 80),
+            .init(yOffset: 90),
+        ])
+    }
+
+    @Test("now line offset matches time delta at natural placement")
+    func nowLineOffsetNaturalPlacement() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let segmentStart = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10))!
+        let now = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10, minute: 30))!
+        let ppm: CGFloat = 1.0
+        let renderedTop = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm, calendar: cal)
+        let offset = CalendarPositioning.nowLineOffset(
+            inBlockTop: renderedTop,
+            now: now,
+            pixelsPerMinute: ppm,
+            calendar: cal
+        )
+        #expect(offset == 30.0)
+    }
+
+    @Test("now line absolute Y stays at now when block is vertically stacked")
+    func nowLineOffsetStackedPlacement() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let segmentStart = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10))!
+        let now = cal.date(from: DateComponents(year: 2026, month: 5, day: 9, hour: 10, minute: 30))!
+        let ppm: CGFloat = 1.0
+        let timeTop = CalendarPositioning.yOffset(for: segmentStart, pixelsPerMinute: ppm, calendar: cal)
+        let renderedTop = timeTop + 26 // pushed down by vertical stacking
+        let offset = CalendarPositioning.nowLineOffset(
+            inBlockTop: renderedTop,
+            now: now,
+            pixelsPerMinute: ppm,
+            calendar: cal
+        )
+        #expect(offset == 4.0)
+    }
+
+    @Test("usage row straddling the now line moves above when there is room")
+    func usageRowAvoidingNowLinePlacedAbove() {
+        // Preferred 46 with height 14 straddles a line at 50; the upper side
+        // (50 - 14 - 4 = 32) clears the reserved top rows.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 46,
+            rowHeight: 14,
+            nowY: 50,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 32)
+    }
+
+    @Test("usage row falls below the now line when the upper side has no room")
+    func usageRowAvoidingNowLineForcedBelow() {
+        // Preferred 6 straddles a line at 10; above would land at -8, below
+        // the reserved top rows, so the row takes the lower side (10 + 4).
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 6,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 14)
+    }
+
+    @Test("usage row clamps when neither side of the now line fits")
+    func usageRowAvoidingNowLineClamped() {
+        // A block so short that neither above (-13) nor below (9) fits the
+        // reserved bounds [2, 8]: the preferred offset clamps into them.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: -5,
+            rowHeight: 14,
+            nowY: 5,
+            minOffset: 2,
+            maxOffset: 8,
+            gap: 4
+        )
+        #expect(offset == 2)
+    }
+
+    @Test("usage row avoidance stays inside both bounds")
+    func usageRowAvoidingNowLineRespectsBothBounds() {
+        // A tall reserved footer leaves bounds [2, 20]. Preferred 30 straddles a
+        // line at 40, and the upper candidate (40 - 14 - 4 = 22) overshoots
+        // maxOffset: checking only `>= minOffset` let the row escape the block.
+        let above = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 30,
+            rowHeight: 14,
+            nowY: 40,
+            minOffset: 2,
+            maxOffset: 20,
+            gap: 4
+        )
+        #expect(above >= 2 && above <= 20)
+
+        // Mirror case: the lower candidate (10 + 4 = 14) satisfies maxOffset but
+        // sits above a high minOffset, which would overlap the reserved header.
+        let below = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 18,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 16,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(below >= 16 && below <= 200)
+    }
+
+    @Test("a non-straddling preferred offset is still clamped into bounds")
+    func usageRowAvoidingNowLineClampsNonStraddling() {
+        // The row does not straddle the line at 5, but its preferred offset is
+        // far past maxOffset; passing it through unclamped rendered outside.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 500,
+            rowHeight: 14,
+            nowY: 5,
+            minOffset: 2,
+            maxOffset: 100,
+            gap: 4
+        )
+        #expect(offset == 100)
+    }
+
+    @Test("missing now line passes the preferred offset through, clamped")
+    func usageRowAvoidingNowLineMissingNowLine() {
+        let within = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 30,
+            rowHeight: 14,
+            nowY: nil,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(within == 30)
+        let outside = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 500,
+            rowHeight: 14,
+            nowY: nil,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(outside == 200)
+    }
+
+    @Test("row clear of the now line keeps its preferred offset")
+    func usageRowAvoidingNowLineNonStraddling() {
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 100,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 2,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(offset == 100)
+    }
 }

@@ -79,6 +79,8 @@ final class WeekCalendarViewModel {
             if !actual.contains(where: { $0.id == window.id }) {
                 self.selection = nil
             }
+        case .weekly:
+            self.selection = nil
         }
     }
 
@@ -89,6 +91,8 @@ final class WeekCalendarViewModel {
             return window.startAt < weekEnd && window.endAt > weekStart
         case .actual(let window):
             return window.startAt < weekEnd && window.endAt > weekStart
+        case .weekly:
+            return false
         }
     }
 

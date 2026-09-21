@@ -39,6 +39,9 @@ brew install --cask zaai-com/tap/c5h
 [GitHub Releases](https://github.com/ZAAI-com/C5h/releases), open it, and drag
 **C5h.app** to your Applications folder. The app is signed and notarized.
 
+Once installed, C5h keeps itself up to date via its built-in Sparkle updater;
+Homebrew installs defer to the built-in updater.
+
 ## First run
 
 1. Launch C5h. A short onboarding walks you through what the app tracks.

@@ -95,19 +95,33 @@ struct DayCalendarScreen: View {
                     viewModel.selection = (viewModel.selection == next) ? nil : next
                 }
             },
+            onSelectWeekly: { window in
+                withAnimation(C5hAnimation.morph) {
+                    let next = CalendarSelection.weekly(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
+                }
+            },
             onMovePlanned: { window, start in
-                Task { await viewModel.move(window: window, to: start) }
+                viewModel.move(window: window, to: start)
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {
-            if let err = viewModel.lastError {
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(C5hTypography.captionFont)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal, C5hSpacing.lg)
-                    .padding(.vertical, C5hSpacing.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: C5hSpacing.xs) {
+                if let err = viewModel.lastError {
+                    Label(err, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+                // Advisory, not an error: the plan was created. Orange keeps it
+                // visually distinct from a failure.
+                if let advisory = viewModel.lastAdvisory {
+                    Label(advisory, systemImage: "link")
+                        .foregroundStyle(.orange)
+                }
             }
+            .font(C5hTypography.captionFont)
+            .padding(.horizontal, C5hSpacing.lg)
+            .padding(.vertical, C5hSpacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .toolbar { actionToolbar(viewModel: viewModel) }
         // Keep the inspector inside the detail content instead of using
@@ -143,6 +157,9 @@ struct DayCalendarScreen: View {
                     } else if viewModel.selection == nil,
                               let firstPlanned = viewModel.planned.first {
                         viewModel.selection = .planned(firstPlanned)
+                    } else if viewModel.selection == nil,
+                              let firstWeekly = viewModel.weeklyWindows.values.first {
+                        viewModel.selection = .weekly(firstWeekly)
                     } else {
                         viewModel.selection = nil
                     }

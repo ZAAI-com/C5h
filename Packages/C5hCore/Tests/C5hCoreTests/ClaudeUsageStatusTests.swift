@@ -4,6 +4,15 @@ import Testing
 
 @Suite("ClaudeUsageStatus")
 struct ClaudeUsageStatusTests {
+    @Test("Preserves provider percentages at and above the allowance", arguments: [100, 105, 107])
+    func preservesOverLimitUsage(percent: Int) throws {
+        let status = try ClaudeUsageStatus.parsePayload("""
+        {"rate_limits":{"five_hour":{"used_percentage":\(percent),"resets_at":1778373600},"seven_day":{"used_percentage":\(percent),"resets_at":1778373600}}}
+        """)
+        #expect(status.fiveHour.usedPercentage == Double(percent))
+        #expect(status.sevenDay?.usedPercentage == Double(percent))
+    }
+
     @Test("Parses five hour reset from statusLine payload")
     func parsesFiveHourReset() throws {
         let status = try ClaudeUsageStatus.parsePayload("""
@@ -28,6 +37,55 @@ struct ClaudeUsageStatusTests {
         #expect(window.durationSeconds == 5 * 3600)
         #expect(window.startAt.timeIntervalSince1970 == 1_778_355_600)
         #expect(window.endAt.timeIntervalSince1970 == 1_778_373_600)
+    }
+
+    @Test("Treats a plausible Claude countdown as live regardless of percentage")
+    func validatesLiveFiveHourTimer() {
+        let capturedAt = Date(timeIntervalSince1970: 1_000)
+        let fourHoursFiftyEightMinutes: TimeInterval = (4 * 60 * 60) + (58 * 60)
+        let zeroPercent = ClaudeUsageStatus(
+            fiveHour: RateLimitWindow(
+                usedPercentage: 0,
+                resetsAt: capturedAt.addingTimeInterval(fourHoursFiftyEightMinutes)
+            )
+        )
+        let highPercentage = ClaudeUsageStatus(
+            fiveHour: RateLimitWindow(
+                usedPercentage: 99,
+                resetsAt: capturedAt.addingTimeInterval(fourHoursFiftyEightMinutes)
+            )
+        )
+
+        #expect(zeroPercent.hasLiveFiveHourTimer(capturedAt: capturedAt))
+        #expect(highPercentage.hasLiveFiveHourTimer(capturedAt: capturedAt))
+    }
+
+    @Test("Accepts only positive countdowns within five hours plus tolerance")
+    func boundsLiveFiveHourTimer() {
+        let capturedAt = Date(timeIntervalSince1970: 1_000)
+        let upperBound = TimeInterval(
+            ClaudeUsageStatus.fiveHourDurationSeconds
+                + ClaudeUsageStatus.fiveHourTimerToleranceSeconds
+        )
+        let atUpperBound = ClaudeUsageStatus(
+            fiveHour: RateLimitWindow(
+                usedPercentage: 0,
+                resetsAt: capturedAt.addingTimeInterval(upperBound)
+            )
+        )
+        let tooDistant = ClaudeUsageStatus(
+            fiveHour: RateLimitWindow(
+                usedPercentage: 0,
+                resetsAt: capturedAt.addingTimeInterval(upperBound + 1)
+            )
+        )
+        let expired = ClaudeUsageStatus(
+            fiveHour: RateLimitWindow(usedPercentage: 0, resetsAt: capturedAt)
+        )
+
+        #expect(atUpperBound.hasLiveFiveHourTimer(capturedAt: capturedAt))
+        #expect(!tooDistant.hasLiveFiveHourTimer(capturedAt: capturedAt))
+        #expect(!expired.hasLiveFiveHourTimer(capturedAt: capturedAt))
     }
 
     @Test("Extracts latest parseable sentinel payload from PTY output")

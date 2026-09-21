@@ -52,6 +52,49 @@ struct UsageResetDetectorTests {
         #expect(event?.detectedAt == Date(timeIntervalSince1970: r1 - 8_600))
     }
 
+    @Test("Claude's idle sliding 5h slot is not a cascade of resets")
+    func claudeSlidingFiveHourSlotIsNotReset() {
+        // While idle, Claude reports `(now floored to 10 minutes) + 5h` at 0%,
+        // advancing a grid step at a time. Read as real windows, each advance
+        // looked like a quota reset landing before the previous end, which put a
+        // reset glyph on every calendar block and clipped every window to the
+        // gap between two polls.
+        let firstStart = r1 - 18_000
+        let snapshots = (0..<4).map { step -> UsageSnapshot in
+            let slotStart = firstStart + TimeInterval(step * 600)
+            return claudeSnapshot(
+                fiveHourPercent: 0,
+                fiveHourResetsAt: slotStart + 18_000,
+                capturedAt: Date(timeIntervalSince1970: slotStart + 108)
+            )
+        }
+        let series = UsageHistorySeries(providerID: .claude, snapshots: snapshots)
+
+        #expect(series.points.allSatisfy { !$0.hasActiveFiveHourWindow })
+        #expect(UsageResetDetector.detect(in: series).filter { $0.kind == .fiveHour }.isEmpty)
+    }
+
+    @Test("A settled Claude window still drives reset detection")
+    func settledClaudeWindowStillDetectsReset() {
+        // The prospective-slot rule must not blind the detector to real resets:
+        // both samples here sit well past their window's start.
+        let prev = claudeSnapshot(
+            fiveHourPercent: 0,
+            fiveHourResetsAt: r1,
+            capturedAt: Date(timeIntervalSince1970: r1 - 13_600)
+        )
+        let newEnd = r1 - 9_400
+        let curr = claudeSnapshot(
+            fiveHourPercent: 0,
+            fiveHourResetsAt: newEnd,
+            capturedAt: Date(timeIntervalSince1970: r1 - 8_600)
+        )
+        let series = UsageHistorySeries(providerID: .claude, snapshots: [prev, curr])
+
+        #expect(series.points.allSatisfy { $0.hasActiveFiveHourWindow })
+        #expect(UsageResetDetector.detect(in: series).filter { $0.kind == .fiveHour }.count == 1)
+    }
+
     @Test("Codex synthetic sliding 5h ends are not resets")
     func codexSyntheticSlidingFiveHourEndsAreIgnored() {
         let firstCapture = Date(timeIntervalSince1970: r1 - 20_000)

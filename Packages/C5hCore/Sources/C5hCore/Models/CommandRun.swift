@@ -60,11 +60,26 @@ public struct CommandRun: Identifiable, Codable, Sendable, Hashable {
     }
 }
 
+/// Minimal, tolerant metadata used to validate an `ActualWindow5h` command-run
+/// attribution. Unlike a full `CommandRun`, this evidence can be reconstructed
+/// from legacy rows whose persisted command-name raw value no longer decodes.
+public struct TriggerAttributionEvidence: Sendable, Hashable {
+    public var providerID: ProviderID
+    public var startedAt: Date
+    public var isPrompt: Bool
+
+    public init(providerID: ProviderID, startedAt: Date, isPrompt: Bool) {
+        self.providerID = providerID
+        self.startedAt = startedAt
+        self.isPrompt = isPrompt
+    }
+}
+
 public enum CommandName: String, Codable, Sendable, CaseIterable {
-    case versionCommand = "VersionCommand"
-    case authStatusCommand = "AuthStatusCommand"
-    case usageCommand = "UsageCommand"
-    case promptCommand = "PromptCommand"
+    case version = "Version"
+    case authStatus = "AuthStatus"
+    case usage = "Usage"
+    case prompt = "Prompt"
 }
 
 public enum CommandRunStatus: String, Codable, Sendable, CaseIterable {

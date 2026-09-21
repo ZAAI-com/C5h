@@ -47,7 +47,7 @@ struct LogsView: View {
             tableSide(viewModel: viewModel)
                 .frame(minWidth: 380, maxWidth: .infinity)
             Divider()
-            CommandRunDetailView(run: viewModel.selectedRun)
+            CommandRunDetailView(entry: viewModel.selectedEntry)
                 .frame(width: 360)
         }
         .searchable(
@@ -105,10 +105,10 @@ struct LogsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.red.opacity(0.08))
             }
-            if viewModel.runs.isEmpty && !viewModel.isLoading {
+            if viewModel.entries.isEmpty && !viewModel.isLoading {
                 emptyState
             } else {
-                CommandRunTable(runs: viewModel.filteredRuns, selection: $bound.selection)
+                CommandRunTable(entries: viewModel.filteredEntries, selection: $bound.selection)
             }
         }
     }

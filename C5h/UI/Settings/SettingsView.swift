@@ -114,6 +114,25 @@ struct SettingsView: View {
                 LabeledContent("Build time", value: buildTimeLabel)
                 LabeledContent("Source revision", value: sourceRevisionLabel)
             }
+            Section("Updates") {
+                if appEnv.updaterService.isEnabled {
+                    @Bindable var updaterService = appEnv.updaterService
+                    Toggle("Automatically check for updates", isOn: $updaterService.automaticallyChecksForUpdates)
+                    Toggle("Automatically download and install updates", isOn: $updaterService.automaticallyDownloadsUpdates)
+                        .disabled(!updaterService.automaticallyChecksForUpdates)
+                    LabeledContent("Last checked", value: lastUpdateCheckLabel)
+                    Button("Check for Updates…") { updaterService.checkForUpdates() }
+                        .buttonStyle(.glass)
+                        .disabled(!updaterService.canCheckForUpdates)
+                    Text("Updates download in the background and install when you quit C5h.")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(C5hColors.fgTertiary)
+                } else {
+                    Text("Automatic updates are unavailable in this build.")
+                        .font(C5hTypography.captionFont)
+                        .foregroundStyle(C5hColors.fgTertiary)
+                }
+            }
             Section("Logs maintenance") {
                 Button("Sweep logs older than 30 days") {
                     Task { await sweepLogs(policy: .thirtyDays) }
@@ -156,6 +175,9 @@ struct SettingsView: View {
             }
         }
         .task {
+            // Re-sync the update toggles in case Sparkle's own alert UI
+            // changed the underlying defaults since the mirrors were read.
+            appEnv.updaterService.refreshFromUpdater()
             await reloadHeartbeat()
         }
     }
@@ -226,6 +248,10 @@ struct SettingsView: View {
             return fallback
         }
         return value
+    }
+
+    private var lastUpdateCheckLabel: String {
+        appEnv.updaterService.lastUpdateCheckDate.map(\.c5hDateTime) ?? "Never"
     }
 
     private var lastSeenLabel: String {

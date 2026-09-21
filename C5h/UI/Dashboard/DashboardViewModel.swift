@@ -48,7 +48,9 @@ final class DashboardViewModel {
         self.usageGate = UsageCheckGate.make(
             appSettings: appSettingsRepository,
             actual5hRepository: actual5hRepository,
-            plannedWindowRepository: plannedWindowRepository
+            plannedWindowRepository: plannedWindowRepository,
+            usageSnapshotRepository: usageSnapshotRepository,
+            localActivityDetector: .standard
         )
         self.fetcher = UsageFetcher(
             persistSnapshot: { snapshot in
@@ -73,7 +75,7 @@ final class DashboardViewModel {
             let now = Date()
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
-            self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.activeWindows = Self.activeFiveHourWindows(from: actuals, now: now)
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
@@ -129,7 +131,7 @@ final class DashboardViewModel {
         do {
             let interval = DateInterval(start: now.addingTimeInterval(-7 * 86_400), end: now.addingTimeInterval(86_400))
             let actuals = try await actual5hRepo.fetchWindows(for: interval)
-            self.activeWindows = actuals.filter { $0.startAt <= now && $0.endAt >= now }
+            self.activeWindows = Self.activeFiveHourWindows(from: actuals, now: now)
             self.weeklyWindows = try await loadLatestWeeklyWindows(now: now)
             await loadSevenDayResets(now: now)
             await refreshUsagePercentages()
@@ -147,6 +149,17 @@ final class DashboardViewModel {
             return nil
         }
         return now.timeIntervalSince(snapshot.capturedAt)
+    }
+
+    private static func activeFiveHourWindows(
+        from windows: [ActualWindow5h],
+        now: Date
+    ) -> [ActualWindow5h] {
+        windows.filter {
+            $0.startAt <= now
+                && $0.endAt >= now
+                && $0.durationSeconds < CodexUsageStatus.weeklyClassThresholdSeconds
+        }
     }
 
     private func intervalSeconds(for providerID: ProviderID) async -> TimeInterval {
@@ -253,30 +266,31 @@ final class DashboardViewModel {
 
     private func refreshUsagePercentages() async {
         var next: [UUID: Double] = [:]
-        var cache: [ProviderID: NormalizedUsage?] = [:]
+        var cache: [ProviderID: UsageHistorySeries] = [:]
         for window in activeWindows {
-            let normalized: NormalizedUsage?
-            if let cached = cache[window.providerID] {
-                normalized = cached
-            } else {
-                normalized = try? await loadLatestNormalized(providerID: window.providerID)
-                cache[window.providerID] = normalized
+            if cache[window.providerID] == nil {
+                let snapshot = try? await usageRepo.fetchLatest(providerID: window.providerID)
+                cache[window.providerID] = UsageHistorySeries(
+                    providerID: window.providerID,
+                    snapshots: snapshot.map { [$0] } ?? []
+                )
             }
-            if let pct = normalized?.usedPercentage {
-                next[window.id] = pct
+            // Generic normalized usage may describe a weekly-only account.
+            // Attribute only a short-limit reading with this window's reset.
+            //
+            // Scoping applies to provider-anchored windows only, matching
+            // `ActualWindowBlockView`. A `.manual` window's end is the user's
+            // bound, not a reset the provider ever reported, so scoping by it
+            // rejects every reading and the dashboard loses the percentage.
+            let history = cache[window.providerID]
+            let scoped = window.hasProviderAnchoredUsageWindow
+                ? history?.scoped(toFiveHourWindowEndingAt: window.endAt)
+                : history
+            if let reading = scoped?.latestFiveHourPoint() {
+                next[window.id] = reading.value
             }
         }
         self.activeWindowUsagePercentages = next
-    }
-
-    private func loadLatestNormalized(providerID: ProviderID) async throws -> NormalizedUsage? {
-        guard let snapshot = try await usageRepo.fetchLatest(providerID: providerID) else {
-            return nil
-        }
-        guard let data = snapshot.normalizedJSON.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(NormalizedUsage.self, from: data)
     }
 
 }

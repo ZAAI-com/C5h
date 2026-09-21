@@ -108,7 +108,8 @@ struct HelperMain {
             settingsRepo: settingsRepo,
             usageFetcher: usageFetcher,
             cmdRepo: cmdRepo,
-            logWriter: logWriter
+            logWriter: logWriter,
+            usageSnapshotRepo: usageRepo
         )
         let scheduler = SchedulerService(driver: driver)
 
@@ -119,7 +120,8 @@ struct HelperMain {
             cmdRepo: cmdRepo,
             logWriter: logWriter,
             actual5hRepo: actual5hRepo,
-            plannedRepo: plannedRepo
+            plannedRepo: plannedRepo,
+            usageSnapshotRepo: usageRepo
         )
 
         // Heartbeat + tick loop. Sleep 30s between iterations. Exit after a bounded
@@ -145,8 +147,10 @@ struct HelperMain {
 
 /// Polls each provider's usage on its own configured cadence so the "current 5h
 /// window" we display stays accurate even when the main app isn't open. Honors
-/// the per-provider "check when idle" setting: when off, a provider is skipped
-/// unless it has an active or pending planned window.
+/// the per-provider "check when idle" setting via `UsageCheckGate`: when off, a
+/// provider is skipped unless it has an active or pending planned window, and
+/// Claude's quota-consuming probe additionally requires evidence that a window
+/// is already open (otherwise the probe itself would open one).
 actor HelperUsageRefresher {
     let resolver: any CLIPathResolving
     let settingsRepo: any AppSettingsRepository
@@ -156,6 +160,7 @@ actor HelperUsageRefresher {
     let gate: UsageCheckGate
 
     private var lastRefreshAt: [ProviderID: Date] = [:]
+    private var lastSkipLogAt: [ProviderID: Date] = [:]
 
     init(
         resolver: any CLIPathResolving,
@@ -164,7 +169,8 @@ actor HelperUsageRefresher {
         cmdRepo: any CommandRunRepository,
         logWriter: any FileLogWriting,
         actual5hRepo: any ActualWindow5hRepository,
-        plannedRepo: any PlannedWindowRepository
+        plannedRepo: any PlannedWindowRepository,
+        usageSnapshotRepo: any UsageSnapshotRepository
     ) {
         self.resolver = resolver
         self.settingsRepo = settingsRepo
@@ -174,7 +180,9 @@ actor HelperUsageRefresher {
         self.gate = UsageCheckGate.make(
             appSettings: settingsRepo,
             actual5hRepository: actual5hRepo,
-            plannedWindowRepository: plannedRepo
+            plannedWindowRepository: plannedRepo,
+            usageSnapshotRepository: usageSnapshotRepo,
+            localActivityDetector: .standard
         )
     }
 
@@ -184,9 +192,19 @@ actor HelperUsageRefresher {
             if let last = lastRefreshAt[providerID], now.timeIntervalSince(last) < interval {
                 continue
             }
-            // Don't consume the interval when gated off: re-evaluate next tick so
-            // a newly active or planned window resumes polling promptly.
+            // Don't consume the interval when gated off: keep re-evaluating DB
+            // evidence on the helper's 30-second ticks so a newly active or
+            // planned window resumes promptly. Claude's recursive transcript
+            // walk is cached separately at this provider's refresh cadence.
             guard await gate.shouldCheck(providerID: providerID, now: now) else {
+                // Log gated-off consuming probes at the refresh cadence (the
+                // gate re-evaluates every 30s tick) so overnight behavior is
+                // verifiable without flooding the log.
+                if providerID.usageProbeConsumesQuota,
+                   lastSkipLogAt[providerID].map({ now.timeIntervalSince($0) >= interval }) ?? true {
+                    lastSkipLogAt[providerID] = now
+                    NSLog("C5hHelper: skipped \(providerID.rawValue) usage probe (gate closed)")
+                }
                 continue
             }
             if await refresh(providerID: providerID, now: now) {
@@ -221,7 +239,7 @@ actor HelperUsageRefresher {
             let snapshot: UsageSnapshot
             let repo = cmdRepo
             let writer = logWriter
-            snapshot = try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+            snapshot = try await Usage(providerID: providerID, executableURL: cliURL).collect(
                 logWriter: writer,
                 onStart: { run in try await repo.create(run) },
                 onComplete: { run in try await repo.update(run) }
@@ -253,6 +271,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
     let usageFetcher: UsageFetcher
     let cmdRepo: any CommandRunRepository
     let logWriter: any FileLogWriting
+    let usageSnapshotRepo: any UsageSnapshotRepository
 
     func fetchDuePrompts(now: Date) async throws -> [ScheduledPrompt] {
         try await scheduledRepo.fetchDuePrompts(now: now)
@@ -276,7 +295,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
 
     func trigger(prompt: ScheduledPrompt) async throws -> CommandRun {
         let cliURL = try await resolveCLI(for: prompt.providerID)
-        return try await runner.run(PromptCommand(
+        return try await runner.run(Prompt(
             providerID: prompt.providerID,
             executableURL: cliURL,
             input: TriggerPromptInput(
@@ -296,6 +315,7 @@ struct HelperSchedulerDriver: SchedulerDriver {
         let cliResolver = resolver
         let cmdRepo = cmdRepo
         let logWriter = logWriter
+        let usageSnapshotRepo = usageSnapshotRepo
         let resolver = ActiveWindowResolver(
             fetcher: usageFetcher,
             snapshotFetch: { providerID in
@@ -304,19 +324,26 @@ struct HelperSchedulerDriver: SchedulerDriver {
                     settingsRepo: settingsRepo,
                     resolver: cliResolver
                 )
-                return try await UsageCommand(providerID: providerID, executableURL: cliURL).collect(
+                return try await Usage(providerID: providerID, executableURL: cliURL).collect(
                     logWriter: logWriter,
                     onStart: { run in try await cmdRepo.create(run) },
                     onComplete: { run in try await cmdRepo.update(run) }
                 )
             },
             activeWindowFetch: { providerID, now in
-                let interval = DateInterval(start: now, duration: 1)
-                let windows = try await actual5hRepo.fetchWindows(for: interval)
-                return windows.first { $0.providerID == providerID }
+                try await actual5hRepo.fetchActiveWindow(providerID: providerID, at: now)
             },
             updateActualWindow: { window in
                 try await actual5hRepo.update(window)
+            },
+            awaitActiveWindow: { providerID, now in
+                try await actual5hRepo.awaitActiveWindow(providerID: providerID, at: now)
+            },
+            triggerAttributionFetch: { commandRunID in
+                try await cmdRepo.fetchAttributionEvidence(id: commandRunID)
+            },
+            latestSnapshotFetch: { providerID in
+                try await usageSnapshotRepo.fetchLatest(providerID: providerID)
             }
         )
         return await resolver.resolveTriggeredWindow(

@@ -5,9 +5,9 @@
 # SMAppService requires Developer ID signing + the app being in /Applications,
 # so a Debug build from DerivedData will always fail registration with .notFound.
 #
-# For a full notarized + DMG'd release, use ./Toolkit/Conductor/release.sh.
+# For a full notarized + DMG'd release, use ./Toolkit/Release/release.sh.
 #
-# Usage: ./Toolkit/Conductor/release-local.sh
+# Usage: ./Toolkit/Release/release-local.sh
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

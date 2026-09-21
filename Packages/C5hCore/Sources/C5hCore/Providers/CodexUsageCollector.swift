@@ -13,7 +13,7 @@ public struct CodexUsageCollector: Sendable {
         executableURL: URL,
         environment: [String: String] = EnvironmentResolver.defaultEnvironment(),
         timeoutSeconds: TimeInterval = 30,
-        clientVersion: String = "dev"
+        clientVersion: String = CodexAppServerClient.defaultClientVersion
     ) {
         self.executableURL = executableURL
         self.environment = environment

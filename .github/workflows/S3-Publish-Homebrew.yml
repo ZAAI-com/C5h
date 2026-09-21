@@ -36,6 +36,22 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # S2 can publish a prerelease (excluded from releases/latest). The cask
+      # is the stable channel for every Homebrew user, so a prerelease tag must
+      # never reach it.
+      - name: Reject prereleases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          is_prerelease="$(gh release view "${{ steps.version.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --json isPrerelease --jq .isPrerelease)"
+          if [ "$is_prerelease" != "false" ]; then
+            echo "Release ${{ steps.version.outputs.version }} is a prerelease; refusing to publish it to the Homebrew cask."
+            exit 1
+          fi
+
       - name: Download release DMG
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

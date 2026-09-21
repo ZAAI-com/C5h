@@ -28,10 +28,10 @@ struct CodexProviderAdapter: ProviderAdapter {
         self.logWriter = logWriter
     }
 
-    func runVersionCommand() async -> ProviderStatus { await backing.runVersionCommand() }
-    func runAuthStatusCommand() async -> ProviderStatus { await backing.runAuthStatusCommand() }
+    func runVersion() async -> ProviderStatus { await backing.runVersion() }
+    func runAuthStatus() async -> ProviderStatus { await backing.runAuthStatus() }
 
-    func runUsageCommand() async throws -> UsageSnapshot {
+    func runUsage() async throws -> UsageSnapshot {
         let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
         guard let cliURL = await backing.resolver.resolveCLI(
             named: backing.executableName,
@@ -41,14 +41,14 @@ struct CodexProviderAdapter: ProviderAdapter {
         }
         let repo = cmdRepo
         let writer = logWriter
-        return try await UsageCommand(providerID: .codex, executableURL: cliURL).collect(
+        return try await Usage(providerID: .codex, executableURL: cliURL).collect(
             logWriter: writer,
             onStart: { run in try await repo.create(run) },
             onComplete: { run in try await repo.update(run) }
         )
     }
 
-    func runPromptCommand(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
+    func runPrompt(_ input: TriggerPromptInput, runID: UUID) async throws -> CommandRun {
         let configured = try? await backing.appSettings.get(backing.settingsKey, as: String.self)
         guard let cliURL = await backing.resolver.resolveCLI(
             named: backing.executableName,
@@ -57,7 +57,7 @@ struct CodexProviderAdapter: ProviderAdapter {
             throw C5hError.cliNotFound(backing.executableName)
         }
         return try await backing.runner.run(
-            PromptCommand(providerID: .codex, executableURL: cliURL, input: input).spec(),
+            Prompt(providerID: .codex, executableURL: cliURL, input: input).spec(),
             runID: runID
         )
     }

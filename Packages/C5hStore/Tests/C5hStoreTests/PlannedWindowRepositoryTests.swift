@@ -139,6 +139,31 @@ struct PlannedWindowRepositoryTests {
         }
     }
 
+    @Test("A retained weekly-class row does not block a planned window")
+    func retainedWeeklyClassRowDoesNotBlockPlannedWindow() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let plannedRepo = GRDBPlannedWindowRepository(database: db)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        let now = Date()
+        try await actualRepo.create(ActualWindow5h(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(-3600),
+            durationSeconds: CodexUsageStatus.weeklyClassThresholdSeconds,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        ))
+
+        let planned = PlannedWindow(
+            providerID: .codex,
+            startAt: now.addingTimeInterval(10 * 60)
+        )
+        try await plannedRepo.create(planned)
+
+        #expect(try await plannedRepo.fetch(id: planned.id) != nil)
+    }
+
     @Test("Same-provider historical actual overlap is allowed")
     func allowsHistoricalActualOverlap() async throws {
         let db = try Database.inMemory()
@@ -182,6 +207,34 @@ struct PlannedWindowRepositoryTests {
         } catch {
             #expect(String(describing: error).contains("cannot overlap"))
         }
+    }
+
+    @Test(
+        "Terminal planned windows do not block create or update",
+        arguments: [PlannedWindowStatus.triggered, .missed, .cancelled]
+    )
+    func terminalPlannedWindowsDoNotBlock(status: PlannedWindowStatus) async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBPlannedWindowRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        try await repo.create(PlannedWindow(providerID: .claude, startAt: base, status: status))
+
+        // Create on top of the terminal plan.
+        try await repo.create(PlannedWindow(
+            providerID: .claude,
+            startAt: base.addingTimeInterval(3600)
+        ))
+
+        // Move another plan onto the terminal plan.
+        var moved = PlannedWindow(providerID: .claude, startAt: base.addingTimeInterval(12 * 3600))
+        try await repo.create(moved)
+        moved.startAt = base.addingTimeInterval(-4 * 3600)
+        try await repo.update(moved)
+
+        let stored = try await repo.fetch(id: moved.id)
+        #expect(stored?.startAt == moved.startAt)
     }
 
     @Test("Different-provider overlap and same-provider boundary touch are allowed")

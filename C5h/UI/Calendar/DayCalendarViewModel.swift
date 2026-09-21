@@ -11,8 +11,23 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
+    var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
+    /// Dropped starts whose save is still in flight, keyed by planned-window id.
+    private var pendingMoves: [UUID: Date] = [:]
+    /// Bumped per `loadLocalWindows` call so a superseded load drops its result.
+    private var loadGeneration = 0
+    /// Non-blocking notice from the last quick-plan (currently the chain-risk
+    /// advisory). Cleared on the next plan action.
+    var lastAdvisory: String?
+    /// Same-provider windows from the slot immediately *before* the displayed
+    /// day, held only for chain-risk validation. A window ending at 23:00 is
+    /// exactly what makes a 00:30 plan risky, and the day-bounded render query
+    /// cannot see it. Deliberately kept out of `planned`/`actual` so it never
+    /// renders.
+    private(set) var chainHistoryActual: [ActualWindow5h] = []
+    private(set) var chainHistoryPlanned: [PlannedWindow] = []
 
     private let plannedRepository: any PlannedWindowRepository
     private let actual5hRepository: any ActualWindow5hRepository
@@ -48,22 +63,131 @@ final class DayCalendarViewModel {
         refreshUsageWindowsInBackground()
     }
 
-    private func loadLocalWindows() async {
+    /// `preservingError` keeps the current `lastError` on a successful load, so
+    /// a reload that reconciles after a failed save does not erase its message.
+    private func loadLocalWindows(preservingError: Bool = false) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         let interval = CalendarPositioning.dayInterval(for: date)
+        // One provider slot before the day, for chain-risk lookback only.
+        let lookback = DateInterval(
+            start: interval.start.addingTimeInterval(
+                -PlannedWindowValidator.defaultProviderSlotLength
+            ),
+            end: interval.start
+        )
         do {
             async let planned = plannedRepository.fetchWindows(for: interval)
             async let actual = actual5hRepository.fetchWindows(for: interval)
-            let fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
+            async let priorPlanned = plannedRepository.fetchWindows(for: lookback)
+            async let priorActual = actual5hRepository.fetchWindows(for: lookback)
+            var fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
             let fetchedActual = try await actual
+            let fetchedPriorPlanned = try await priorPlanned.filter { !$0.status.isTerminal }
+            let fetchedPriorActual = try await priorActual
+            // A newer load started while this one was fetching: its data is at
+            // least as fresh, so applying this result could only briefly
+            // restore a stale position (for example, a fetch from before a move
+            // was saved landing after the save finished).
+            guard generation == loadGeneration else { return }
+            // Moves still being saved keep their dropped position, so a
+            // background reload never puts the block back mid-save.
+            for index in fetchedPlanned.indices {
+                if let pendingStart = pendingMoves[fetchedPlanned[index].id] {
+                    fetchedPlanned[index].startAt = pendingStart
+                }
+            }
+            self.chainHistoryPlanned = fetchedPriorPlanned
+            self.chainHistoryActual = fetchedPriorActual
             // Assign only when changed so a coarse change signal (which can fire
             // for a different day) doesn't re-render and restart block animations.
             if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
             if self.actual != fetchedActual { self.actual = fetchedActual }
-            self.lastError = nil
+            refreshPlannedSelection()
+            if !preservingError { self.lastError = nil }
         } catch {
+            guard generation == loadGeneration else { return }
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
+        // The Today and Tomorrow screens both render the active weekly window
+        // when it overlaps their displayed day. Skip unrelated days and clear
+        // state when this view model navigates away from either screen.
+        if Self.isTodayOrTomorrow(date) {
+            await loadWeeklyContext(now: .now)
+        } else {
+            setWeeklyWindows([:])
+        }
+    }
+
+    /// Swaps a `.planned` selection for the current value of the same window so
+    /// the inspector follows a move (and its revert on failure).
+    private func refreshPlannedSelection() {
+        guard case let .planned(selected)? = selection,
+              let current = planned.first(where: { $0.id == selected.id }),
+              current != selected else { return }
+        selection = .planned(current)
+    }
+
+    private func loadWeeklyContext(now: Date) async {
+        guard let actual7dRepo = actual7dRepository else { return }
+        var windows: [ProviderID: ActualWindow7d] = [:]
+        for providerID in ProviderID.allCases {
+            // Only surface the 7d block for weekly-only providers (those that do
+            // not report a 5h limit); accounts with a 5h limit already convey
+            // usage through their 5h blocks.
+            guard await isWeeklyOnly(providerID: providerID) else { continue }
+            if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
+               window.startAt <= now,
+               now < window.endAt,
+               CalendarPositioning.windowOverlaps(
+                   start: window.startAt,
+                   durationSeconds: window.durationSeconds,
+                   day: date
+               ) {
+                windows[providerID] = window
+            }
+        }
+        setWeeklyWindows(windows)
+    }
+
+    /// Single assignment funnel for `weeklyWindows`. Assigns the dictionary
+    /// only when changed (preserving the animation-restart guard), then
+    /// reconciles a `.weekly` selection with the refreshed state: a window
+    /// still present under the same id is swapped for its refreshed value so
+    /// the inspector shows current data and tap-to-toggle equality still
+    /// matches, and any selection the reload filtered out (expired, replaced
+    /// by a new id, removed, or no longer weekly-only) is cleared. A window
+    /// that was not already selected is never selected. `.planned` and
+    /// `.actual` selections are untouched.
+    private func setWeeklyWindows(_ windows: [ProviderID: ActualWindow7d]) {
+        if weeklyWindows != windows {
+            weeklyWindows = windows
+        }
+        guard case let .weekly(selected)? = selection else { return }
+        if let refreshed = windows[selected.providerID], refreshed.id == selected.id {
+            if refreshed != selected {
+                selection = .weekly(refreshed)
+            }
+        } else {
+            selection = nil
+        }
+    }
+
+    /// True when the provider's latest usage snapshot reports a weekly limit but
+    /// no 5h limit. Unknown (no snapshot / unparseable) is treated as not
+    /// weekly-only, so the 7d block stays hidden rather than shown speculatively.
+    private func isWeeklyOnly(providerID: ProviderID) async -> Bool {
+        guard let usageRepo = usageSnapshotRepository,
+              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
+              let limits = ProviderUsageLimits.from(snapshot: snapshot) else {
+            return false
+        }
+        return limits.isWeeklyOnly
+    }
+
+    private static func isTodayOrTomorrow(_ date: Date) -> Bool {
+        Calendar.current.isDateInToday(date) || Calendar.current.isDateInTomorrow(date)
     }
 
     private func loadUsageHistories() async {
@@ -135,12 +259,16 @@ final class DayCalendarViewModel {
               let actual7dRepo = actual7dRepository else { return }
         let actual5hRepo = actual5hRepository
         // When settings are available, honor the per-provider "check when idle"
-        // gate; without them, fall back to refreshing (default behavior).
+        // gate; without them, only providers with read-only probes may fall
+        // back to refreshing (an ungated Claude probe on an idle account would
+        // open a fresh 5h window).
         let gate = appSettings.map {
             UsageCheckGate.make(
                 appSettings: $0,
                 actual5hRepository: actual5hRepo,
-                plannedWindowRepository: plannedRepository
+                plannedWindowRepository: plannedRepository,
+                usageSnapshotRepository: usageRepo,
+                localActivityDetector: .standard
             )
         }
         let fetcher = UsageFetcher(
@@ -162,7 +290,11 @@ final class DayCalendarViewModel {
                age < interval {
                 continue
             }
-            if let gate, await gate.shouldCheck(providerID: providerID, now: now) == false {
+            if let gate {
+                if await gate.shouldCheck(providerID: providerID, now: now) == false {
+                    continue
+                }
+            } else if providerID.usageProbeConsumesQuota {
                 continue
             }
             do {
@@ -200,6 +332,16 @@ final class DayCalendarViewModel {
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
+    /// Active weekly block for the Today and Tomorrow screens when the latest
+    /// persisted weekly window overlaps the displayed day.
+    func weeklyWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
+        guard Self.isTodayOrTomorrow(date) else { return nil }
+        guard let window = weeklyWindows[providerID], window.startAt <= now, now < window.endAt else {
+            return nil
+        }
+        return window
+    }
+
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {
         let providerActual = actual.filter { $0.providerID == providerID }
         return (
@@ -232,10 +374,24 @@ final class DayCalendarViewModel {
         }
     }
 
-    func move(window: PlannedWindow, to startAt: Date) async {
-        guard window.startAt != startAt else { return }
+    /// Applies the dropped position immediately, then saves it in the
+    /// background. The synchronous part runs in the same update as the drop, so
+    /// the block, its time labels, and the inspector never show the old start.
+    /// A window whose previous move is still being saved ignores further moves;
+    /// other windows can move meanwhile.
+    func move(window: PlannedWindow, to startAt: Date) {
+        guard window.startAt != startAt, pendingMoves[window.id] == nil else { return }
         var moved = window
         moved.startAt = startAt
+        pendingMoves[window.id] = startAt
+        if let index = planned.firstIndex(where: { $0.id == window.id }) {
+            planned[index].startAt = startAt
+        }
+        refreshPlannedSelection()
+        Task { await persistMove(original: window, moved: moved) }
+    }
+
+    private func persistMove(original window: PlannedWindow, moved: PlannedWindow) async {
         do {
             let original = try await plannedRepository.fetch(id: window.id) ?? window
             try await plannedRepository.update(moved)
@@ -260,11 +416,15 @@ final class DayCalendarViewModel {
                 }
                 throw error
             }
+            pendingMoves[window.id] = nil
             lastError = nil
             await loadLocalWindows()
         } catch {
+            // Reconcile with whatever was actually persisted, keeping the error
+            // visible through the reload.
+            pendingMoves[window.id] = nil
             lastError = errorMessage(error)
-            await loadLocalWindows()
+            await loadLocalWindows(preservingError: true)
         }
     }
 
@@ -279,6 +439,15 @@ final class DayCalendarViewModel {
             durationSeconds: duration,
             status: .scheduled
         )
+        // Advisory, not a veto: the plan is created either way. The chained
+        // boundary can also decay, and a short gap is sometimes intentional.
+        // Lookback windows are included so a plan early in the day still sees
+        // the previous evening's window.
+        lastAdvisory = PlannedWindowValidator.chainRisk(
+            candidate: window,
+            against: planned + chainHistoryPlanned,
+            actualWindows: actual + chainHistoryActual
+        ).map(Self.chainRiskMessage)
         do {
             try await plannedRepository.create(window)
             let wakePrompt = await defaultWakePrompt(for: provider)
@@ -303,6 +472,21 @@ final class DayCalendarViewModel {
         } catch {
             self.lastError = errorMessage(error)
         }
+    }
+
+    /// Explains the projected shortfall and the nearest safe starts, using the
+    /// suggested starts the validator already computed (back-to-back with the
+    /// previous window, or at the chained slot's end for a full-length window).
+    private static func chainRiskMessage(_ risk: PlannedWindowChainRisk) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let minutes = max(1, risk.shortfallSeconds / 60)
+        let starts = risk.suggestedStarts
+            .map { formatter.string(from: $0) }
+            .joined(separator: " or ")
+        let projected = formatter.string(from: risk.projectedEffectiveEnd)
+        return "Planned inside the previous window's chained slot: it may end around "
+            + "\(projected), \(minutes) min short. Try \(starts)."
     }
 
     private func defaultWakePrompt(for provider: ProviderID) async -> String {

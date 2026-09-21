@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public struct VersionCommand: Sendable {
+public struct Version: Sendable {
     public var providerID: ProviderID
     public var executableURL: URL
     public var environment: [String: String]
@@ -22,7 +22,7 @@ public struct VersionCommand: Sendable {
     public func spec() -> CommandSpec {
         CommandSpec(
             providerID: providerID,
-            commandName: .versionCommand,
+            commandName: .version,
             executableURL: executableURL,
             arguments: ["--version"],
             environment: environment,
@@ -39,7 +39,7 @@ public struct VersionCommand: Sendable {
     }
 }
 
-public struct AuthStatusCommand: Sendable {
+public struct AuthStatus: Sendable {
     public var providerID: ProviderID
     public var executableURL: URL
     public var environment: [String: String]
@@ -69,7 +69,7 @@ public struct AuthStatusCommand: Sendable {
     public func spec() -> CommandSpec {
         CommandSpec(
             providerID: providerID,
-            commandName: .authStatusCommand,
+            commandName: .authStatus,
             executableURL: executableURL,
             arguments: arguments,
             environment: environment,
@@ -118,7 +118,7 @@ public struct AuthStatusCommand: Sendable {
     }
 }
 
-public struct UsageCommand: Sendable {
+public struct Usage: Sendable {
     public typealias OnEvent = @Sendable (CommandRun) async throws -> Void
 
     public var providerID: ProviderID
@@ -190,7 +190,7 @@ public struct UsageCommand: Sendable {
         var run = CommandRun(
             id: runID,
             providerID: providerID,
-            commandName: .usageCommand,
+            commandName: .usage,
             command: executableURL.path,
             argumentsJSON: Self.argumentsJSON(for: providerID),
             startedAt: startedAt,
@@ -293,7 +293,7 @@ public struct UsageCommand: Sendable {
     }
 }
 
-public struct PromptCommand: Sendable {
+public struct Prompt: Sendable {
     public var providerID: ProviderID
     public var executableURL: URL
     public var input: TriggerPromptInput
@@ -326,7 +326,7 @@ public struct PromptCommand: Sendable {
     public func spec() -> CommandSpec {
         CommandSpec(
             providerID: providerID,
-            commandName: .promptCommand,
+            commandName: .prompt,
             executableURL: executableURL,
             arguments: arguments,
             workingDirectory: input.projectPath.map { URL(fileURLWithPath: $0) },

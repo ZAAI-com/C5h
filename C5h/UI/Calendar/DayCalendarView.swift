@@ -7,6 +7,7 @@ struct DayCalendarView: View {
     let now: Date
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    let onSelectWeekly: (ActualWindow7d) -> Void
     let onMovePlanned: (PlannedWindow, Date) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
@@ -47,6 +48,7 @@ struct DayCalendarView: View {
                                         providerID: providerID,
                                         plannedWindows: cw.planned,
                                         actualSegments: cw.actual,
+                                        weeklyWindow: viewModel.weeklyWindow(for: providerID, now: now),
                                         history: viewModel.history(for: providerID),
                                         resetWindowIDs: resetWindowIDs(for: cw.actual, providerID: providerID),
                                         date: viewModel.date,
@@ -55,6 +57,7 @@ struct DayCalendarView: View {
                                         columnWidth: columnWidth,
                                         onSelectPlanned: onSelectPlanned,
                                         onSelectActual: onSelectActual,
+                                        onSelectWeekly: onSelectWeekly,
                                         onMovePlanned: onMovePlanned,
                                         onQuickPlan: { start in
                                             Task { await viewModel.quickPlan(provider: providerID, startAt: start) }

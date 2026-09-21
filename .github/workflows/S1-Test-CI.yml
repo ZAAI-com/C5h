@@ -15,6 +15,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Test release identifier validation
+        run: ./Toolkit/Release/Tests/validate-release-identifiers.sh
+
       - name: Select latest Xcode
         # C5h targets the macOS 26 SDK, so it needs the newest Xcode the runner ships.
         run: |

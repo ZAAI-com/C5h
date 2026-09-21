@@ -341,27 +341,26 @@ private struct WeekDayColumnView: View {
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
 
-    private enum StackID: Hashable {
+    private enum BlockID: Hashable {
         case planned(UUID)
         case actual(UUID)
     }
 
-    private struct StackBlock {
-        let id: StackID
-        let yOffset: CGFloat
-        let height: CGFloat
-        let sortPriority: Int
+    private struct LaneBlock {
+        let id: BlockID
+        let interval: DateInterval
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
-            let stackedYOffsets = stackedBlockYOffsets
+            let frames = blockFrames
             ForEach(activePlanned) { window in
                 if let segment = visibleSegment(
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) {
+                    let frame = frames[.planned(window.id)] ?? .zero
                     Button {
                         onSelectPlanned(window)
                     } label: {
@@ -374,13 +373,14 @@ private struct WeekDayColumnView: View {
                             clipsTop: segment.clippedStart,
                             clipsBottom: segment.clippedEnd,
                             segmentStart: segment.start,
-                            widthOverride: providerContentWidth
+                            widthOverride: frame.width,
+                            renderedTopOffset: frame.minY
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
-                        x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.planned(window.id)] ?? yOffset(for: segment.start)
+                        x: providerXOffset(for: window.providerID) + frame.minX,
+                        y: frame.minY
                     )
                     .zIndex(1)
                 }
@@ -391,6 +391,7 @@ private struct WeekDayColumnView: View {
                     start: actualSegment.startAt,
                     durationSeconds: actualSegment.durationSeconds
                 ) {
+                    let frame = frames[.actual(actualSegment.id)] ?? .zero
                     Button {
                         onSelectActual(window)
                     } label: {
@@ -408,14 +409,15 @@ private struct WeekDayColumnView: View {
                             displayEnd: actualSegment.endAt,
                             marksResetEnd: actualSegment.marksResetEnd,
                             condensed: true,
-                            widthOverride: providerContentWidth,
-                            isReset: resetWindowIDs.contains(actualSegment.id)
+                            widthOverride: frame.width,
+                            isReset: resetWindowIDs.contains(actualSegment.id),
+                            renderedTopOffset: frame.minY
                         )
                     }
                     .buttonStyle(.plain)
                     .offset(
-                        x: providerXOffset(for: window.providerID),
-                        y: stackedYOffsets[.actual(actualSegment.id)] ?? yOffset(for: segment.start)
+                        x: providerXOffset(for: window.providerID) + frame.minX,
+                        y: frame.minY
                     )
                     .zIndex(2)
                 }
@@ -447,23 +449,18 @@ private struct WeekDayColumnView: View {
         planned.filter { !$0.status.isTerminal }
     }
 
-    private var stackedBlockYOffsets: [StackID: CGFloat] {
-        var map: [StackID: CGFloat] = [:]
+    private var blockFrames: [BlockID: CGRect] {
+        var map: [BlockID: CGRect] = [:]
         for provider in ProviderID.allCases {
-            var blocks: [StackBlock] = []
+            var blocks: [LaneBlock] = []
             for window in activePlanned where window.providerID == provider {
                 guard let segment = visibleSegment(
                     start: window.startAt,
                     durationSeconds: window.durationSeconds
                 ) else { continue }
-                blocks.append(StackBlock(
+                blocks.append(LaneBlock(
                     id: .planned(window.id),
-                    yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
-                    sortPriority: 0
+                    interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
                 ))
             }
             for actualSegment in actual where actualSegment.window.providerID == provider {
@@ -471,26 +468,18 @@ private struct WeekDayColumnView: View {
                     start: actualSegment.startAt,
                     durationSeconds: actualSegment.durationSeconds
                 ) else { continue }
-                blocks.append(StackBlock(
+                blocks.append(LaneBlock(
                     id: .actual(actualSegment.id),
-                    yOffset: yOffset(for: segment.start),
-                    height: CalendarPositioning.blockHeight(
-                        durationSeconds: segment.durationSeconds,
-                        pixelsPerMinute: layout.pixelsPerMinute
-                    ),
-                    sortPriority: 1
+                    interval: DateInterval(start: segment.start, duration: TimeInterval(segment.durationSeconds))
                 ))
             }
-            let sorted = blocks.sorted {
-                if $0.yOffset != $1.yOffset { return $0.yOffset < $1.yOffset }
-                return $0.sortPriority < $1.sortPriority
-            }
-            let placements = CalendarPositioning.stackVertically(
-                sorted.map { .init(yOffset: $0.yOffset, height: $0.height) },
-                gap: layout.blockVerticalGap
+            let frames = CalendarPositioning.laneFrames(
+                for: blocks.map(\.interval),
+                pixelsPerMinute: layout.pixelsPerMinute,
+                columnWidth: providerContentWidth
             )
-            for (block, placement) in zip(sorted, placements) {
-                map[block.id] = placement.yOffset
+            for (block, frame) in zip(blocks, frames) {
+                map[block.id] = frame
             }
         }
         return map

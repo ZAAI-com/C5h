@@ -6,8 +6,8 @@ import C5hStore
 @Observable
 @MainActor
 final class LogsViewModel {
-    var runs: [CommandRun] = []
-    var selection: CommandRun.ID?
+    var entries: [CommandRunEntry] = []
+    var selection: CommandRunEntry.ID?
 
     var providerFilter: ProviderID?
     var statusFilter: CommandRunStatus?
@@ -24,22 +24,25 @@ final class LogsViewModel {
         self.repository = repository
     }
 
-    var selectedRun: CommandRun? {
+    var selectedEntry: CommandRunEntry? {
         guard let selection else { return nil }
-        return runs.first { $0.id == selection }
+        return entries.first { $0.id == selection }
     }
 
-    var filteredRuns: [CommandRun] {
-        runs.filter { run in
-            guard searchText.isEmpty
-                || run.command.localizedCaseInsensitiveContains(searchText)
-                || run.argumentsJSON.localizedCaseInsensitiveContains(searchText)
-                || (run.workingDirectory?.localizedCaseInsensitiveContains(searchText) ?? false)
-                || (run.errorMessage?.localizedCaseInsensitiveContains(searchText) ?? false)
-            else {
-                return false
+    var filteredEntries: [CommandRunEntry] {
+        entries.filter { entry in
+            switch entry {
+            case .readable(let run):
+                return searchText.isEmpty
+                    || run.command.localizedCaseInsensitiveContains(searchText)
+                    || run.argumentsJSON.localizedCaseInsensitiveContains(searchText)
+                    || (run.workingDirectory?.localizedCaseInsensitiveContains(searchText) ?? false)
+                    || (run.errorMessage?.localizedCaseInsensitiveContains(searchText) ?? false)
+            case .unreadable:
+                // Unreadable rows carry no searchable text; only surface them
+                // when the user is not actively filtering by a search term.
+                return searchText.isEmpty
             }
-            return true
         }
     }
 
@@ -53,11 +56,11 @@ final class LogsViewModel {
                 commandName: commandNameFilter,
                 since: dateRange.since
             )
-            runs = try await repository.fetchRecent(limit: 500, filter: filter)
-            if let sel = selection, !runs.contains(where: { $0.id == sel }) {
-                selection = runs.first?.id
+            entries = try await repository.fetchRecentEntries(limit: 500, filter: filter)
+            if let sel = selection, !entries.contains(where: { $0.id == sel }) {
+                selection = entries.first?.id
             } else if selection == nil {
-                selection = runs.first?.id
+                selection = entries.first?.id
             }
             lastError = nil
         } catch {

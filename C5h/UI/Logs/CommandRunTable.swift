@@ -1,42 +1,103 @@
 import SwiftUI
 import C5hCore
+import C5hStore
 
 struct CommandRunTable: View {
-    let runs: [CommandRun]
-    @Binding var selection: CommandRun.ID?
+    let entries: [CommandRunEntry]
+    @Binding var selection: CommandRunEntry.ID?
 
     var body: some View {
-        Table(runs, selection: $selection) {
-            TableColumn("Started") { run in
-                Text(run.startedAt.c5hDateTime)
-                    .font(C5hTypography.monoFont)
-                    .lineLimit(1)
+        Table(entries, selection: $selection) {
+            TableColumn("Started") { entry in
+                startedCell(entry)
             }
             .width(min: 180, ideal: 195)
 
-            TableColumn("Provider") { run in
-                providerLabel(run.providerID)
+            TableColumn("Provider") { entry in
+                providerCell(entry)
             }
             .width(min: 70, ideal: 80)
 
-            TableColumn("Command") { run in
-                Text(run.commandName.rawValue)
-                    .font(C5hTypography.captionFont)
-                    .lineLimit(1)
+            TableColumn("Command") { entry in
+                commandCell(entry)
             }
             .width(min: 115, ideal: 135)
 
-            TableColumn("Status") { run in
-                StatusBadge(status: run.status)
+            TableColumn("Status") { entry in
+                statusCell(entry)
             }
             .width(min: 85, ideal: 95)
 
-            TableColumn("Duration") { run in
-                Text(durationText(run))
+            TableColumn("Duration") { entry in
+                durationCell(entry)
+            }
+            .width(min: 75, ideal: 85)
+        }
+    }
+
+    @ViewBuilder
+    private func startedCell(_ entry: CommandRunEntry) -> some View {
+        switch entry {
+        case .readable(let run):
+            Text(run.startedAt.c5hDateTime)
+                .font(C5hTypography.monoFont)
+                .lineLimit(1)
+        case .unreadable(_, let startedAt):
+            Text(startedAt?.c5hDateTime ?? "—")
+                .font(C5hTypography.monoFont)
+                .foregroundStyle(C5hColors.fgTertiary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func providerCell(_ entry: CommandRunEntry) -> some View {
+        switch entry {
+        case .readable(let run):
+            providerLabel(run.providerID)
+        case .unreadable:
+            Text("—").font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgTertiary)
+        }
+    }
+
+    @ViewBuilder
+    private func commandCell(_ entry: CommandRunEntry) -> some View {
+        switch entry {
+        case .readable(let run):
+            Text(run.commandName.rawValue)
+                .font(C5hTypography.captionFont)
+                .lineLimit(1)
+        case .unreadable:
+            HStack(spacing: 4) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                Text("Log not readable")
                     .font(C5hTypography.captionFont)
                     .lineLimit(1)
             }
-            .width(min: 75, ideal: 85)
+            .foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
+    private func statusCell(_ entry: CommandRunEntry) -> some View {
+        switch entry {
+        case .readable(let run):
+            StatusBadge(status: run.status)
+        case .unreadable:
+            Text("—").font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgTertiary)
+        }
+    }
+
+    @ViewBuilder
+    private func durationCell(_ entry: CommandRunEntry) -> some View {
+        switch entry {
+        case .readable(let run):
+            Text(durationText(run))
+                .font(C5hTypography.captionFont)
+                .lineLimit(1)
+        case .unreadable:
+            Text("—").font(C5hTypography.captionFont).foregroundStyle(C5hColors.fgTertiary)
         }
     }
 

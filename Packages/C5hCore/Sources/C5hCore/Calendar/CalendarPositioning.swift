@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CoreFoundation
 
 public enum CalendarPositioning {
@@ -17,6 +18,61 @@ public enum CalendarPositioning {
         calendar: Calendar = .current
     ) -> CGFloat {
         CGFloat(minutesSinceStartOfDay(date, calendar: calendar)) * pixelsPerMinute
+    }
+
+    /// Vertical offset of the current-time line inside a block, given the block's
+    /// top edge in column coordinates (after vertical stacking).
+    public static func nowLineOffset(
+        inBlockTop renderedTop: CGFloat,
+        now: Date,
+        pixelsPerMinute: CGFloat,
+        calendar: Calendar = .current
+    ) -> CGFloat {
+        yOffset(for: now, pixelsPerMinute: pixelsPerMinute, calendar: calendar) - renderedTop
+    }
+
+    /// Resolves a floating usage row's final vertical offset so it clears the
+    /// rendered now-line when the two would collide. `preferred` is the row's
+    /// time-anchored offset. When the now-line is not rendered in this block
+    /// (`nowY == nil`) the preferred offset is clamped to the bounds and
+    /// returned; when it is rendered but the row does not straddle it, the
+    /// preferred offset passes through unchanged. A straddling row prefers the
+    /// upper side (`nowY - rowHeight - gap`): space above the line keeps
+    /// growing as time advances, so a row placed there stays clear, while a
+    /// row placed below is soon engulfed again as the line advances toward it.
+    /// The lower side (`nowY + gap`) is used only when there is no room above,
+    /// and when neither side fits the preferred offset is clamped back into
+    /// bounds.
+    public static func usageRowOffsetAvoidingNowLine(
+        preferred: CGFloat,
+        rowHeight: CGFloat,
+        nowY: CGFloat?,
+        minOffset: CGFloat,
+        maxOffset: CGFloat,
+        gap: CGFloat
+    ) -> CGFloat {
+        guard let nowY else {
+            return min(max(preferred, minOffset), maxOffset)
+        }
+        let clamp = { (value: CGFloat) in min(max(value, minOffset), maxOffset) }
+        let straddles = preferred < nowY + gap && preferred + rowHeight > nowY - gap
+        if !straddles {
+            return clamp(preferred)
+        }
+        // Each candidate is checked against *both* bounds. Checking only the
+        // side it is trying to escape let a row leave the caller's bounds (for
+        // example a tall reserved footer makes `maxOffset` small enough that the
+        // upper candidate overshoots it), overlapping corner content or the
+        // reserved top padding.
+        let above = nowY - rowHeight - gap
+        if above >= minOffset, above <= maxOffset {
+            return above
+        }
+        let below = nowY + gap
+        if below <= maxOffset, below >= minOffset {
+            return below
+        }
+        return clamp(preferred)
     }
 
     public static func blockHeight(
@@ -109,6 +165,30 @@ public enum CalendarPositioning {
         }
     }
 
+    /// Frames for intervals already clipped to the displayed day. Packing changes
+    /// only horizontal geometry; timestamps always determine the vertical origin.
+    /// The minimum height matches calendar rendering and hit testing.
+    public static func laneFrames(
+        for intervals: [DateInterval],
+        pixelsPerMinute: CGFloat,
+        columnWidth: CGFloat,
+        gap: CGFloat = 4,
+        calendar: Calendar = .current
+    ) -> [CGRect] {
+        let placements = packLanes(intervals)
+        var frames: [CGRect] = []
+        for (interval, placement) in zip(intervals, placements) {
+            let slotWidth: CGFloat = max(0, columnWidth) / CGFloat(placement.laneCount)
+            let laneGap: CGFloat = placement.laneCount > 1 ? min(max(0, gap), slotWidth / 2) : 0
+            let x: CGFloat = CGFloat(placement.lane) * slotWidth + laneGap / 2
+            let y = yOffset(for: interval.start, pixelsPerMinute: pixelsPerMinute, calendar: calendar)
+            let width: CGFloat = max(0, slotWidth - laneGap)
+            let height = blockHeight(durationSeconds: Int(interval.duration), pixelsPerMinute: pixelsPerMinute)
+            frames.append(CGRect(x: x, y: y, width: width, height: height))
+        }
+        return frames
+    }
+
     public struct VerticalStackInput: Sendable, Equatable {
         public let yOffset: CGFloat
         public let height: CGFloat
@@ -131,17 +211,28 @@ public enum CalendarPositioning {
     /// The caller supplies blocks in render order, normally sorted by their true
     /// time-derived Y position. Touching blocks keep their true position; only a
     /// block whose top would overlap the previous rendered bottom is shifted down.
+    ///
+    /// `maxY` bounds the displacement to the height of the column. Shifts
+    /// accumulate, so without a bound a dense cluster walks blocks past the
+    /// column's clipped frame, where they are neither visible nor hit-testable.
+    /// Past the bound a block stops being displaced and overlaps in place
+    /// instead, which keeps it reachable. A block is never moved above its own
+    /// true position.
     public static func stackVertically(
         _ blocks: [VerticalStackInput],
-        gap: CGFloat = 4
+        gap: CGFloat = 4,
+        maxY: CGFloat? = nil
     ) -> [VerticalStackPlacement] {
         var previousBottom: CGFloat?
         return blocks.map { block in
-            let y: CGFloat
+            var y: CGFloat
             if let bottom = previousBottom, block.yOffset < bottom {
                 y = bottom + gap
             } else {
                 y = block.yOffset
+            }
+            if let maxY {
+                y = min(y, max(block.yOffset, maxY - block.height))
             }
             previousBottom = y + block.height
             return VerticalStackPlacement(yOffset: y)

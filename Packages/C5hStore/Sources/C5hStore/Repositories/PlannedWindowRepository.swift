@@ -109,9 +109,15 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
         let startStr = DateTimeService.formatUTC(window.startAt)
         let endStr = DateTimeService.formatUTC(window.endAt)
         let nowStr = DateTimeService.formatUTC(.now)
+        // Terminal plans (triggered, missed, cancelled) no longer hold their
+        // slot: the calendar hides them, so they must not block a move either.
+        let terminalStatuses = PlannedWindowStatus.allCases
+            .filter(\.isTerminal)
+            .map(\.rawValue)
         let conflict = try PlannedWindowRecord
             .filter(Column("provider_id") == window.providerID.rawValue)
             .filter(Column("id") != window.id.uuidString)
+            .filter(!terminalStatuses.contains(Column("status")))
             .filter(sql: """
                 datetime(start_at) < datetime(?) AND
                 datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?)
@@ -126,6 +132,10 @@ public struct GRDBPlannedWindowRepository: PlannedWindowRepository {
 
         let activeActualConflict = try ActualWindow5hRecord
             .filter(Column("provider_id") == window.providerID.rawValue)
+            .filter(
+                Column("duration_seconds")
+                    < CodexUsageStatus.weeklyClassThresholdSeconds
+            )
             .filter(sql: """
                 datetime(start_at) <= datetime(?) AND
                 datetime(start_at, '+' || duration_seconds || ' seconds') > datetime(?) AND
