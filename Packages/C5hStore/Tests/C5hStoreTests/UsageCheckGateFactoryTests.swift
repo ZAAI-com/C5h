@@ -478,6 +478,83 @@ struct UsageCheckGateFactoryTests {
         ))
     }
 
+    @Test("The probe margin does not open the gate before a window starts")
+    func endMarginDoesNotRelaxTheWindowStartBound() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: false)
+        let actualRepo = GRDBActualWindow5hRepository(database: db)
+
+        // Starts 60s from now: inside the 90s end margin, but not yet open.
+        try await actualRepo.upsertByEndAt(ActualWindow5h(
+            providerID: .claude,
+            startAt: now.addingTimeInterval(60),
+            source: .c5hTriggered,
+            confidence: .exact
+        ), tolerance: 0)
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: actualRepo,
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: EmptyUsageSnapshotRepository(),
+            localActivityDetector: Self.emptyDetector()
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+        // Once the window has actually opened, the gate allows the probe.
+        #expect(await gate.shouldCheck(
+            providerID: .claude,
+            now: now.addingTimeInterval(60)
+        ))
+    }
+
+    @Test("An undecodable newest snapshot falls back to the previous boundary")
+    func undecodableNewestSnapshotFallsBackToPreviousBoundary() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let settings = GRDBAppSettingsRepository(database: db)
+        try await settings.set(AppSettingsKeys.checkUsageWhenIdle(for: .claude), value: true)
+        let snapshotRepo = GRDBUsageSnapshotRepository(database: db)
+        let projects = try makeProjectsDirectory()
+        defer { removeDirectory(projects) }
+
+        // A window that expired 10 minutes ago, then an undecodable newer row.
+        // The expired boundary must survive, so a transcript written inside the
+        // old window cannot re-arm the quota-consuming probe.
+        let expiredEnd = now.addingTimeInterval(-600)
+        try await snapshotRepo.create(makeSnapshot(
+            capturedAt: now.addingTimeInterval(-900),
+            windowEndsAt: expiredEnd
+        ))
+        try await snapshotRepo.create(UsageSnapshot(
+            providerID: .claude,
+            capturedAt: now.addingTimeInterval(-30),
+            rawJSON: "{}",
+            normalizedJSON: "not-json"
+        ))
+        try makeTranscript(
+            in: projects,
+            project: "-Users-m-Some-Project",
+            name: "inside-old-window.jsonl",
+            modifiedAt: expiredEnd.addingTimeInterval(-60)
+        )
+
+        let gate = UsageCheckGate.make(
+            appSettings: settings,
+            actual5hRepository: GRDBActualWindow5hRepository(database: db),
+            plannedWindowRepository: GRDBPlannedWindowRepository(database: db),
+            usageSnapshotRepository: snapshotRepo,
+            localActivityDetector: ClaudeLocalActivityDetector(
+                projectsDirectory: projects,
+                excludedProjectPaths: []
+            )
+        )
+
+        #expect(await gate.shouldCheck(providerID: .claude, now: now) == false)
+    }
+
     @Test("A malformed snapshot does not suppress valid local activity")
     func malformedSnapshotDoesNotSuppressLocalActivity() async throws {
         let db = try Database.inMemory()

@@ -258,10 +258,8 @@ public struct ClaudeUsageCollector: Sendable {
     }
 
     private static func statusPayloadURL() throws -> URL {
-        let fallback = FileManager.default.temporaryDirectory
-            .appendingPathComponent("C5h", isDirectory: true)
-        let base = safeWorkingDirectory() ?? fallback
-        let dir = base.appendingPathComponent("usage-probes", isDirectory: true)
+        let dir = safeWorkingDirectory()
+            .appendingPathComponent("usage-probes", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
     }
@@ -273,22 +271,31 @@ public struct ClaudeUsageCollector: Sendable {
     /// ("access data from other apps") and file-provider mounts like `~/OneDrive`.
     /// The app's Application Support directory is owned by C5h and TCC-safe.
     ///
-    /// Public because `ClaudeLocalActivityDetector` must exclude the session
-    /// files Claude Code writes for this cwd (each probe creates one) when it
-    /// scans `~/.claude/projects` for real user activity.
-    public static func probeWorkingDirectory() -> URL? {
+    /// Exposed so `ClaudeLocalActivityDetector` can exclude the session files
+    /// Claude Code writes for this cwd (each probe creates one) when it scans
+    /// `~/.claude/projects` for real user activity. Both components must agree
+    /// on the directory: if the probe launched somewhere the detector does not
+    /// exclude, the probe's own transcript would read as user activity and
+    /// re-arm the quota-consuming probe on every tick.
+    static func probeWorkingDirectory() -> URL {
         safeWorkingDirectory()
     }
 
-    private static func safeWorkingDirectory() -> URL? {
+    /// Never optional: resolving Application Support can fail (sandbox or
+    /// container setup problems), and returning nil there used to launch the
+    /// probe in the inherited cwd while the detector excluded nothing. The
+    /// temporary directory is an always-available, TCC-safe, C5h-owned
+    /// fallback that keeps the two components in agreement.
+    private static func safeWorkingDirectory() -> URL {
         let fm = FileManager.default
-        guard let support = try? fm.url(
+        let support = try? fm.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
-        ) else { return nil }
-        let dir = support.appendingPathComponent("C5h", isDirectory: true)
+        )
+        let dir = (support ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
+            .appendingPathComponent("C5h", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

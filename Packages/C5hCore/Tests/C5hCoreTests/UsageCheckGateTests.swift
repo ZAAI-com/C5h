@@ -10,7 +10,7 @@ struct UsageCheckGateTests {
     func codexChecksWhenIdleEnabled() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in
                 Issue.record("Local activity must not be consulted for a read-only probe")
@@ -50,7 +50,7 @@ struct UsageCheckGateTests {
     func activeWindowShortCircuitsLocalActivity() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in true },
+            hasActiveWindow: { _, _, _ in true },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in
                 Issue.record("Local activity must not be consulted when a window is active")
@@ -70,7 +70,7 @@ struct UsageCheckGateTests {
     func passesNowIntoPlannedWindowCheck() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, checkDate in checkDate == now },
             hasRecentLocalActivity: { _, _ in false }
         )
@@ -81,7 +81,7 @@ struct UsageCheckGateTests {
     func appliesMarginToActiveWindowCheckDate() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
-            hasActiveWindow: { providerID, checkDate in
+            hasActiveWindow: { providerID, _, checkDate in
                 switch providerID {
                 case .claude:
                     checkDate == now.addingTimeInterval(UsageCheckGate.consumingProbeEndMargin)
@@ -101,7 +101,7 @@ struct UsageCheckGateTests {
     func appliesMarginToSnapshotCheckDate() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in false },
             isBelievedActiveFromSnapshot: { providerID, checkDate in
@@ -119,7 +119,7 @@ struct UsageCheckGateTests {
     func passesNowIntoLocalActivityCheck() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, checkDate in checkDate == now }
         )
@@ -137,7 +137,7 @@ struct UsageCheckGateTests {
         // Idle checks off everywhere; only Claude has an active window.
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
-            hasActiveWindow: { providerID, _ in providerID == .claude },
+            hasActiveWindow: { providerID, _, _ in providerID == .claude },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in false }
         )
@@ -150,7 +150,7 @@ struct UsageCheckGateTests {
         struct Boom: Error {}
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in false },
-            hasActiveWindow: { _, _ in throw Boom() },
+            hasActiveWindow: { _, _, _ in throw Boom() },
             hasPendingPlannedWindow: { _, _ in throw Boom() },
             hasRecentLocalActivity: { _, _ in false }
         )
@@ -162,7 +162,7 @@ struct UsageCheckGateTests {
         struct Boom: Error {}
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in throw Boom() }
         )
@@ -232,7 +232,7 @@ struct UsageCheckGateTests {
         struct Boom: Error {}
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in false },
             isBelievedActiveFromSnapshot: { _, _ in true },
@@ -275,7 +275,7 @@ struct UsageCheckGateTests {
     func recordedWindowInMarginSuppressesLocalActivity() async {
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, checkDate in checkDate == now },
+            hasActiveWindow: { _, _, checkDate in checkDate == now },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in true }
         )
@@ -304,7 +304,7 @@ struct UsageCheckGateTests {
         struct Boom: Error {}
         let gate = UsageCheckGate(
             isIdleCheckEnabled: { _ in true },
-            hasActiveWindow: { _, _ in false },
+            hasActiveWindow: { _, _, _ in false },
             hasPendingPlannedWindow: { _, _ in false },
             hasRecentLocalActivity: { _, _ in true },
             isBelievedActiveFromSnapshot: { _, _ in false },
@@ -325,7 +325,7 @@ struct UsageCheckGateTests {
     ) -> UsageCheckGate {
         UsageCheckGate(
             isIdleCheckEnabled: { _ in idleEnabled },
-            hasActiveWindow: { _, _ in hasActive },
+            hasActiveWindow: { _, _, _ in hasActive },
             hasPendingPlannedWindow: { _, _ in hasPending },
             hasRecentLocalActivity: { _, _ in hasActivity },
             isBelievedActiveFromSnapshot: { _, _ in believedActive },

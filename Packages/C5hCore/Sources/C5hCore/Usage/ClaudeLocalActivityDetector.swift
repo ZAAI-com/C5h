@@ -76,10 +76,7 @@ public struct ClaudeLocalActivityDetector: Sendable {
     }
 
     public static var defaultExcludedProjectPaths: [URL] {
-        guard let probeWorkingDirectory = ClaudeUsageCollector.probeWorkingDirectory() else {
-            return []
-        }
-        return [probeWorkingDirectory]
+        [ClaudeUsageCollector.probeWorkingDirectory()]
     }
 
     /// Claude Code names each project directory after the session's working

@@ -203,7 +203,7 @@ struct ClaudeLocalActivityDetectorTests {
         // ClaudeUsageCollector.probeWorkingDirectory() -> encoded name) rather
         // than a hand-built path, so a drift in the real probe-cwd encoding
         // would fail here instead of silently breaking self-exclusion.
-        let probeCwd = try #require(ClaudeUsageCollector.probeWorkingDirectory())
+        let probeCwd = ClaudeUsageCollector.probeWorkingDirectory()
         let encoded = ClaudeLocalActivityDetector.encodedProjectDirectoryName(forPath: probeCwd.path)
         let projects = try makeProjectsDirectory()
         defer { removeDirectory(projects) }

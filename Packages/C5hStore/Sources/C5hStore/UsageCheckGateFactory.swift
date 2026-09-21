@@ -1,6 +1,36 @@
 import Foundation
 import C5hCore
 
+/// How far back the gate will look for a snapshot carrying a decodable window
+/// boundary. The newest row is not always usable: a payload can fail to decode
+/// (provider format change, truncated write), and discarding the boundary
+/// entirely fails open, letting an expired window re-authorise a
+/// quota-consuming probe. One window length plus the end margin covers every
+/// boundary that can still be relevant at `now`.
+private let snapshotBoundaryLookback =
+    UsageCheckGate.preWindowQuietHorizon + UsageCheckGate.consumingProbeEndMargin
+
+/// Latest decodable `windowEndsAt` for `providerID` within the lookback, newest
+/// first. Falls back past undecodable rows instead of giving up on the newest.
+private func latestSnapshotWindowEnd(
+    _ repository: any UsageSnapshotRepository,
+    _ providerID: ProviderID,
+    _ now: Date
+) async throws -> Date? {
+    let snapshots = try await repository.fetchInRange(
+        providerID: providerID,
+        interval: DateInterval(
+            start: now.addingTimeInterval(-snapshotBoundaryLookback),
+            end: now
+        )
+    )
+    return snapshots
+        .sorted { $0.capturedAt > $1.capturedAt }
+        .lazy
+        .compactMap { UsageNormalizer.decode($0.normalizedJSON)?.windowEndsAt }
+        .first
+}
+
 public extension UsageCheckGate {
     /// Builds a gate wired to the GRDB repositories. C5hCore defines the gate in
     /// terms of closures (it can't depend on C5hStore), so this connects those
@@ -22,15 +52,19 @@ public extension UsageCheckGate {
                 )) ?? nil
                 return stored ?? AppSettingsKeys.defaultCheckUsageWhenIdle
             },
-            hasActiveWindow: { providerID, checkDate in
+            hasActiveWindow: { providerID, now, checkDate in
                 // UsageCheckGate supplies a margin-adjusted check date for
-                // quota-consuming providers and `now` for read-only probes.
+                // quota-consuming providers and `now` for read-only probes. The
+                // margin exists to stop a probe landing just after a window
+                // expires, so it applies to the end bound only: a window that
+                // has not started yet must not authorise a probe, or the gate
+                // would open up to `consumingProbeEndMargin` early.
                 let windows = try await actual5hRepository.fetchWindows(
-                    for: DateInterval(start: checkDate, duration: 1)
+                    for: DateInterval(start: now, end: max(now, checkDate))
                 )
                 return windows.contains {
                     $0.providerID == providerID
-                        && $0.startAt <= checkDate
+                        && $0.startAt <= now
                         && checkDate < $0.endAt
                 }
             },
@@ -78,9 +112,9 @@ public extension UsageCheckGate {
                 // window expires, its boundary must also retire transcripts
                 // written inside the old window. Future ends remain governed by
                 // the believed-active and expiring-window checks.
-                let latestSnapshotEnd = try await usageSnapshotRepository
-                    .fetchLatest(providerID: providerID)
-                    .flatMap { UsageNormalizer.decode($0.normalizedJSON)?.windowEndsAt }
+                let latestSnapshotEnd = try await latestSnapshotWindowEnd(
+                    usageSnapshotRepository, providerID, now
+                )
                 let lastExpiredSnapshotEnd = latestSnapshotEnd.flatMap {
                     $0 <= now ? $0 : nil
                 }
@@ -104,10 +138,9 @@ public extension UsageCheckGate {
                 // gate supplies the same margin-adjusted boundary used for
                 // recorded windows.
                 guard providerID.usageProbeConsumesQuota,
-                      let snapshot = try await usageSnapshotRepository.fetchLatest(
-                        providerID: providerID
-                      ),
-                      let windowEndsAt = UsageNormalizer.decode(snapshot.normalizedJSON)?.windowEndsAt
+                      let windowEndsAt = try await latestSnapshotWindowEnd(
+                        usageSnapshotRepository, providerID, checkDate
+                      )
                 else {
                     return false
                 }
@@ -138,12 +171,9 @@ public extension UsageCheckGate {
                 // cannot land its startup request after expiry and anchor a fresh
                 // window.
                 guard providerID.usageProbeConsumesQuota,
-                      let snapshot = try await usageSnapshotRepository.fetchLatest(
-                        providerID: providerID
-                      ),
-                      let windowEndsAt = UsageNormalizer.decode(
-                        snapshot.normalizedJSON
-                      )?.windowEndsAt
+                      let windowEndsAt = try await latestSnapshotWindowEnd(
+                        usageSnapshotRepository, providerID, now
+                      )
                 else {
                     return false
                 }

@@ -27,7 +27,11 @@ import Foundation
 /// Mirrors the closure style of `ActiveWindowResolver`.
 public struct UsageCheckGate: Sendable {
     public typealias IsIdleCheckEnabled = @Sendable (ProviderID) async -> Bool
-    public typealias HasActiveWindow = @Sendable (ProviderID, Date) async throws -> Bool
+    /// `(providerID, now, endCheckDate)`. `now` bounds the window start, while
+    /// `endCheckDate` carries the quota-consuming end margin. Keeping them apart
+    /// stops the margin from also relaxing the start bound, which would let a
+    /// probe run before its window opens.
+    public typealias HasActiveWindow = @Sendable (ProviderID, Date, Date) async throws -> Bool
     public typealias HasPendingPlannedWindow = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias HasRecentLocalActivity = @Sendable (ProviderID, Date) async throws -> Bool
     public typealias IsBelievedActiveFromSnapshot = @Sendable (ProviderID, Date) async throws -> Bool
@@ -88,7 +92,7 @@ public struct UsageCheckGate: Sendable {
         let activeWindowCheckDate = providerID.usageProbeConsumesQuota
             ? now.addingTimeInterval(Self.consumingProbeEndMargin)
             : now
-        if (try? await hasActiveWindow(providerID, activeWindowCheckDate)) == true {
+        if (try? await hasActiveWindow(providerID, now, activeWindowCheckDate)) == true {
             return true
         }
         if (try? await hasPendingPlannedWindow(providerID, now)) == true {
@@ -115,7 +119,7 @@ public struct UsageCheckGate: Sendable {
             // recent local activity cannot re-open probing in that tail, where
             // the probe's startup request could land after the real expiry and
             // anchor a fresh window.
-            if (try? await hasActiveWindow(providerID, now)) == true {
+            if (try? await hasActiveWindow(providerID, now, now)) == true {
                 return false
             }
             // Fail-open on snapshot lookup error (treat as not expiring) so a
