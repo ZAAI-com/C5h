@@ -325,13 +325,24 @@ public struct ActiveWindowResolver: Sendable {
                 return derived5h
             }
             if active.source == .c5hTriggered {
-                if active.commandRunID == nil {
+                // A link to the run being resolved right now is not an earlier
+                // attribution: the derived window carries this run's
+                // `commandRunID` into the upsert, and `upsertByEndAt` fills a
+                // nil link on the row it merges into, so a row that had no link
+                // reads back pointing at this run. Validating it would check
+                // this run against itself and, in this branch, always fail
+                // (the window predates the trigger by definition), demoting a
+                // row that has no earlier trigger to preserve.
+                if active.commandRunID == nil || active.commandRunID == commandRunID {
                     // There is no earlier command attribution to validate or
                     // preserve. Keep the existing trigger classification and
                     // attach the current prompt as its first command link.
+                    let needsWrite = active.commandRunID != commandRunID
                     active.commandRunID = commandRunID
-                    active.updatedAt = now
-                    try await updateActualWindow(active)
+                    if needsWrite {
+                        active.updatedAt = now
+                        try await updateActualWindow(active)
+                    }
                     return active
                 }
                 switch await existingTriggerAttribution(for: active) {

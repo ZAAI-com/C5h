@@ -988,6 +988,59 @@ struct ActiveWindowResolverTests {
         #expect(await recorder.updated.isEmpty)
     }
 
+    @Test("Demote path preserves a triggered row the upsert linked to this run")
+    func demotePathPreservesRowLinkedByOwnUpsert() async throws {
+        let recorder = Recorder()
+        // The derived window now carries this run's commandRunID into the
+        // upsert, and upsertByEndAt fills a nil link on the row it merges into.
+        // So a c5hTriggered row that had NO command link reads back linked to
+        // the run currently being resolved. That is not an earlier trigger to
+        // validate: a run cannot corroborate itself, and treating it as one
+        // would demote a row the "no earlier attribution" branch is meant to
+        // preserve.
+        let triggerTime = Self.hourStart.addingTimeInterval(1800)
+        let chainedStart = triggerTime.addingTimeInterval(-80 * 60)
+        let commandRunID = UUID()
+        var stamped = ActualWindow5h(
+            providerID: .claude,
+            startAt: chainedStart,
+            source: .c5hTriggered,
+            confidence: .exact
+        )
+        // Exactly what the DB returns after this run's own upsert filled it.
+        stamped.commandRunID = commandRunID
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: chainedStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { [stamped] _, _ in stamped },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            triggerAttributionFetch: { requested in
+                // The only evidence available is this very run, whose start is
+                // well after the chained window start.
+                guard requested == commandRunID else { return nil }
+                return TriggerAttributionEvidence(
+                    providerID: .claude,
+                    startedAt: triggerTime,
+                    isPrompt: true
+                )
+            }
+        )
+
+        let window = try #require(await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        ))
+
+        #expect(window.source == .c5hTriggered)
+        #expect(window.commandRunID == commandRunID)
+    }
+
     @Test("Demote path resets a previously stamped c5hTriggered row")
     func demotePathResetsPreviouslyStampedRow() async throws {
         let recorder = Recorder()
