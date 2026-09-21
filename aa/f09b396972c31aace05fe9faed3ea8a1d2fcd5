@@ -1,0 +1,27 @@
+Packages/C5hCore/Sources/C5hCore/Usage/UsageHistorySeries.swift
+  s_e269fee58f4b76::t_9e3a8fdce5a068 154-158
+Packages/C5hCore/Sources/C5hCore/Calendar/CalendarPositioning.swift
+  s_e269fee58f4b76::t_9e3a8fdce5a068 57,60,62-66,68,72,75
+C5h/UI/Dashboard/DashboardViewModel.swift
+  s_e269fee58f4b76::t_8a97d04e3c4918 280-289
+Packages/C5hCore/Tests/C5hCoreTests/CalendarPositioningTests.swift
+  s_e269fee58f4b76::t_3b3fb6cefe2eb7 333-375
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_e269fee58f4b76::t_344cc9effcd143 943-965
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "aaf09b396972c31aace05fe9faed3ea8a1d2fcd5",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
