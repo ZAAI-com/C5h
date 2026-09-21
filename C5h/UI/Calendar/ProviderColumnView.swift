@@ -129,12 +129,16 @@ struct ProviderColumnView: View {
                                     lastValidDragStart = resolved
                                 }
                                 let start = lastValidDragStart ?? window.startAt
-                                draggingPlannedID = nil
-                                dragPreviewStart = nil
-                                lastValidDragStart = nil
+                                // Hand the drop to the model before clearing
+                                // the preview: it applies the new start
+                                // synchronously, so the block never falls back
+                                // to its old position while the save runs.
                                 if start != window.startAt {
                                     onMovePlanned(window, start)
                                 }
+                                draggingPlannedID = nil
+                                dragPreviewStart = nil
+                                lastValidDragStart = nil
                             }
                     )
                 }
@@ -432,34 +436,21 @@ struct ProviderColumnView: View {
         return !PlannedWindowValidator
             .validate(
                 candidate: candidate,
-                against: plannedWindows,
+                against: activePlannedWindows,
                 actualWindows: actualSegments.map(\.window)
             )
             .hasConflict
     }
 
-    /// The allowed start closest to `candidate` on the provider's snap grid.
-    /// Resolving against the whole day rather than only the positions the
-    /// pointer has already passed means a drag over a blocking stretch (an
-    /// actual window, a neighbouring plan, the past) jumps to the far side of
-    /// it instead of freezing at its near edge. Returns nil when the day holds
-    /// no allowed start at all, in which case the caller keeps the window put.
+    /// The allowed start closest to `candidate` on the provider's snap grid
+    /// (see `PlannedSlotResolver`). Returns nil when the day holds no allowed
+    /// start at all, in which case the caller keeps the window put.
     private func nearestAllowedStart(for window: PlannedWindow, near candidate: Date) -> Date? {
-        if canPlace(window, at: candidate) { return candidate }
-        let step = TimeInterval(providerID.plannedWindowSnapMinutes * 60)
-        let interval = CalendarPositioning.dayInterval(for: date)
-        let latestStart = interval.end.addingTimeInterval(-step)
-        // Alternate later/earlier so the first hit is the nearest one; the day's
-        // own length bounds the walk.
-        let maxSteps = Int(interval.duration / step) + 1
-        for offset in 1...max(1, maxSteps) {
-            let delta = Double(offset) * step
-            for signed in [candidate.addingTimeInterval(delta), candidate.addingTimeInterval(-delta)] {
-                guard signed >= interval.start, signed <= latestStart else { continue }
-                if canPlace(window, at: signed) { return signed }
-            }
-        }
-        return nil
+        PlannedSlotResolver.nearestAllowedStart(
+            near: candidate,
+            in: CalendarPositioning.dayInterval(for: date),
+            stepSeconds: TimeInterval(providerID.plannedWindowSnapMinutes * 60)
+        ) { canPlace(window, at: $0) }
     }
 
     /// Whether the dragged `window` may occupy `start`: not in the past (the
@@ -473,7 +464,7 @@ struct ProviderColumnView: View {
         return !PlannedWindowValidator
             .validate(
                 candidate: candidate,
-                against: plannedWindows,
+                against: activePlannedWindows,
                 actualWindows: actualSegments.map(\.window)
             )
             .hasConflict

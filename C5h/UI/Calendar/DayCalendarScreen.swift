@@ -102,7 +102,7 @@ struct DayCalendarScreen: View {
                 }
             },
             onMovePlanned: { window, start in
-                Task { await viewModel.move(window: window, to: start) }
+                viewModel.move(window: window, to: start)
             }
         )
         .safeAreaInset(edge: .top, spacing: 0) {

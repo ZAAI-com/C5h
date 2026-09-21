@@ -209,6 +209,34 @@ struct PlannedWindowRepositoryTests {
         }
     }
 
+    @Test(
+        "Terminal planned windows do not block create or update",
+        arguments: [PlannedWindowStatus.triggered, .missed, .cancelled]
+    )
+    func terminalPlannedWindowsDoNotBlock(status: PlannedWindowStatus) async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBPlannedWindowRepository(database: db)
+
+        let base = Date(timeIntervalSince1970: 1_730_000_000)
+        try await repo.create(PlannedWindow(providerID: .claude, startAt: base, status: status))
+
+        // Create on top of the terminal plan.
+        try await repo.create(PlannedWindow(
+            providerID: .claude,
+            startAt: base.addingTimeInterval(3600)
+        ))
+
+        // Move another plan onto the terminal plan.
+        var moved = PlannedWindow(providerID: .claude, startAt: base.addingTimeInterval(12 * 3600))
+        try await repo.create(moved)
+        moved.startAt = base.addingTimeInterval(-4 * 3600)
+        try await repo.update(moved)
+
+        let stored = try await repo.fetch(id: moved.id)
+        #expect(stored?.startAt == moved.startAt)
+    }
+
     @Test("Different-provider overlap and same-provider boundary touch are allowed")
     func allowsDifferentProviderOverlapAndBoundaryTouch() async throws {
         let db = try Database.inMemory()

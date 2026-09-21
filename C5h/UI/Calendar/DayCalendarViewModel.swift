@@ -14,6 +14,10 @@ final class DayCalendarViewModel {
     var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
     var selection: CalendarSelection?
     var lastError: String?
+    /// Dropped starts whose save is still in flight, keyed by planned-window id.
+    private var pendingMoves: [UUID: Date] = [:]
+    /// Bumped per `loadLocalWindows` call so a superseded load drops its result.
+    private var loadGeneration = 0
     /// Non-blocking notice from the last quick-plan (currently the chain-risk
     /// advisory). Cleared on the next plan action.
     var lastAdvisory: String?
@@ -59,7 +63,11 @@ final class DayCalendarViewModel {
         refreshUsageWindowsInBackground()
     }
 
-    private func loadLocalWindows() async {
+    /// `preservingError` keeps the current `lastError` on a successful load, so
+    /// a reload that reconciles after a failed save does not erase its message.
+    private func loadLocalWindows(preservingError: Bool = false) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         let interval = CalendarPositioning.dayInterval(for: date)
         // One provider slot before the day, for chain-risk lookback only.
         let lookback = DateInterval(
@@ -73,16 +81,32 @@ final class DayCalendarViewModel {
             async let actual = actual5hRepository.fetchWindows(for: interval)
             async let priorPlanned = plannedRepository.fetchWindows(for: lookback)
             async let priorActual = actual5hRepository.fetchWindows(for: lookback)
-            let fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
+            var fetchedPlanned = try await planned.filter { !$0.status.isTerminal }
             let fetchedActual = try await actual
-            self.chainHistoryPlanned = try await priorPlanned.filter { !$0.status.isTerminal }
-            self.chainHistoryActual = try await priorActual
+            let fetchedPriorPlanned = try await priorPlanned.filter { !$0.status.isTerminal }
+            let fetchedPriorActual = try await priorActual
+            // A newer load started while this one was fetching: its data is at
+            // least as fresh, so applying this result could only briefly
+            // restore a stale position (for example, a fetch from before a move
+            // was saved landing after the save finished).
+            guard generation == loadGeneration else { return }
+            // Moves still being saved keep their dropped position, so a
+            // background reload never puts the block back mid-save.
+            for index in fetchedPlanned.indices {
+                if let pendingStart = pendingMoves[fetchedPlanned[index].id] {
+                    fetchedPlanned[index].startAt = pendingStart
+                }
+            }
+            self.chainHistoryPlanned = fetchedPriorPlanned
+            self.chainHistoryActual = fetchedPriorActual
             // Assign only when changed so a coarse change signal (which can fire
             // for a different day) doesn't re-render and restart block animations.
             if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
             if self.actual != fetchedActual { self.actual = fetchedActual }
-            self.lastError = nil
+            refreshPlannedSelection()
+            if !preservingError { self.lastError = nil }
         } catch {
+            guard generation == loadGeneration else { return }
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
@@ -94,6 +118,15 @@ final class DayCalendarViewModel {
         } else {
             setWeeklyWindows([:])
         }
+    }
+
+    /// Swaps a `.planned` selection for the current value of the same window so
+    /// the inspector follows a move (and its revert on failure).
+    private func refreshPlannedSelection() {
+        guard case let .planned(selected)? = selection,
+              let current = planned.first(where: { $0.id == selected.id }),
+              current != selected else { return }
+        selection = .planned(current)
     }
 
     private func loadWeeklyContext(now: Date) async {
@@ -341,10 +374,24 @@ final class DayCalendarViewModel {
         }
     }
 
-    func move(window: PlannedWindow, to startAt: Date) async {
-        guard window.startAt != startAt else { return }
+    /// Applies the dropped position immediately, then saves it in the
+    /// background. The synchronous part runs in the same update as the drop, so
+    /// the block, its time labels, and the inspector never show the old start.
+    /// A window whose previous move is still being saved ignores further moves;
+    /// other windows can move meanwhile.
+    func move(window: PlannedWindow, to startAt: Date) {
+        guard window.startAt != startAt, pendingMoves[window.id] == nil else { return }
         var moved = window
         moved.startAt = startAt
+        pendingMoves[window.id] = startAt
+        if let index = planned.firstIndex(where: { $0.id == window.id }) {
+            planned[index].startAt = startAt
+        }
+        refreshPlannedSelection()
+        Task { await persistMove(original: window, moved: moved) }
+    }
+
+    private func persistMove(original window: PlannedWindow, moved: PlannedWindow) async {
         do {
             let original = try await plannedRepository.fetch(id: window.id) ?? window
             try await plannedRepository.update(moved)
@@ -369,11 +416,15 @@ final class DayCalendarViewModel {
                 }
                 throw error
             }
+            pendingMoves[window.id] = nil
             lastError = nil
             await loadLocalWindows()
         } catch {
+            // Reconcile with whatever was actually persisted, keeping the error
+            // visible through the reload.
+            pendingMoves[window.id] = nil
             lastError = errorMessage(error)
-            await loadLocalWindows()
+            await loadLocalWindows(preservingError: true)
         }
     }
 
