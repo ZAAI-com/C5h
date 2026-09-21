@@ -940,6 +940,29 @@ struct UsageHistorySeriesTests {
         #expect(readings[0].used == 20)
     }
 
+    @Test("weeklyReadings treats the interval as half-open")
+    func weeklyReadingsIsHalfOpen() {
+        // Adjacent calendar segments abut, so a reading captured exactly on the
+        // shared boundary must belong to the later segment only, not be drawn
+        // twice.
+        let boundary = Date(timeIntervalSince1970: 2_000)
+        let series = UsageHistorySeries(providerID: .codex, points: [
+            UsagePoint(capturedAt: boundary, fiveHour: nil, sevenDay: 20),
+        ])
+
+        let earlier = series.weeklyReadings(in: DateInterval(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: boundary
+        ))
+        let later = series.weeklyReadings(in: DateInterval(
+            start: boundary,
+            end: Date(timeIntervalSince1970: 3_000)
+        ))
+
+        #expect(earlier.isEmpty)
+        #expect(later.count == 1)
+    }
+
     @Test("weeklyReadings collapses consecutive equal rounded percentages")
     func weeklyReadingsCollapsesEqualPercentages() {
         // 1.0 and 1.4 both display as 1%; 2.0 and 2.2 both display as 2%. A value

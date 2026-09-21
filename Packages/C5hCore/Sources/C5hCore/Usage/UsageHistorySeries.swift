@@ -151,7 +151,11 @@ public struct UsageHistorySeries: Sendable, Hashable {
     public func weeklyReadings(in interval: DateInterval) -> [(capturedAt: Date, used: Double)] {
         var readings: [(capturedAt: Date, used: Double)] = []
         var lastRoundedPercent: Int?
-        for point in points where interval.contains(point.capturedAt) {
+        // Half-open: `DateInterval.contains` includes `end`, and callers pass
+        // abutting segments, so a reading captured exactly on a boundary would
+        // render in both. The later segment owns it.
+        for point in points
+        where point.capturedAt >= interval.start && point.capturedAt < interval.end {
             guard let used = point.sevenDay else { continue }
             let rounded = Int(used.rounded())
             if rounded == lastRoundedPercent { continue }

@@ -54,19 +54,25 @@ public enum CalendarPositioning {
         guard let nowY else {
             return min(max(preferred, minOffset), maxOffset)
         }
+        let clamp = { (value: CGFloat) in min(max(value, minOffset), maxOffset) }
         let straddles = preferred < nowY + gap && preferred + rowHeight > nowY - gap
         if !straddles {
-            return preferred
+            return clamp(preferred)
         }
+        // Each candidate is checked against *both* bounds. Checking only the
+        // side it is trying to escape let a row leave the caller's bounds (for
+        // example a tall reserved footer makes `maxOffset` small enough that the
+        // upper candidate overshoots it), overlapping corner content or the
+        // reserved top padding.
         let above = nowY - rowHeight - gap
-        if above >= minOffset {
+        if above >= minOffset, above <= maxOffset {
             return above
         }
         let below = nowY + gap
-        if below <= maxOffset {
+        if below <= maxOffset, below >= minOffset {
             return below
         }
-        return min(max(preferred, minOffset), maxOffset)
+        return clamp(preferred)
     }
 
     public static func blockHeight(

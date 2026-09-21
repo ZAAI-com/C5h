@@ -330,6 +330,49 @@ struct CalendarPositioningTests {
         #expect(offset == 2)
     }
 
+    @Test("usage row avoidance stays inside both bounds")
+    func usageRowAvoidingNowLineRespectsBothBounds() {
+        // A tall reserved footer leaves bounds [2, 20]. Preferred 30 straddles a
+        // line at 40, and the upper candidate (40 - 14 - 4 = 22) overshoots
+        // maxOffset: checking only `>= minOffset` let the row escape the block.
+        let above = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 30,
+            rowHeight: 14,
+            nowY: 40,
+            minOffset: 2,
+            maxOffset: 20,
+            gap: 4
+        )
+        #expect(above >= 2 && above <= 20)
+
+        // Mirror case: the lower candidate (10 + 4 = 14) satisfies maxOffset but
+        // sits above a high minOffset, which would overlap the reserved header.
+        let below = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 18,
+            rowHeight: 14,
+            nowY: 10,
+            minOffset: 16,
+            maxOffset: 200,
+            gap: 4
+        )
+        #expect(below >= 16 && below <= 200)
+    }
+
+    @Test("a non-straddling preferred offset is still clamped into bounds")
+    func usageRowAvoidingNowLineClampsNonStraddling() {
+        // The row does not straddle the line at 5, but its preferred offset is
+        // far past maxOffset; passing it through unclamped rendered outside.
+        let offset = CalendarPositioning.usageRowOffsetAvoidingNowLine(
+            preferred: 500,
+            rowHeight: 14,
+            nowY: 5,
+            minOffset: 2,
+            maxOffset: 100,
+            gap: 4
+        )
+        #expect(offset == 100)
+    }
+
     @Test("missing now line passes the preferred offset through, clamped")
     func usageRowAvoidingNowLineMissingNowLine() {
         let within = CalendarPositioning.usageRowOffsetAvoidingNowLine(

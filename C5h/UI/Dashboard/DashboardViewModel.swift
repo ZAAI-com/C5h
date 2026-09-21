@@ -277,9 +277,16 @@ final class DashboardViewModel {
             }
             // Generic normalized usage may describe a weekly-only account.
             // Attribute only a short-limit reading with this window's reset.
-            if let reading = cache[window.providerID]?
-                .scoped(toFiveHourWindowEndingAt: window.endAt)
-                .latestFiveHourPoint() {
+            //
+            // Scoping applies to provider-anchored windows only, matching
+            // `ActualWindowBlockView`. A `.manual` window's end is the user's
+            // bound, not a reset the provider ever reported, so scoping by it
+            // rejects every reading and the dashboard loses the percentage.
+            let history = cache[window.providerID]
+            let scoped = window.hasProviderAnchoredUsageWindow
+                ? history?.scoped(toFiveHourWindowEndingAt: window.endAt)
+                : history
+            if let reading = scoped?.latestFiveHourPoint() {
                 next[window.id] = reading.value
             }
         }
