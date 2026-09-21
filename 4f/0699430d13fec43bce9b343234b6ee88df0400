@@ -1,0 +1,35 @@
+Packages/C5hStore/Tests/C5hStoreTests/UsageCheckGateFactoryTests.swift
+  s_e269fee58f4b76::t_8ba4dd92bbf076 490,495
+  s_e269fee58f4b76::t_979f70fc5a0339 481-489,491-494,496-557
+Packages/C5hStore/Sources/C5hStore/UsageCheckGateFactory.swift
+  s_e269fee58f4b76::t_df649faa424d03 4-33,115-117,141-143,174-176
+  s_e269fee58f4b76::t_e7faebff5618f2 55
+  s_e269fee58f4b76::t_7d9e85906089b5 57-61,63,67
+Packages/C5hCore/Tests/C5hCoreTests/ClaudeLocalActivityDetectorTests.swift
+  s_e269fee58f4b76::t_03f4ceb2107b4f 206
+Packages/C5hCore/Sources/C5hCore/Usage/UsageCheckGate.swift
+  s_e269fee58f4b76::t_e7faebff5618f2 30-34,95,122
+Packages/C5hCore/Sources/C5hCore/Providers/ClaudeUsageCollector.swift
+  s_e269fee58f4b76::t_7548b2d2cd080c 274-280,284-289,291,296-298
+  s_e269fee58f4b76::t_9cf328f448b981 261-262
+Packages/C5hCore/Sources/C5hCore/Usage/ClaudeLocalActivityDetector.swift
+  s_e269fee58f4b76::t_7548b2d2cd080c 79
+Packages/C5hCore/Tests/C5hCoreTests/UsageCheckGateTests.swift
+  s_e269fee58f4b76::t_527c4a9b8db4ab 13,53,73,84,104,122,140,153,165,235,278,307,328
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4f0699430d13fec43bce9b343234b6ee88df0400",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
