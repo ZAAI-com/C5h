@@ -752,6 +752,119 @@ struct ActiveWindowResolverTests {
         #expect(updates.isEmpty)
     }
 
+    @Test("Anchors from a snapshot captured just after the command started")
+    func anchorsFromSnapshotCapturedAfterCommandStart() async throws {
+        let recorder = Recorder()
+        // The concurrent poll this fallback exists for holds the usage lock and
+        // finishes capturing a moment *after* the command's startedAt, which is
+        // what the resolver is handed as `now`. Requiring capturedAt <= now
+        // rejected exactly that snapshot and lost the trigger's window.
+        let triggerTime = try isoDate("2026-07-18T08:08:54Z")
+        let windowStart = try isoDate("2026-07-18T08:00:00Z")
+        let commandRunID = UUID()
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime.addingTimeInterval(7),
+            windowStartAt: windowStart,
+            usedPercentage: 0
+        )
+        let committed = ActualWindow5h(
+            providerID: .claude,
+            startAt: windowStart,
+            source: .detectedFromUsage,
+            confidence: .estimated
+        )
+        let state = HandoffState(activeResponses: [nil, committed])
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { providerID in
+                throw C5hError.usageRefreshAlreadyRunning(providerID)
+            },
+            activeWindowFetch: { providerID, now in
+                await state.nextActive(providerID: providerID, now: now)
+            },
+            updateActualWindow: { window in await recorder.addUpdate(window) },
+            latestSnapshotFetch: { _ in snapshot }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.id == committed.id)
+        #expect(window.commandRunID == commandRunID)
+    }
+
+    @Test("A snapshot beyond the anchor horizon on either side is rejected")
+    func rejectsSnapshotsOutsideTheAnchorHorizon() async throws {
+        let triggerTime = try isoDate("2026-07-18T08:08:54Z")
+        let windowStart = try isoDate("2026-07-18T08:00:00Z")
+        let beyond = ActiveWindowResolver.latestSnapshotAnchorHorizon + 1
+
+        for offset in [beyond, -beyond] {
+            let recorder = Recorder()
+            let snapshot = makeClaudeSnapshot(
+                capturedAt: triggerTime.addingTimeInterval(offset),
+                windowStartAt: windowStart,
+                usedPercentage: 0
+            )
+            let resolver = ActiveWindowResolver(
+                fetcher: makeFetcher(recorder: recorder),
+                snapshotFetch: { providerID in
+                    throw C5hError.usageRefreshAlreadyRunning(providerID)
+                },
+                activeWindowFetch: { _, _ in nil },
+                updateActualWindow: { window in await recorder.addUpdate(window) },
+                latestSnapshotFetch: { _ in snapshot }
+            )
+
+            let result = await resolver.resolveTriggeredWindow(
+                providerID: .claude,
+                commandRunID: UUID(),
+                now: triggerTime
+            )
+            #expect(result == nil)
+            #expect(await recorder.upserted5h.isEmpty)
+        }
+    }
+
+    @Test("The upserted derived window carries the trigger's command link")
+    func upsertedDerivedWindowCarriesCommandLink() async throws {
+        let recorder = Recorder()
+        let triggerTime = Self.hourStart.addingTimeInterval(1800)
+        let chainedStart = triggerTime.addingTimeInterval(-80 * 60)
+        let commandRunID = UUID()
+        // Zero usage and a start that predates the trigger: the demote path,
+        // which returns `derived5h` directly when no row covers `now`. Without
+        // the link on the upsert, the run would have no window attribution.
+        let snapshot = makeClaudeSnapshot(
+            capturedAt: triggerTime,
+            windowStartAt: chainedStart,
+            usedPercentage: 0
+        )
+        let resolver = ActiveWindowResolver(
+            fetcher: makeFetcher(recorder: recorder),
+            snapshotFetch: { _ in snapshot },
+            activeWindowFetch: { _, _ in nil },
+            updateActualWindow: { window in await recorder.addUpdate(window) }
+        )
+
+        let result = await resolver.resolveTriggeredWindow(
+            providerID: .claude,
+            commandRunID: commandRunID,
+            now: triggerTime
+        )
+
+        let window = try #require(result)
+        #expect(window.commandRunID == commandRunID)
+        // The classification itself is untouched: this is traceability only.
+        #expect(window.source == .detectedFromUsage)
+        let upserted = try #require(await recorder.upserted5h.first)
+        #expect(upserted.commandRunID == commandRunID)
+    }
+
     @Test("Promotes an hour-floored fresh anchor even at zero usage")
     func promotesHourFlooredFreshAnchorAtZeroUsage() async throws {
         let recorder = Recorder()

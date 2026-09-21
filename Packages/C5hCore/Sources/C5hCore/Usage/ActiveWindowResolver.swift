@@ -273,11 +273,19 @@ public struct ActiveWindowResolver: Sendable {
         // Claude can anchor a wake prompt before usage registers. Codex cannot:
         // its idle response is a synthetic sliding slot, so keep Codex active-
         // gated here even though UsageFetcher supports an explicit force-anchor.
-        let derived5h = try fetcher.derived5h(
+        var derived5h = try fetcher.derived5h(
             from: snapshot,
             now: now,
             requireActiveWindow: providerID == .codex
         )
+        // Carry the trigger link into the upsert rather than stamping it only on
+        // the row the later `activeWindowFetch` happens to return. Several paths
+        // below return `derived5h` directly (no row covers `now`, or the row that
+        // does has different bounds), and without this the run the window was
+        // derived for would end up with no attribution at all. `upsertByEndAt`
+        // only fills a nil `commandRunID`, so an already-attributed row keeps its
+        // original trigger.
+        derived5h?.commandRunID = commandRunID
         if let window = derived5h {
             try await fetcher.upsertActualWindow5h(window, UsageFetcher.dedupTolerance)
         }
@@ -440,10 +448,15 @@ public struct ActiveWindowResolver: Sendable {
         now: Date
     ) async -> ActualWindow5h? {
         do {
+            // The horizon is symmetric around `now`. Callers pass
+            // `commandRun.startedAt` as `now`, and the concurrent probe this
+            // fallback exists for can finish capturing just *after* the command
+            // starts; requiring `capturedAt <= now` rejected exactly the snapshot
+            // it was meant to recover. The backward side still bounds staleness.
             guard let snapshot = try await latestSnapshotFetch(providerID),
                   snapshot.providerID == providerID,
-                  snapshot.capturedAt <= now,
-                  now.timeIntervalSince(snapshot.capturedAt) <= Self.latestSnapshotAnchorHorizon else {
+                  abs(snapshot.capturedAt.timeIntervalSince(now))
+                    <= Self.latestSnapshotAnchorHorizon else {
                 return nil
             }
             guard let derived = try fetcher.derived5h(
