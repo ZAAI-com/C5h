@@ -90,6 +90,11 @@ jobs:
           brew tap-new local/c5hlint --no-git
           mkdir -p "$(brew --repository local/c5hlint)/Casks"
           cp cask.rb "$(brew --repository local/c5hlint)/Casks/${CASK_NAME}.rb"
+          # brew audit resolves the cask by token and ignores casks from
+          # untrusted taps. The tap is a throwaway created above on a
+          # disposable runner, so trusting it grants nothing beyond the file
+          # this step just wrote. (HOMEBREW_NO_REQUIRE_TAP_TRUST is deprecated.)
+          brew trust --tap local/c5hlint
           brew style "local/c5hlint"
           # Audit structural issues (sha, url, stanzas) that brew style misses.
           # The release DMG is already published at this point, so --online also
