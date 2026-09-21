@@ -1,0 +1,28 @@
+C5h/UI/Logs/CommandRunDetailView.swift
+  s_e269fee58f4b76::t_63e67a538fc3ea 30
+Packages/C5hCore/Tests/C5hCoreTests/CodexUsageStatusTests.swift
+  s_e269fee58f4b76::t_6f192eb66abefc 224
+Packages/C5hCore/Sources/C5hCore/Providers/CodexAppServerClient.swift
+  s_e269fee58f4b76::t_63e67a538fc3ea 16-23
+C5h/UI/Providers/ProvidersViewModel.swift
+  s_e269fee58f4b76::t_63e67a538fc3ea 193
+Packages/C5hCore/Tests/C5hCoreTests/UsageHistorySeriesTests.swift
+  s_e269fee58f4b76::t_c5dd87911ec71a 73-74
+  s_e269fee58f4b76::t_0060cfc0028691 86-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "154e0123aa948ad97ef58f6b0a6bc7c7d71981b7",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
