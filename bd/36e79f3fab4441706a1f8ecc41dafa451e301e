@@ -1,0 +1,25 @@
+Packages/C5hStore/Tests/C5hStoreTests/MigrationsTests.swift
+  s_e269fee58f4b76::t_47349712a58dfa 497-507,510-515,517-525,528-533,535-551
+  s_e269fee58f4b76::t_e7670f066c5fca 508-509,516,526-527,534
+Packages/C5hStore/Sources/C5hStore/Migrations/Migrations.swift
+  s_e269fee58f4b76::t_20cb9678fd70af 175-202
+Toolkit/Release/appcast.sh
+  s_e269fee58f4b76::t_3122d74c5135e5 100-111,114-121
+  s_e269fee58f4b76::t_9ee0a4abd6184c 122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "bd36e79f3fab4441706a1f8ecc41dafa451e301e",
+  "prompts": {},
+  "sessions": {
+    "s_e269fee58f4b76": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3b80a8-79bf-4257-ba5c-652573c3ea60",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Manuel <m@manuelgruber.com>"
+    }
+  }
+}
