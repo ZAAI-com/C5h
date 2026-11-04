@@ -5,6 +5,7 @@ struct DayCalendarView: View {
     let viewModel: DayCalendarViewModel
     let layout: CalendarLayoutConfig
     let now: Date
+    var showWeekly: Bool = true
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
     let onSelectWeekly: (ActualWindow7d) -> Void
@@ -48,7 +49,8 @@ struct DayCalendarView: View {
                                         providerID: providerID,
                                         plannedWindows: cw.planned,
                                         actualSegments: cw.actual,
-                                        weeklyWindow: viewModel.weeklyWindow(for: providerID, now: now),
+                                        weeklySegments: showWeekly ? viewModel.weeklySegments(for: providerID) : [],
+                                        weeklyYieldsToPlanning: !viewModel.weeklyOnlyProviders.contains(providerID),
                                         history: viewModel.history(for: providerID),
                                         resetWindowIDs: resetWindowIDs(for: cw.actual, providerID: providerID),
                                         date: viewModel.date,

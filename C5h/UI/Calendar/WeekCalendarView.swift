@@ -10,6 +10,7 @@ struct WeekCalendarScreen: View {
     @State private var visibleProviders: Set<ProviderID> = Set(ProviderID.allCases)
     @State private var showPlanned: Bool = false
     @State private var showActual: Bool = true
+    @AppStorage(CalendarDisplayKeys.showWeeklyWindows) private var showWeekly = true
 
     var body: some View {
         Group {
@@ -35,6 +36,7 @@ struct WeekCalendarScreen: View {
                     weekStart: .now,
                     plannedRepository: plannedRepo,
                     actual5hRepository: actual5hRepo,
+                    actual7dRepository: appEnv.actualWindow7dRepository,
                     usageSnapshotRepository: appEnv.usageSnapshotRepository
                 )
                 viewModel = vm
@@ -71,6 +73,7 @@ struct WeekCalendarScreen: View {
             visibleProviders: visibleProviders,
             showPlanned: showPlanned,
             showActual: showActual,
+            showWeekly: showWeekly,
             onSelectPlanned: { window in
                 withAnimation(C5hAnimation.morph) {
                     let next = CalendarSelection.planned(window)
@@ -80,6 +83,12 @@ struct WeekCalendarScreen: View {
             onSelectActual: { window in
                 withAnimation(C5hAnimation.morph) {
                     let next = CalendarSelection.actual(window)
+                    viewModel.selection = (viewModel.selection == next) ? nil : next
+                }
+            },
+            onSelectWeekly: { window in
+                withAnimation(C5hAnimation.morph) {
+                    let next = CalendarSelection.weekly(window)
                     viewModel.selection = (viewModel.selection == next) ? nil : next
                 }
             }
@@ -141,6 +150,7 @@ struct WeekCalendarScreen: View {
                     Menu {
                         Toggle("Planned windows", isOn: $showPlanned)
                         Toggle("Actual windows", isOn: $showActual)
+                        Toggle("Weekly windows", isOn: $showWeekly)
                     } label: {
                         Label("Windows", systemImage: "rectangle.on.rectangle")
                     }
@@ -162,6 +172,12 @@ struct WeekCalendarScreen: View {
                                           showPlanned: showPlanned
                                       ) {
                                 viewModel.selection = .planned(firstPlanned)
+                            } else if viewModel.selection == nil,
+                                      let firstWeekly = viewModel.firstVisibleWeekly(
+                                          visibleProviders: visibleProviders,
+                                          showWeekly: showWeekly
+                                      ) {
+                                viewModel.selection = .weekly(firstWeekly)
                             } else {
                                 viewModel.selection = nil
                             }
@@ -179,6 +195,7 @@ struct WeekCalendarScreen: View {
                 CalendarInspectorPane(
                     selection: viewModel.selection,
                     resetEvent: viewModel.selection.flatMap { viewModel.resetEvent(for: $0) },
+                    weeklySegment: viewModel.selection.flatMap { viewModel.weeklySegment(for: $0) },
                     onClose: {
                         withAnimation(C5hAnimation.morph) {
                             viewModel.selection = nil
@@ -201,8 +218,10 @@ struct WeekCalendarView: View {
     let visibleProviders: Set<ProviderID>
     let showPlanned: Bool
     let showActual: Bool
+    let showWeekly: Bool
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    let onSelectWeekly: (ActualWindow7d) -> Void
 
     private static let minPixelsPerMinute: CGFloat = 0.3
     private static let gridVerticalPadding: CGFloat = 16
@@ -246,6 +265,7 @@ struct WeekCalendarView: View {
                                 day: day,
                                 planned: filteredPlanned(forDay: day),
                                 actual: filteredActual(forDay: day),
+                                weekly: filteredWeekly(forDay: day),
                                 histories: viewModel.usageHistories,
                                 resetWindowIDs: resetWindowIDs(forDay: day),
                                 now: now,
@@ -254,7 +274,8 @@ struct WeekCalendarView: View {
                                 showPlanned: showPlanned,
                                 showActual: showActual,
                                 onSelectPlanned: onSelectPlanned,
-                                onSelectActual: onSelectActual
+                                onSelectActual: onSelectActual,
+                                onSelectWeekly: onSelectWeekly
                             )
                         }
                     }
@@ -283,6 +304,18 @@ struct WeekCalendarView: View {
     private func filteredActual(forDay day: Date) -> [ActualWindow5hDisplaySegment] {
         guard showActual else { return [] }
         return viewModel.actualDisplaySegments.filter {
+            visibleProviders.contains($0.window.providerID)
+                && CalendarPositioning.windowOverlaps(
+                    start: $0.startAt,
+                    durationSeconds: $0.durationSeconds,
+                    day: day
+                )
+        }
+    }
+
+    private func filteredWeekly(forDay day: Date) -> [ActualWindow7dDisplaySegment] {
+        guard showWeekly else { return [] }
+        return viewModel.weeklySegments.filter {
             visibleProviders.contains($0.window.providerID)
                 && CalendarPositioning.windowOverlaps(
                     start: $0.startAt,
@@ -331,6 +364,7 @@ private struct WeekDayColumnView: View {
     let day: Date
     let planned: [PlannedWindow]
     let actual: [ActualWindow5hDisplaySegment]
+    let weekly: [ActualWindow7dDisplaySegment]
     let histories: [ProviderID: UsageHistorySeries]
     let resetWindowIDs: Set<UUID>
     let now: Date
@@ -340,6 +374,7 @@ private struct WeekDayColumnView: View {
     let showActual: Bool
     let onSelectPlanned: (PlannedWindow) -> Void
     let onSelectActual: (ActualWindow5h) -> Void
+    let onSelectWeekly: (ActualWindow7d) -> Void
 
     private enum BlockID: Hashable {
         case planned(UUID)
@@ -354,6 +389,36 @@ private struct WeekDayColumnView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             background
+            // Weekly bands sit beneath the 5h lanes (zIndex 1/2) and the
+            // current-time line, filling the provider's half of the column.
+            ForEach(weekly) { weeklySegment in
+                if let segment = visibleSegment(
+                    start: weeklySegment.startAt,
+                    durationSeconds: weeklySegment.durationSeconds
+                ) {
+                    Button {
+                        onSelectWeekly(weeklySegment.window)
+                    } label: {
+                        WeeklyWindowBlockView(
+                            window: weeklySegment.window,
+                            history: histories[weeklySegment.window.providerID],
+                            now: now,
+                            columnWidth: halfColumnWidth,
+                            layout: layout,
+                            visibleDurationSeconds: segment.durationSeconds,
+                            clipsTop: segment.clippedStart,
+                            clipsBottom: segment.clippedEnd,
+                            segmentStart: segment.start
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .offset(
+                        x: providerXOffset(for: weeklySegment.window.providerID),
+                        y: yOffset(for: segment.start)
+                    )
+                    .zIndex(0)
+                }
+            }
             let frames = blockFrames
             ForEach(activePlanned) { window in
                 if let segment = visibleSegment(

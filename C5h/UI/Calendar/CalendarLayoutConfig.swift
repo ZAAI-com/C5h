@@ -12,3 +12,10 @@ struct CalendarLayoutConfig: Sendable {
 
     var dayHeight: CGFloat { pixelsPerMinute * 24 * 60 }
 }
+
+/// UserDefaults keys for calendar display filters shared by the Day and Week
+/// screens, so a toggle on one screen applies to the others and survives a
+/// relaunch.
+enum CalendarDisplayKeys {
+    static let showWeeklyWindows = "calendar.showWeeklyWindows"
+}

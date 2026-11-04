@@ -5,7 +5,11 @@ struct ProviderColumnView: View {
     let providerID: ProviderID
     let plannedWindows: [PlannedWindow]
     let actualSegments: [ActualWindow5hDisplaySegment]
-    var weeklyWindow: ActualWindow7d? = nil
+    var weeklySegments: [ActualWindow7dDisplaySegment] = []
+    /// When the provider also has a 5h limit, its weekly block is background:
+    /// wherever a plan can start, hover and tap quick-plan instead of
+    /// selecting the weekly window.
+    var weeklyYieldsToPlanning: Bool = false
     let history: UsageHistorySeries?
     /// IDs of actual windows that followed a detected quota reset, marked with a
     /// subtle neutral glyph on their block.
@@ -232,23 +236,28 @@ struct ProviderColumnView: View {
                 return .planned(window)
             }
         }
-        // The weekly block is drawn beneath the planned/actual lanes (zIndex 0),
-        // so it is matched last: a 5h block on top wins any overlap. Without this
-        // the weekly block reads as empty calendar space (a plan ghost is drawn
-        // over it and a tap quick-plans instead of selecting it).
-        if let weeklyWindow,
-           blockContentX <= location.x, location.x <= blockContentX + blockContentWidth,
-           let segment = visibleSegment(
-               start: weeklyWindow.startAt,
-               durationSeconds: weeklyWindow.durationSeconds
-           ) {
+        // Weekly blocks are drawn beneath the planned/actual lanes (zIndex 0),
+        // so they are matched last: a 5h block on top wins any overlap. Without
+        // this a weekly block reads as empty calendar space (a plan ghost is
+        // drawn over it and a tap quick-plans instead of selecting it).
+        guard blockContentX <= location.x, location.x <= blockContentX + blockContentWidth else {
+            return nil
+        }
+        if weeklyYieldsToPlanning, resolvedPlanStart(forY: location.y) != nil {
+            return nil
+        }
+        for weekly in weeklySegments {
+            guard let segment = visibleSegment(
+                start: weekly.startAt,
+                durationSeconds: weekly.durationSeconds
+            ) else { continue }
             let top = yOffset(for: segment.start)
             let height = CalendarPositioning.blockHeight(
                 durationSeconds: segment.durationSeconds,
                 pixelsPerMinute: layout.pixelsPerMinute
             )
             if (top...(top + height)).contains(location.y) {
-                return .weekly(weeklyWindow)
+                return .weekly(weekly.window)
             }
         }
         return nil
@@ -470,29 +479,29 @@ struct ProviderColumnView: View {
             .hasConflict
     }
 
-    @ViewBuilder
     private var weeklyBlock: some View {
-        if let weeklyWindow,
-           let segment = visibleSegment(
-               start: weeklyWindow.startAt,
-               durationSeconds: weeklyWindow.durationSeconds
-           ) {
-            WeeklyWindowBlockView(
-                window: weeklyWindow,
-                history: history,
-                now: now,
-                columnWidth: columnWidth,
-                layout: layout,
-                visibleDurationSeconds: segment.durationSeconds,
-                clipsTop: segment.clippedStart,
-                clipsBottom: segment.clippedEnd,
-                segmentStart: segment.start
-            )
-            .offset(
-                x: blockContentX,
-                y: yOffset(for: segment.start)
-            )
-            .zIndex(0)
+        ForEach(weeklySegments) { weekly in
+            if let segment = visibleSegment(
+                start: weekly.startAt,
+                durationSeconds: weekly.durationSeconds
+            ) {
+                WeeklyWindowBlockView(
+                    window: weekly.window,
+                    history: history,
+                    now: now,
+                    columnWidth: columnWidth,
+                    layout: layout,
+                    visibleDurationSeconds: segment.durationSeconds,
+                    clipsTop: segment.clippedStart,
+                    clipsBottom: segment.clippedEnd,
+                    segmentStart: segment.start
+                )
+                .offset(
+                    x: blockContentX,
+                    y: yOffset(for: segment.start)
+                )
+                .zIndex(0)
+            }
         }
     }
 

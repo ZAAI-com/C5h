@@ -11,7 +11,12 @@ final class DayCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
-    var weeklyWindows: [ProviderID: ActualWindow7d] = [:]
+    /// Weekly display segments overlapping the displayed day, clipped where a
+    /// later same-provider window started (see `ActualWindow7dDisplayResolver`).
+    var weeklySegmentsByProvider: [ProviderID: [ActualWindow7dDisplaySegment]] = [:]
+    /// Providers without a 5h limit. Their weekly block is the column's only
+    /// window, so a tap on it selects it instead of quick-planning a 5h block.
+    private(set) var weeklyOnlyProviders: Set<ProviderID> = []
     var selection: CalendarSelection?
     var lastError: String?
     /// Dropped starts whose save is still in flight, keyed by planned-window id.
@@ -110,13 +115,13 @@ final class DayCalendarViewModel {
             self.lastError = errorMessage(error)
         }
         await loadUsageHistories()
-        // The Today and Tomorrow screens both render the active weekly window
-        // when it overlaps their displayed day. Skip unrelated days and clear
-        // state when this view model navigates away from either screen.
+        // The Today and Tomorrow screens render every weekly window that
+        // overlaps their displayed day. Skip unrelated days and clear state
+        // when this view model navigates away from either screen.
         if Self.isTodayOrTomorrow(date) {
-            await loadWeeklyContext(now: .now)
+            await loadWeeklyContext()
         } else {
-            setWeeklyWindows([:])
+            setWeeklySegments([:])
         }
     }
 
@@ -129,61 +134,58 @@ final class DayCalendarViewModel {
         selection = .planned(current)
     }
 
-    private func loadWeeklyContext(now: Date) async {
-        guard let actual7dRepo = actual7dRepository else { return }
-        var windows: [ProviderID: ActualWindow7d] = [:]
+    private func loadWeeklyContext() async {
+        guard let actual7dRepo = actual7dRepository,
+              let usageRepo = usageSnapshotRepository else { return }
+        let day = CalendarPositioning.dayInterval(for: date)
+        // Reach back one full weekly duration so a window that started before
+        // the day is still clipped by a successor that also started earlier.
+        let lookback = DateInterval(
+            start: day.start.addingTimeInterval(-TimeInterval(ClaudeUsageStatus.sevenDayDurationSeconds)),
+            end: day.end
+        )
+        guard let fetched = try? await actual7dRepo.fetchWindows(for: lookback) else { return }
+        var segments: [ProviderID: [ActualWindow7dDisplaySegment]] = [:]
+        var weeklyOnly: Set<ProviderID> = []
         for providerID in ProviderID.allCases {
-            // Only surface the 7d block for weekly-only providers (those that do
-            // not report a 5h limit); accounts with a 5h limit already convey
-            // usage through their 5h blocks.
-            guard await isWeeklyOnly(providerID: providerID) else { continue }
-            if let window = try? await actual7dRepo.fetchLatest(providerID: providerID),
-               window.startAt <= now,
-               now < window.endAt,
-               CalendarPositioning.windowOverlaps(
-                   start: window.startAt,
-                   durationSeconds: window.durationSeconds,
-                   day: date
-               ) {
-                windows[providerID] = window
-            }
+            if await usageRepo.isWeeklyOnly(providerID: providerID) { weeklyOnly.insert(providerID) }
+            guard await usageRepo.showsWeeklyWindowBlocks(providerID: providerID) else { continue }
+            let overlapping = ActualWindow7dDisplayResolver
+                .segments(for: fetched.filter { $0.providerID == providerID })
+                .filter {
+                    CalendarPositioning.windowOverlaps(
+                        start: $0.startAt,
+                        durationSeconds: $0.durationSeconds,
+                        day: date
+                    )
+                }
+            if !overlapping.isEmpty { segments[providerID] = overlapping }
         }
-        setWeeklyWindows(windows)
+        if weeklyOnlyProviders != weeklyOnly { weeklyOnlyProviders = weeklyOnly }
+        setWeeklySegments(segments)
     }
 
-    /// Single assignment funnel for `weeklyWindows`. Assigns the dictionary
-    /// only when changed (preserving the animation-restart guard), then
-    /// reconciles a `.weekly` selection with the refreshed state: a window
+    /// Single assignment funnel for `weeklySegmentsByProvider`. Assigns the
+    /// dictionary only when changed (preserving the animation-restart guard),
+    /// then reconciles a `.weekly` selection with the refreshed state: a window
     /// still present under the same id is swapped for its refreshed value so
     /// the inspector shows current data and tap-to-toggle equality still
-    /// matches, and any selection the reload filtered out (expired, replaced
-    /// by a new id, removed, or no longer weekly-only) is cleared. A window
-    /// that was not already selected is never selected. `.planned` and
-    /// `.actual` selections are untouched.
-    private func setWeeklyWindows(_ windows: [ProviderID: ActualWindow7d]) {
-        if weeklyWindows != windows {
-            weeklyWindows = windows
+    /// matches, and any selection the reload filtered out (out of the day,
+    /// removed, or no longer drawn for its provider) is cleared. A window that was not
+    /// already selected is never selected. `.planned` and `.actual` selections
+    /// are untouched.
+    private func setWeeklySegments(_ segments: [ProviderID: [ActualWindow7dDisplaySegment]]) {
+        if weeklySegmentsByProvider != segments {
+            weeklySegmentsByProvider = segments
         }
         guard case let .weekly(selected)? = selection else { return }
-        if let refreshed = windows[selected.providerID], refreshed.id == selected.id {
+        if let refreshed = segments[selected.providerID]?.first(where: { $0.id == selected.id })?.window {
             if refreshed != selected {
                 selection = .weekly(refreshed)
             }
         } else {
             selection = nil
         }
-    }
-
-    /// True when the provider's latest usage snapshot reports a weekly limit but
-    /// no 5h limit. Unknown (no snapshot / unparseable) is treated as not
-    /// weekly-only, so the 7d block stays hidden rather than shown speculatively.
-    private func isWeeklyOnly(providerID: ProviderID) async -> Bool {
-        guard let usageRepo = usageSnapshotRepository,
-              let snapshot = try? await usageRepo.fetchLatest(providerID: providerID),
-              let limits = ProviderUsageLimits.from(snapshot: snapshot) else {
-            return false
-        }
-        return limits.isWeeklyOnly
     }
 
     private static func isTodayOrTomorrow(_ date: Date) -> Bool {
@@ -332,14 +334,18 @@ final class DayCalendarViewModel {
         return TimeInterval(stored ?? AppSettingsKeys.defaultUsageRefreshIntervalSeconds)
     }
 
-    /// Active weekly block for the Today and Tomorrow screens when the latest
-    /// persisted weekly window overlaps the displayed day.
-    func weeklyWindow(for providerID: ProviderID, now: Date = .now) -> ActualWindow7d? {
-        guard Self.isTodayOrTomorrow(date) else { return nil }
-        guard let window = weeklyWindows[providerID], window.startAt <= now, now < window.endAt else {
-            return nil
-        }
-        return window
+    /// Weekly blocks for the Today and Tomorrow screens: every weekly window
+    /// overlapping the displayed day, clipped at its successor's start.
+    func weeklySegments(for providerID: ProviderID) -> [ActualWindow7dDisplaySegment] {
+        guard Self.isTodayOrTomorrow(date) else { return [] }
+        return weeklySegmentsByProvider[providerID] ?? []
+    }
+
+    /// The displayed segment behind a selected weekly window, surfaced in the
+    /// inspector so it can tell when a later window superseded it.
+    func weeklySegment(for selection: CalendarSelection) -> ActualWindow7dDisplaySegment? {
+        guard case let .weekly(window) = selection else { return nil }
+        return weeklySegmentsByProvider[window.providerID]?.first { $0.id == window.id }
     }
 
     func windows(for providerID: ProviderID) -> (planned: [PlannedWindow], actual: [ActualWindow5hDisplaySegment]) {
