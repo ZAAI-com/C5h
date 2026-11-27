@@ -102,4 +102,36 @@ struct ActualWindow7dRepositoryTests {
         let all = try await repo.fetchAll().filter { $0.providerID == .claude }
         #expect(all.count == 2)
     }
+
+    @Test("fetchWindows returns overlapping rows in start order")
+    func fetchWindowsReturnsOverlapping() async throws {
+        let db = try Database.inMemory()
+        try await Seed.runIfNeeded(database: db)
+        let repo = GRDBActualWindow7dRepository(database: db)
+
+        let day: TimeInterval = 86_400
+        let base = Date(timeIntervalSince1970: 1_790_000_000)
+        func weekly(_ startDay: Double) -> ActualWindow7d {
+            ActualWindow7d(
+                providerID: .codex,
+                startAt: base.addingTimeInterval(startDay * day),
+                usedPercentage: 50,
+                source: .detectedFromUsage,
+                confidence: .estimated
+            )
+        }
+        let endsBefore = weekly(-10)
+        let straddlesStart = weekly(-3)
+        let inside = weekly(1)
+        let startsAfter = weekly(3)
+        for window in [startsAfter, inside, endsBefore, straddlesStart] {
+            try await repo.create(window)
+        }
+
+        let fetched = try await repo.fetchWindows(
+            for: DateInterval(start: base, duration: 2 * day)
+        )
+
+        #expect(fetched.map(\.id) == [straddlesStart.id, inside.id])
+    }
 }

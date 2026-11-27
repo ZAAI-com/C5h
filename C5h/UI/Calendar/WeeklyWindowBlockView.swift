@@ -76,7 +76,8 @@ struct WeeklyWindowBlockView: View {
 
     /// One reading row styled like the 5h block: the clock time the usage command
     /// ran on the left and its "7d usage X%" reading on the right. There is no 5h
-    /// column, since the 7d block is only shown for weekly-only providers.
+    /// column: 5h usage, when the provider has a 5h limit, lives on the 5h blocks
+    /// drawn over this one.
     private func usageReadingRow(
         at time: Date,
         used: Double,

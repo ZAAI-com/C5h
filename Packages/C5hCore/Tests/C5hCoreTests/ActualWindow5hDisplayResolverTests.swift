@@ -186,6 +186,107 @@ struct ActualWindow5hDisplayResolverTests {
         #expect(codexSegment.endAt == codexOverlap.endAt)
     }
 
+    @Test("Rolloff observed after the successor started ends at the successor's start")
+    func rolloffSnapsToSuccessorStart() throws {
+        // Mirrors 2026-11-04: window 08:20 last confirmed at 11:48, the next
+        // poll at 11:53 sees a prospective (inactive) slot for the window that
+        // the provider anchors at 11:50. The clip must land at 11:50, not 11:53.
+        let first = actualWindow(startHour: 7 + 20.0 / 60.0)
+        let next = actualWindow(startHour: 10 + 50.0 / 60.0)
+        let confirming = point(hour: 10.8, fiveHour: 74, resetsAt: first.endAt, active: true)
+        let switched = point(hour: 10 + 53.0 / 60.0, fiveHour: 0, resetsAt: next.endAt, active: false)
+        let series = UsageHistorySeries(providerID: .claude, points: [confirming, switched])
+
+        let segments = ActualWindow5hDisplayResolver.segments(
+            for: [first, next],
+            resetEvents: [],
+            histories: [.claude: series]
+        )
+
+        let segment = try #require(segments.first { $0.id == first.id })
+        #expect(segment.endAt == next.startAt)
+        #expect(segment.marksResetEnd == false)
+    }
+
+    @Test("A successor starting before the last confirming poll still sets the end")
+    func rolloffSnapsToHourFlooredSuccessorStart() throws {
+        // An hour-floored successor can start before the old window's last
+        // confirming poll. Ending at the poll would keep an overlap.
+        let first = actualWindow(startHour: 10 + 50.0 / 60.0)
+        let next = actualWindow(startHour: 14)
+        let confirming = point(hour: 14.5, fiveHour: 93, resetsAt: first.endAt, active: true)
+        let switched = point(hour: 14.6, fiveHour: 0, resetsAt: next.endAt, active: false)
+        let series = UsageHistorySeries(providerID: .claude, points: [confirming, switched])
+
+        let segments = ActualWindow5hDisplayResolver.segments(
+            for: [first, next],
+            resetEvents: [],
+            histories: [.claude: series]
+        )
+
+        let segment = try #require(segments.first { $0.id == first.id })
+        #expect(segment.endAt == next.startAt)
+    }
+
+    @Test("A successor starting after the rolloff leaves the rolloff end")
+    func rolloffKeepsCaptureTimeWhenSuccessorStartsLater() throws {
+        let first = actualWindow(startHour: 7.5)
+        let later = actualWindow(startHour: 9.5)
+        let confirming = point(hour: 8, fiveHour: 40, resetsAt: first.endAt, active: true)
+        let rolledOffAt = referenceDay.addingTimeInterval(9 * 3_600)
+        let freshSlot = point(
+            at: rolledOffAt,
+            fiveHour: 0,
+            resetsAt: rolledOffAt.addingTimeInterval(5 * 3_600),
+            active: false
+        )
+        let series = UsageHistorySeries(providerID: .claude, points: [confirming, freshSlot])
+
+        let segments = ActualWindow5hDisplayResolver.segments(
+            for: [first, later],
+            resetEvents: [],
+            histories: [.claude: series]
+        )
+
+        let segment = try #require(segments.first { $0.id == first.id })
+        #expect(segment.endAt == rolledOffAt)
+    }
+
+    @Test("A chain of rolled-over windows packs into one full-width lane")
+    func rolledOverChainDoesNotSplitIntoLanes() throws {
+        // The three Claude windows from the 2026-11-04 screenshot. Before the
+        // fix each clip landed a few minutes past the next start, so the whole
+        // chain formed one overlap cluster and rendered at half width.
+        let first = actualWindow(startHour: 7 + 20.0 / 60.0)
+        let second = actualWindow(startHour: 10 + 50.0 / 60.0)
+        let third = actualWindow(startHour: 14)
+        let points = [
+            point(hour: 10.8, fiveHour: 74, resetsAt: first.endAt, active: true),
+            point(hour: 10 + 53.0 / 60.0, fiveHour: 0, resetsAt: second.endAt, active: false),
+            point(hour: 11, fiveHour: 5, resetsAt: second.endAt, active: true),
+            point(hour: 13 + 55.0 / 60.0, fiveHour: 93, resetsAt: second.endAt, active: true),
+            point(hour: 14 + 6.5 / 60.0, fiveHour: 0, resetsAt: third.endAt, active: false),
+            point(hour: 14.2, fiveHour: 2, resetsAt: third.endAt, active: true),
+        ]
+        let series = UsageHistorySeries(providerID: .claude, points: points)
+
+        let segments = ActualWindow5hDisplayResolver.segments(
+            for: [first, second, third],
+            resetEvents: [],
+            histories: [.claude: series]
+        )
+
+        let byID = Dictionary(uniqueKeysWithValues: segments.map { ($0.id, $0) })
+        #expect(try #require(byID[first.id]).endAt == second.startAt)
+        #expect(try #require(byID[second.id]).endAt == third.startAt)
+        #expect(try #require(byID[third.id]).endAt == third.endAt)
+
+        let placements = CalendarPositioning.packLanes(
+            segments.map { DateInterval(start: $0.startAt, end: $0.endAt) }
+        )
+        #expect(placements.allSatisfy { $0 == .init(lane: 0, laneCount: 1) })
+    }
+
     private func actualWindow(
         providerID: ProviderID = .claude,
         startHour: Double

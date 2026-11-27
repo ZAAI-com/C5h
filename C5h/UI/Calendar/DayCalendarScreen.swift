@@ -9,6 +9,7 @@ struct DayCalendarScreen: View {
     @Environment(AppEnvironment.self) private var appEnv
     @State private var viewModel: DayCalendarViewModel?
     @State private var now: Date = .now
+    @AppStorage(CalendarDisplayKeys.showWeeklyWindows) private var showWeekly = true
     private let layout = CalendarLayoutConfig()
 
     var body: some View {
@@ -83,6 +84,7 @@ struct DayCalendarScreen: View {
             viewModel: viewModel,
             layout: layout,
             now: now,
+            showWeekly: showWeekly,
             onSelectPlanned: { window in
                 withAnimation(C5hAnimation.morph) {
                     let next = CalendarSelection.planned(window)
@@ -131,6 +133,7 @@ struct DayCalendarScreen: View {
             CalendarInspectorPane(
                 selection: viewModel.selection,
                 resetEvent: viewModel.selection.flatMap { viewModel.resetEvent(for: $0) },
+                weeklySegment: viewModel.selection.flatMap { viewModel.weeklySegment(for: $0) },
                 onClose: {
                     withAnimation(C5hAnimation.morph) {
                         viewModel.selection = nil
@@ -149,6 +152,15 @@ struct DayCalendarScreen: View {
     @ToolbarContentBuilder
     private func actionToolbar(viewModel: DayCalendarViewModel) -> some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Toggle("Weekly windows", isOn: $showWeekly)
+            } label: {
+                Label("Windows", systemImage: "rectangle.on.rectangle")
+            }
+            .help("Show/hide window types")
+        }
+
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 withAnimation(C5hAnimation.morph) {
                     if viewModel.selection == nil,
@@ -157,9 +169,11 @@ struct DayCalendarScreen: View {
                     } else if viewModel.selection == nil,
                               let firstPlanned = viewModel.planned.first {
                         viewModel.selection = .planned(firstPlanned)
-                    } else if viewModel.selection == nil,
-                              let firstWeekly = viewModel.weeklyWindows.values.first {
-                        viewModel.selection = .weekly(firstWeekly)
+                    } else if viewModel.selection == nil, showWeekly,
+                              let firstWeekly = ProviderID.allCases.lazy
+                                  .compactMap({ viewModel.weeklySegments(for: $0).first })
+                                  .first {
+                        viewModel.selection = .weekly(firstWeekly.window)
                     } else {
                         viewModel.selection = nil
                     }

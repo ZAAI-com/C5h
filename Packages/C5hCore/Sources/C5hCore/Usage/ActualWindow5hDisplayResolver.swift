@@ -86,12 +86,27 @@ public enum ActualWindow5hDisplayResolver {
                 history: histories[window.providerID],
                 tolerance: resetEndTolerance
             ) else { continue }
+            // The rolloff capture time is only when a poll first noticed the
+            // change. When a same-provider window already started before that
+            // poll, the switch happened at its start: end there so the two
+            // segments touch instead of overlapping by the polling delay
+            // (which would split them into side-by-side calendar lanes).
+            let successorStart = windows
+                .filter {
+                    $0.providerID == window.providerID
+                        && $0.id != window.id
+                        && $0.startAt > window.startAt
+                        && $0.startAt < rolloff
+                }
+                .map(\.startAt)
+                .max()
+            let clippedEnd = successorStart ?? rolloff
             let currentEnd = displayEndByWindowID[window.id] ?? window.endAt
-            guard rolloff < currentEnd else { continue }
+            guard clippedEnd < currentEnd else { continue }
             let sameAsResetClip = (marksResetByWindowID[window.id] == true)
-                && currentEnd.timeIntervalSince(rolloff) <= resetEndTolerance
+                && currentEnd.timeIntervalSince(clippedEnd) <= resetEndTolerance
             guard !sameAsResetClip else { continue }
-            displayEndByWindowID[window.id] = rolloff
+            displayEndByWindowID[window.id] = clippedEnd
             marksResetByWindowID[window.id] = false
         }
 

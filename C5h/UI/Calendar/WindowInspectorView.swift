@@ -18,15 +18,18 @@ enum CalendarSelection: Hashable, Identifiable {
 struct WindowInspectorView: View {
     let selection: CalendarSelection
     let resetEvent: UsageResetEvent?
+    let weeklySegment: ActualWindow7dDisplaySegment?
     let onDelete: ((UUID) -> Void)?
 
     init(
         selection: CalendarSelection,
         resetEvent: UsageResetEvent? = nil,
+        weeklySegment: ActualWindow7dDisplaySegment? = nil,
         onDelete: ((UUID) -> Void)? = nil
     ) {
         self.selection = selection
         self.resetEvent = resetEvent
+        self.weeklySegment = weeklySegment
         self.onDelete = onDelete
     }
 
@@ -79,6 +82,10 @@ struct WindowInspectorView: View {
         labelled("Provider", window.providerID.displayName)
         labelled("Start", format(window.startAt))
         labelled("Reset", format(window.endAt))
+        if let weeklySegment, weeklySegment.id == window.id, weeklySegment.isSuperseded {
+            labelled("Superseded", format(weeklySegment.endAt))
+        }
+        labelled("Used", BlockFormatters.formatPercent(window.usedPercentage))
         labelled("Remaining", BlockFormatters.formatPercent(window.remainingPercentage))
         labelled("Source", window.source.rawValue)
         labelled("Confidence", window.confidence.rawValue)
@@ -117,6 +124,7 @@ struct WindowInspectorView: View {
 struct CalendarInspectorPane: View {
     let selection: CalendarSelection?
     var resetEvent: UsageResetEvent? = nil
+    var weeklySegment: ActualWindow7dDisplaySegment? = nil
     let onClose: () -> Void
     let onDelete: ((UUID) -> Void)?
 
@@ -144,6 +152,7 @@ struct CalendarInspectorPane: View {
                     WindowInspectorView(
                         selection: selection,
                         resetEvent: resetEvent,
+                        weeklySegment: weeklySegment,
                         onDelete: onDelete
                     )
                 }

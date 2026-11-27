@@ -11,22 +11,28 @@ final class WeekCalendarViewModel {
     var actual: [ActualWindow5h] = []
     var usageHistories: [ProviderID: UsageHistorySeries] = [:]
     var resetEvents: [ProviderID: [UsageResetEvent]] = [:]
+    /// Weekly display segments overlapping the week, for providers whose 7d
+    /// windows are drawn, clipped where a later same-provider window started.
+    var weeklySegments: [ActualWindow7dDisplaySegment] = []
     var selection: CalendarSelection?
     var lastError: String?
 
     private let plannedRepo: any PlannedWindowRepository
     private let actual5hRepo: any ActualWindow5hRepository
+    private let actual7dRepo: (any ActualWindow7dRepository)?
     private let usageSnapshotRepo: (any UsageSnapshotRepository)?
 
     init(
         weekStart: Date,
         plannedRepository: any PlannedWindowRepository,
         actual5hRepository: any ActualWindow5hRepository,
+        actual7dRepository: (any ActualWindow7dRepository)? = nil,
         usageSnapshotRepository: (any UsageSnapshotRepository)? = nil
     ) {
         self.weekStart = Self.startOfWeek(for: weekStart)
         self.plannedRepo = plannedRepository
         self.actual5hRepo = actual5hRepository
+        self.actual7dRepo = actual7dRepository
         self.usageSnapshotRepo = usageSnapshotRepository
     }
 
@@ -57,11 +63,33 @@ final class WeekCalendarViewModel {
             if self.planned != fetchedPlanned { self.planned = fetchedPlanned }
             if self.actual != fetchedActual { self.actual = fetchedActual }
             self.lastError = nil
-            pruneSelectionIfNeeded()
         } catch {
             self.lastError = String(describing: error)
         }
+        await loadWeeklySegments(for: interval)
+        pruneSelectionIfNeeded()
         await loadUsageHistories()
+    }
+
+    private func loadWeeklySegments(for interval: DateInterval) async {
+        guard let actual7dRepo, let usageSnapshotRepo else { return }
+        // Reach back one full weekly duration so a window that started before
+        // the week is still clipped by a successor that also started earlier.
+        let lookback = DateInterval(
+            start: interval.start.addingTimeInterval(-TimeInterval(ClaudeUsageStatus.sevenDayDurationSeconds)),
+            end: interval.end
+        )
+        guard let fetched = try? await actual7dRepo.fetchWindows(for: lookback) else { return }
+        var drawn: Set<ProviderID> = []
+        for providerID in ProviderID.allCases
+        where await usageSnapshotRepo.showsWeeklyWindowBlocks(providerID: providerID) {
+            drawn.insert(providerID)
+        }
+        let segments = ActualWindow7dDisplayResolver
+            .segments(for: fetched.filter { drawn.contains($0.providerID) })
+            .filter { $0.startAt < interval.end && $0.endAt > interval.start }
+        // Assign only when changed so unrelated change signals don't re-render.
+        if self.weeklySegments != segments { self.weeklySegments = segments }
     }
 
     private func pruneSelectionIfNeeded() {
@@ -79,8 +107,12 @@ final class WeekCalendarViewModel {
             if !actual.contains(where: { $0.id == window.id }) {
                 self.selection = nil
             }
-        case .weekly:
-            self.selection = nil
+        case .weekly(let window):
+            if let refreshed = weeklySegments.first(where: { $0.id == window.id })?.window {
+                if refreshed != window { self.selection = .weekly(refreshed) }
+            } else {
+                self.selection = nil
+            }
         }
     }
 
@@ -91,8 +123,8 @@ final class WeekCalendarViewModel {
             return window.startAt < weekEnd && window.endAt > weekStart
         case .actual(let window):
             return window.startAt < weekEnd && window.endAt > weekStart
-        case .weekly:
-            return false
+        case .weekly(let window):
+            return window.startAt < weekEnd && window.endAt > weekStart
         }
     }
 
@@ -113,6 +145,14 @@ final class WeekCalendarViewModel {
             }
         }
         return nil
+    }
+
+    func firstVisibleWeekly(
+        visibleProviders: Set<ProviderID>,
+        showWeekly: Bool
+    ) -> ActualWindow7d? {
+        guard showWeekly else { return nil }
+        return weeklySegments.first { visibleProviders.contains($0.window.providerID) }?.window
     }
 
     func firstVisiblePlanned(
@@ -187,6 +227,13 @@ final class WeekCalendarViewModel {
     func resetEvent(for selection: CalendarSelection) -> UsageResetEvent? {
         guard case let .actual(window) = selection else { return nil }
         return fiveHourResetEvent(forWindowEndingAt: window.endAt, providerID: window.providerID)
+    }
+
+    /// The displayed segment behind a selected weekly window, surfaced in the
+    /// inspector so it can tell when a later window superseded it.
+    func weeklySegment(for selection: CalendarSelection) -> ActualWindow7dDisplaySegment? {
+        guard case let .weekly(window) = selection else { return nil }
+        return weeklySegments.first { $0.id == window.id }
     }
 
     func goToPreviousWeek() {
